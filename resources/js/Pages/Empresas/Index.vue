@@ -106,9 +106,6 @@ const connectionsList = getConnectionsList();
                                             <Link :href="route('empresas.show', c.id)" class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">
                                                 Detalhes
                                             </Link>
-                                            <a :href="route('contaazul.connections.connect', { connection: c.id })" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                                Conectar
-                                            </a>
                                         </div>
                                     </td>
                                 </tr>
