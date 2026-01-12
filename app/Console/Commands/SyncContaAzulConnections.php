@@ -1,0 +1,149 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use App\Models\ContaAzulConnection;
+use App\Models\Cliente;
+use App\Services\ContaAzulApiService;
+use App\Services\ContaAzulAuthService;
+use App\Models\SystemSetting;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+
+class SyncContaAzulConnections extends Command
+{
+    protected $signature = 'contaazul:sync-stale';
+    protected $description = 'Verifica conexões com última sincronização >24h e sincroniza clientes e faturas para todas as empresas.';
+
+    protected ContaAzulApiService $api;
+    protected ContaAzulAuthService $auth;
+
+    public function __construct(ContaAzulApiService $api, ContaAzulAuthService $auth)
+    {
+        parent::__construct();
+        $this->api = $api;
+        $this->auth = $auth;
+    }
+
+    public function handle()
+    {
+        $settings = SystemSetting::latest()->first();
+        if ($settings && $settings->contaazul_cron_enabled === false) {
+            $this->info('Cron de sincronização Conta Azul está desativada nas Configurações do Sistema.');
+            return 0;
+        }
+        $now = Carbon::now();
+        $this->info("Iniciando verificação de conexões para sync às {$now->toDateTimeString()}");
+
+        $staleExists = ContaAzulConnection::active()
+            ->where(function ($q) {
+                $q->whereNull('last_sync_at')
+                  ->orWhere('last_sync_at', '<', Carbon::now()->subHours(24));
+            })
+            ->exists();
+
+        if (! $staleExists) {
+            $this->info('Nenhuma empresa com sync vencido (>24h). Nada a fazer.');
+            return 0;
+        }
+
+        $connections = ContaAzulConnection::active()->orderBy('empresa_nome')->get();
+        foreach ($connections as $connection) {
+            $this->info("Sincronizando empresa: {$connection->empresa_nome} (ID {$connection->id})");
+            try {
+                $token = $this->auth->getValidToken($connection) ?? $this->auth->getValidToken($connection, true);
+                if (! $token) {
+                    $this->warn("Sem token válido para conexão {$connection->id}. Pulando.");
+                    continue;
+                }
+
+                $syncedClients = $this->syncClients($connection);
+                $syncedInvoices = $this->api->syncOverdueInvoices($connection);
+
+                $connection->last_sync_at = Carbon::now();
+                $connection->save();
+
+                $this->info("Empresa {$connection->empresa_nome}: {$syncedClients} clientes e {$syncedInvoices} faturas sincronizados.");
+            } catch (\Exception $e) {
+                Log::error("Erro ao sincronizar conexão {$connection->id}: ".$e->getMessage());
+                $this->error("Erro ao sincronizar {$connection->empresa_nome}: ".$e->getMessage());
+            }
+        }
+
+        $this->info('Sincronização concluída.');
+        return 0;
+    }
+
+    protected function syncClients(ContaAzulConnection $connection): int
+    {
+        $page = 1;
+        $size = 100;
+        $hasMore = true;
+        $syncedCount = 0;
+
+        while ($hasMore) {
+            $response = $this->api->getClients($connection, ['page' => $page, 'size' => $size]);
+            $clientsData = [];
+            if (isset($response['items'])) {
+                $clientsData = $response['items'];
+            } elseif (is_array($response)) {
+                $clientsData = $response;
+            }
+
+            if (empty($clientsData)) {
+                $hasMore = false;
+                break;
+            }
+
+            foreach ($clientsData as $caClient) {
+                $perfis = array_map('strtolower', $caClient['perfis'] ?? []);
+                if (! in_array('cliente', $perfis)) {
+                    continue;
+                }
+                if (empty($caClient['ativo'])) {
+                    continue;
+                }
+                $cpfCnpj = $caClient['documento'] ?? ($caClient['cpf'] ?? ($caClient['cnpj'] ?? null));
+                $phone = $caClient['telefone'] ?? ($caClient['telefone_comercial'] ?? null);
+                $mobilePhone = $caClient['telefone_celular'] ?? null;
+                $city = null;
+                $state = null;
+                if (! empty($caClient['enderecos']) && is_array($caClient['enderecos'])) {
+                    $primaryAddress = $caClient['enderecos'][0];
+                    $city = $primaryAddress['cidade'] ?? null;
+                    $state = $primaryAddress['estado'] ?? null;
+                }
+                Cliente::updateOrCreate(
+                    ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
+                    [
+                        'connection_id' => $connection->id,
+                        'name' => $caClient['nome'] ?? 'Sem Nome',
+                        'company_name' => $connection->empresa_nome,
+                        'email' => $caClient['email'] ?? null,
+                        'phone' => $phone,
+                        'mobile_phone' => $mobilePhone,
+                        'cpf_cnpj' => $cpfCnpj,
+                        'person_type' => $caClient['tipo_pessoa'] ?? null,
+                        'city' => $city,
+                        'state' => $state,
+                    ]
+                );
+                $syncedCount++;
+            }
+
+            if (count($clientsData) < $size) {
+                $hasMore = false;
+            } else {
+                $page++;
+            }
+
+            if ($page > 500) {
+                $hasMore = false;
+            }
+            sleep(1);
+        }
+
+        return $syncedCount;
+    }
+}

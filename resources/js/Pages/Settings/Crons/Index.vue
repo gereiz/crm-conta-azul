@@ -1,0 +1,208 @@
+<script setup>
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { ref, onMounted } from 'vue';
+import axios from 'axios';
+
+const props = defineProps({
+    crons: {
+        type: Array,
+        required: true
+    },
+    can: {
+        type: Object,
+        default: () => ({ create: false, update: false, delete: false })
+    }
+});
+
+const getTypeLabel = (type) => {
+    const types = {
+        'billing': 'Cobrança (Atraso)',
+        'due_date': 'Aviso de Vencimento',
+        'boleto': 'Emissão de Boleto',
+        'birthday': 'Aniversariantes'
+    };
+    return types[type] || type;
+};
+
+const getPeriodLabel = (cron) => {
+    if (cron.type === 'birthday') return '-';
+    
+    // Logic based on type to show relevant info
+    if (cron.type === 'billing') {
+        return `> ${cron.days_after_due || 0} dias de atraso`;
+    }
+    if (cron.type === 'due_date') {
+        return `${cron.days_before_due || 0} dias antes`;
+    }
+
+    if (!cron.period_value) return '-';
+    
+    const units = {
+        'days': 'dias',
+        'months': 'meses',
+        'years': 'anos'
+    };
+    return `Últimos ${cron.period_value} ${units[cron.period_unit] || ''}`;
+};
+
+const toggleStatus = (cron) => {
+    router.put(route('settings.crons.update', cron.id), {
+        ...cron,
+        is_active: !cron.is_active
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Toast notification ideally
+        }
+    });
+};
+
+const deleteCron = (cron) => {
+    if (confirm('Tem certeza que deseja excluir esta automação?')) {
+        router.delete(route('settings.crons.destroy', cron.id));
+    }
+};
+
+const runCron = (cron) => {
+    if (confirm(`Deseja disparar manualmente a automação "${cron.name}"? Isso enviará mensagens para os clientes que se encaixam na regra agora.`)) {
+        router.post(route('settings.crons.run', cron.id), {}, {
+            preserveScroll: true
+        });
+    }
+};
+
+const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+};
+
+const cronEnabled = ref(true);
+const loadingCron = ref(false);
+const updateCronStatus = async () => {
+    loadingCron.value = true;
+    try {
+        await axios.post(route('settings.cron.contaazul.toggle'), { enabled: cronEnabled.value });
+    } catch (e) {
+        cronEnabled.value = !cronEnabled.value;
+        alert('Erro ao atualizar status da cron.');
+    } finally {
+        loadingCron.value = false;
+    }
+};
+
+onMounted(async () => {
+    try {
+        const { data } = await axios.get(route('settings.cron.contaazul.status'));
+        cronEnabled.value = !!data.enabled;
+    } catch (e) {
+        cronEnabled.value = true;
+    }
+});
+</script>
+
+<template>
+    <Head title="Crons - Automações" />
+
+    <AuthenticatedLayout>
+        <template #header>
+            <div class="flex items-center justify-between">
+                <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+                    Automações (Crons)
+                </h2>
+                <Link :href="route('settings.crons.create')">
+                    <PrimaryButton>
+                        Nova Automação
+                    </PrimaryButton>
+                </Link>
+            </div>
+        </template>
+
+        <div class="py-12">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 text-gray-900 dark:text-gray-100">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-medium">Sincronização Automática Multi-Empresa</h3>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" v-model="cronEnabled" @change="updateCronStatus" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                <span class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">{{ cronEnabled ? 'Habilitado' : 'Desabilitado' }}</span>
+                            </label>
+                        </div>
+                        
+                        <div v-if="crons.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            Nenhuma automação cadastrada.
+                        </div>
+
+                        <div v-else class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tipo</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Template</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">connection_id</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Horário</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Regra/Período</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Última Execução</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                        <th scope="col" class="relative px-6 py-3">
+                                            <span class="sr-only">Ações</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    <tr v-for="cron in crons" :key="cron.id">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white">{{ cron.name }}</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                                {{ getTypeLabel(cron.type) }}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ cron.message_template?.name || '-' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ cron.connection_id ?? '-' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ cron.send_time }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ getPeriodLabel(cron) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ formatDate(cron.last_run_at) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <button @click="toggleStatus(cron)" 
+                                                :disabled="!can.update"
+                                                :class="[
+                                                    cron.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+                                                    !can.update ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80 transition-opacity'
+                                                ]"
+                                                class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                                                {{ cron.is_active ? 'Ativo' : 'Inativo' }}
+                                            </button>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button v-if="can.update" @click="runCron(cron)" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-3">Disparar</button>
+                                            <Link v-if="can.update" :href="route('settings.crons.edit', cron.id)" class="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 mr-3">Editar</Link>
+                                            <button v-if="can.delete" @click="deleteCron(cron)" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">Excluir</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </AuthenticatedLayout>
+</template>
