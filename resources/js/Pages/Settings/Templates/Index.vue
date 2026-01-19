@@ -33,7 +33,8 @@ const variables = [
     { code: '@@clientEmail@@', label: 'Email do cliente' },
     { code: '@@invoicePastDueQuantity@@', label: 'Qtd. cobranças vencidas' },
     { code: '@@invoicePastDueDates@@', label: 'Datas de vencimento' },
-    { code: '@@invoiceTotalValue@@', label: 'Valor total vencido' }
+    { code: '@@invoiceTotalValue@@', label: 'Valor total vencido' },
+    { code: '@@invoicePastDuePairs@@', label: 'Pares data - boleto' }
 ];
 
 // Emoji list (common ones)

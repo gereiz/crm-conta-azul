@@ -69,7 +69,7 @@ const formatPhoneForWhatsapp = (phone) => {
     // Default
     if (!digits) digits = '55';
     
-    return '+' + digits;
+    return digits;
 };
 
 const form = useForm({
@@ -181,6 +181,10 @@ const applyTemplate = (templateId) => {
     const boletoUrls = overdueInvoices.map(inv => inv.link_boleto).filter(Boolean).join('\n');
     const firstBoletoUrl = overdueInvoices.find(inv => inv.link_boleto)?.link_boleto || '';
     const firstInvoice = overdueInvoices[0] || {};
+    const pairs = overdueInvoices.map(inv => {
+        const d = inv.data_vencimento ? formatDate(inv.data_vencimento) : '-';
+        return `${d} - ${inv.link_boleto || ''}`;
+    }).join('\n');
 
     // Variables replacement logic
     const replacements = {
@@ -192,6 +196,7 @@ const applyTemplate = (templateId) => {
         '@@invoiceTotalValue@@': formatCurrency(totalValue),
         '@@invoiceBoletoUrls@@': boletoUrls,
         '@@invoiceBoletoUrl@@': firstBoletoUrl,
+        '@@invoicePastDuePairs@@': pairs,
         '@@invoiceDueDate@@': adjustForWeekend(firstInvoice.data_vencimento),
         '@@invoiceStrictDueDate@@': formatDate(firstInvoice.data_vencimento),
         '@@invoiceUrl@@': firstInvoice.link_boleto || '',

@@ -175,6 +175,7 @@ const applyTemplate = (templateId) => {
 
     const boletoUrls = invoicesToUse.map(inv => inv.link_boleto).filter(Boolean).join('\n');
     const firstBoletoUrl = invoicesToUse.find(inv => inv.link_boleto)?.link_boleto || '';
+    const pairs = invoicesToUse.map(inv => `${formatDate(inv.data_vencimento)} - ${inv.link_boleto || ''}`).join('\n');
 
     // Variables replacement logic
     const replacements = {
@@ -186,6 +187,7 @@ const applyTemplate = (templateId) => {
         '@@invoiceTotalValue@@': formatCurrency(totalValue),
         '@@invoiceBoletoUrls@@': boletoUrls,
         '@@invoiceBoletoUrl@@': firstBoletoUrl,
+        '@@invoicePastDuePairs@@': pairs,
         '@@invoiceDueDate@@': adjustForWeekend(invoice.data_vencimento),
         '@@invoiceStrictDueDate@@': formatDate(invoice.data_vencimento),
         '@@invoiceUrl@@': invoice.link_boleto || '',
@@ -242,7 +244,7 @@ const formatPhoneForWhatsapp = (phone) => {
     // Default
     if (!digits) digits = '55';
     
-    return '+' + digits;
+    return digits;
 };
 
 const openDetails = async (invoice) => {

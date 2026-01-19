@@ -118,11 +118,15 @@ class MessageCronService
         }
 
         $invoices = $query->with('cliente')->get();
-        
-        $stats = ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => $invoices->count()];
 
-        foreach ($invoices as $invoice) {
-            $result = $this->sendMessageForInvoice($cron, $invoice);
+        // Agrupar por cliente para envio único
+        $groups = $invoices->filter(fn($inv) => $inv->cliente_id && $inv->cliente)->groupBy('cliente_id');
+        
+        $stats = ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => $groups->count()];
+
+        foreach ($groups as $clienteId => $clientInvoices) {
+            $cliente = $clientInvoices->first()->cliente;
+            $result = $this->sendGroupedMessageForClient($cron, $cliente, $clientInvoices);
             if ($result === 'sent') $stats['sent']++;
             elseif ($result === 'error') $stats['errors']++;
             else $stats['skipped']++;
@@ -385,5 +389,121 @@ class MessageCronService
             'error_message' => $msg,
             'sent_at' => now(),
         ]);
+    }
+
+    protected function sendGroupedMessageForClient(MessageCron $cron, Cliente $cliente, $invoices)
+    {
+        $connId = $cron->connection_id ?? ($cliente->connection_id ?? null);
+        $ignoreSentToday = false;
+        if ($connId) {
+            $ignoreSentToday = (bool) CompanyMessageSetting::where('conta_azul_connection_id', $connId)
+                ->where('message_type', 'ignore_sent_today')
+                ->value('is_enabled');
+        }
+        if (!$ignoreSentToday) {
+            $alreadySent = MessageCronLog::where('message_cron_id', $cron->id)
+                ->where('cliente_id', $cliente->id)
+                ->whereDate('sent_at', Carbon::today())
+                ->exists();
+            if ($alreadySent) return 'skipped';
+        }
+
+        $context = [
+            'cliente_nome' => $cliente->name ?? '',
+            'cliente_ca_id' => $cliente->ca_id ?? null,
+            'invoice_ca_id' => null,
+            'descricao' => 'GroupedBilling',
+        ];
+        if ($connId && $this->restrictionService->isBlocked((int) $connId, $context)) {
+            MessageCronLog::create([
+                'message_cron_id' => $cron->id,
+                'cliente_id' => $cliente->id,
+                'client_name' => $cliente->name,
+                'phone' => $cliente->mobile_phone ?? $cliente->phone ?? 'N/A',
+                'status' => 'skipped',
+                'error_message' => 'Bloqueado por regra de restrição',
+                'sent_at' => now(),
+            ]);
+            return 'skipped';
+        }
+
+        $phone = $cliente->mobile_phone ?? $cliente->phone;
+        if (!$phone) {
+            $this->logError($cron, $cliente, null, "Cliente sem telefone cadastrado.");
+            return 'error';
+        }
+
+        if (!$cron->messageTemplate) {
+            $this->logError($cron, $cliente, $phone, "Template de mensagem não encontrado.");
+            return 'error';
+        }
+
+        if (!$cron->whatsapp_number_id) {
+            $this->logError($cron, $cliente, $phone, "Cron sem número de WhatsApp vinculado.");
+            return 'error';
+        }
+
+        $dates = collect($invoices)->map(function ($inv) {
+            return Carbon::parse($inv->data_vencimento)->format('d/m/Y');
+        })->values()->all();
+        $earliest = collect($invoices)->min(fn($inv) => Carbon::parse($inv->data_vencimento));
+        $adjustedEarliest = $earliest ? (clone $earliest) : null;
+        if ($adjustedEarliest) {
+            if ($adjustedEarliest->isSaturday()) $adjustedEarliest->addDays(2);
+            if ($adjustedEarliest->isSunday()) $adjustedEarliest->addDays(1);
+        }
+
+        $totalValue = collect($invoices)->sum(function ($inv) {
+            return (float) ($inv->saldo_devedor ?? $inv->nao_pago ?? 0);
+        });
+        $firstUrl = collect($invoices)->first(function ($inv) {
+            return !empty($inv->link_boleto);
+        });
+        $allUrls = collect($invoices)->pluck('link_boleto')->filter()->implode("\n");
+        $pairs = collect($invoices)->map(function ($inv) {
+            $due = Carbon::parse($inv->data_vencimento)->format('d/m/Y');
+            $url = $inv->link_boleto ?? '';
+            return $due . ' - ' . $url;
+        })->implode("\n");
+
+        $content = $cron->messageTemplate->content;
+        $content = $this->replaceVariables($content, null, $cliente);
+        $content = str_replace([
+            '@@invoicePastDueQuantity@@',
+            '@@invoicePastDueDates@@',
+            '@@invoiceTotalValue@@',
+            '@@invoiceBoletoUrl@@',
+            '@@invoiceBoletoUrls@@',
+            '@@invoicePastDuePairs@@',
+            '@@invoiceDueDate@@',
+            '@@invoiceStrictDueDate@@',
+            '@@invoiceOpenValue@@',
+            '@@invoiceLateDays@@',
+        ], [
+            (string) count($dates),
+            implode(', ', $dates),
+            number_format($totalValue, 2, ',', '.'),
+            $firstUrl ? ($firstUrl->link_boleto ?? '') : '',
+            $allUrls,
+            $pairs,
+            $adjustedEarliest ? $adjustedEarliest->format('d/m/Y') : '',
+            $earliest ? $earliest->format('d/m/Y') : '',
+            number_format($totalValue, 2, ',', '.'),
+            $earliest ? Carbon::now()->diffInDays($earliest) : 0,
+        ], $content);
+
+        $result = $this->whapiService->sendMessage($cron->whatsapp_number_id, $phone, $content);
+
+        MessageCronLog::create([
+            'message_cron_id' => $cron->id,
+            'cliente_id' => $cliente->id,
+            'client_name' => $cliente->name,
+            'phone' => $phone,
+            'status' => $result['success'] ? 'success' : 'error',
+            'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
+            'sent_at' => now(),
+        ]);
+
+        return $result['success'] ? 'sent' : 'error';
     }
 }
