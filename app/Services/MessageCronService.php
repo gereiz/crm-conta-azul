@@ -206,12 +206,20 @@ class MessageCronService
     {
         if (!$invoice->cliente) return 'skipped';
 
-        $alreadySent = MessageCronLog::where('message_cron_id', $cron->id)
-            ->where('cliente_id', $invoice->cliente_id)
-            ->whereDate('sent_at', Carbon::today())
-            ->exists();
-
-        if ($alreadySent) return 'skipped';
+        $ignoreSentToday = false;
+        $connId = $invoice->connection_id ?? $cron->connection_id;
+        if ($connId) {
+            $ignoreSentToday = (bool) CompanyMessageSetting::where('conta_azul_connection_id', $connId)
+                ->where('message_type', 'ignore_sent_today')
+                ->value('is_enabled');
+        }
+        if (!$ignoreSentToday) {
+            $alreadySent = MessageCronLog::where('message_cron_id', $cron->id)
+                ->where('cliente_id', $invoice->cliente_id)
+                ->whereDate('sent_at', Carbon::today())
+                ->exists();
+            if ($alreadySent) return 'skipped';
+        }
 
         $context = [
             'cliente_nome' => $invoice->cliente->name ?? ($invoice->cliente_nome ?? ''),
@@ -270,12 +278,20 @@ class MessageCronService
     {
         if (!$client->mobile_phone) return 'skipped';
 
-        $alreadySent = MessageCronLog::where('message_cron_id', $cron->id)
-            ->where('cliente_id', $client->id)
-            ->whereDate('sent_at', Carbon::today())
-            ->exists();
-
-        if ($alreadySent) return 'skipped';
+        $ignoreSentToday = false;
+        $connId = $cron->connection_id ?? ($client->connection_id ?? null);
+        if ($connId) {
+            $ignoreSentToday = (bool) CompanyMessageSetting::where('conta_azul_connection_id', $connId)
+                ->where('message_type', 'ignore_sent_today')
+                ->value('is_enabled');
+        }
+        if (!$ignoreSentToday) {
+            $alreadySent = MessageCronLog::where('message_cron_id', $cron->id)
+                ->where('cliente_id', $client->id)
+                ->whereDate('sent_at', Carbon::today())
+                ->exists();
+            if ($alreadySent) return 'skipped';
+        }
 
         if (!$cron->whatsapp_number_id) {
              $this->logError($cron, $client, $client->mobile_phone, "Cron sem número de WhatsApp vinculado.");

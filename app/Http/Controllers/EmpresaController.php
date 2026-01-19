@@ -56,6 +56,9 @@ class EmpresaController extends Controller
             $found = $settings->firstWhere('message_type', $t['key']);
             $messageSettings[$t['key']] = (bool)($found?->is_enabled ?? false);
         }
+        // Flag global: ignorar verificação de "já enviado hoje"
+        $ignoreFlag = $settings->firstWhere('message_type', 'ignore_sent_today');
+        $messageSettings['ignore_sent_today'] = (bool)($ignoreFlag?->is_enabled ?? false);
 
         $cronRulesCollection = CompanyCronRule::where('conta_azul_connection_id', $connection->id)->get();
         $cronRules = [];
@@ -82,7 +85,7 @@ class EmpresaController extends Controller
     public function updateMessageSettings(Request $request, ContaAzulConnection $connection)
     {
         $data = $request->validate([
-            'type' => 'required|string|in:billing,due_date,boleto,birthday',
+            'type' => 'required|string|in:billing,due_date,boleto,birthday,ignore_sent_today',
             'enabled' => 'required|boolean',
         ]);
 
