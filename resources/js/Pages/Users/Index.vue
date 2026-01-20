@@ -12,6 +12,10 @@ import Checkbox from '@/Components/Checkbox.vue';
 
 const props = defineProps({
     users: Array,
+    roles: {
+        type: Array,
+        default: () => []
+    }
 });
 
 const isModalOpen = ref(false);
@@ -23,6 +27,7 @@ const form = useForm({
     password: '',
     password_confirmation: '',
     role: 'operator',
+    role_id: null,
     is_active: true,
 });
 
@@ -35,10 +40,12 @@ const openModal = (user = null) => {
         form.name = user.name;
         form.email = user.email;
         form.role = user.role;
+        form.role_id = user.role_id ?? user.roleRef?.id ?? null;
         form.is_active = Boolean(user.is_active);
         // Password fields remain empty for security
     } else {
         form.role = 'operator';
+        form.role_id = props.roles.find(r => (r.name || '').toLowerCase() === 'operador')?.id ?? null;
         form.is_active = true;
     }
     isModalOpen.value = true;
@@ -75,6 +82,11 @@ const roleLabel = (role) => {
         'viewer': 'Visualizador',
     };
     return roles[role] || role;
+};
+
+const findRoleNameById = (id) => {
+    const r = props.roles.find(x => x.id === id);
+    return r?.name || null;
 };
 </script>
 
@@ -114,7 +126,7 @@ const roleLabel = (role) => {
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ user.email }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">
-                                            {{ roleLabel(user.role) }}
+                                            {{ user.roleRef?.name || roleLabel(user.role) }}
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -168,17 +180,15 @@ const roleLabel = (role) => {
                     </div>
 
                     <div>
-                        <InputLabel for="role" value="Perfil" />
-                         <select
-                            id="role"
-                            v-model="form.role"
+                        <InputLabel for="role_id" value="Perfil" />
+                        <select
+                            id="role_id"
+                            v-model="form.role_id"
                             class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-primary-500 dark:focus:border-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 rounded-md shadow-sm"
                         >
-                            <option value="admin">Administrador</option>
-                            <option value="operator">Operador</option>
-                            <option value="viewer">Visualizador</option>
+                            <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
                         </select>
-                        <InputError class="mt-2" :message="form.errors.role" />
+                        <InputError class="mt-2" :message="form.errors.role_id" />
                     </div>
 
                     <div class="border-t pt-4 mt-4">

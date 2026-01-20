@@ -1,13 +1,31 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import Sidebar from '@/Components/Sidebar.vue';
 import { usePage } from '@inertiajs/vue3';
 
 const sidebarOpen = ref(true);
+const page = usePage();
+const toast = ref({ visible: false, message: '', type: 'success' });
+let toastTimeout = null;
 
 const toggleSidebar = () => {
     sidebarOpen.value = !sidebarOpen.value;
 };
+
+watch(() => page.props.flash, (flash) => {
+    const success = typeof flash?.success === 'function' ? flash.success() : flash?.success;
+    const error = typeof flash?.error === 'function' ? flash.error() : flash?.error;
+    const message = typeof flash?.message === 'function' ? flash.message() : flash?.message;
+    const finalMessage = success || error || message;
+    const type = error ? 'error' : 'success';
+    if (finalMessage) {
+        toast.value = { visible: true, message: finalMessage, type };
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toast.value.visible = false;
+        }, 4000);
+    }
+}, { deep: true });
 </script>
 
 <template>
@@ -16,6 +34,12 @@ const toggleSidebar = () => {
         <Sidebar :open="sidebarOpen" />
 
         <div class="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300">
+            <!-- Toast -->
+            <div v-if="toast.visible" class="fixed top-4 right-4 z-50">
+                <div :class="toast.type === 'error' ? 'bg-red-600' : 'bg-green-600'" class="text-white px-4 py-3 rounded shadow-lg">
+                    {{ toast.message }}
+                </div>
+            </div>
             <!-- Top Header -->
             <header class="bg-white dark:bg-gray-800 shadow border-b border-gray-100 dark:border-gray-700 h-16 flex items-center justify-between px-6 shrink-0">
                 <!-- Hamburger Button -->

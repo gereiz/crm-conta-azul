@@ -19,6 +19,8 @@ use App\Http\Controllers\WhatsappTemplateController;
 use App\Models\SystemSetting;
 use App\Http\Controllers\ContaAzulConnectionController;
 use App\Http\Controllers\BillingRestrictionController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\PermissionController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -82,6 +84,9 @@ Route::middleware('auth')->group(function () {
         Route::post('restrictions/{restriction}/toggle', [BillingRestrictionController::class, 'toggle'])->name('restrictions.toggle');
         Route::get('restrictions/autocomplete/clients', [BillingRestrictionController::class, 'autocompleteClients'])->name('restrictions.autocomplete.clients');
         Route::get('restrictions/autocomplete/invoices', [BillingRestrictionController::class, 'autocompleteInvoices'])->name('restrictions.autocomplete.invoices');
+        
+        Route::resource('roles', RoleController::class)->middleware('permission:roles.manage');
+        Route::resource('permissions', PermissionController::class)->middleware('permission:permissions.manage');
     });
 
     // Módulos
@@ -96,10 +101,10 @@ Route::middleware('auth')->group(function () {
     Route::resource('whatsapp', WhatsAppController::class);
     
     // Envio de Mensagens
-    Route::post('/messages/send', [MessageController::class, 'send'])->name('messages.send');
+    Route::post('/messages/send', [MessageController::class, 'send'])->name('messages.send')->middleware('permission:messages.send');
 
     // Gestão de Usuários (Apenas Admin)
-    Route::resource('users', UserController::class)->middleware('can:viewAny,App\Models\User');
+    Route::resource('users', UserController::class);
 });
 
 require __DIR__.'/auth.php';

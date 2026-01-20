@@ -22,6 +22,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'role_id',
         'is_active',
     ];
 
@@ -49,19 +50,41 @@ class User extends Authenticatable
         ];
     }
     
+    public function roleRef()
+    {
+        return $this->belongsTo(UserRole::class, 'role_id');
+    }
+    
+    public function hasPermission(string $module, string $action): bool
+    {
+        if ($this->isAdmin()) return true;
+        $role = $this->roleRef;
+        if (!$role) return false;
+        return $role->permissions()
+            ->where('module', $module)
+            ->where('action', $action)
+            ->exists();
+    }
+    
     // Helpers para verificação de permissão
     public function isAdmin()
     {
-        return $this->role === 'admin';
+        if ($this->role === 'admin') return true;
+        $r = $this->roleRef;
+        return $r && strtolower($r->name) === 'administrador';
     }
 
     public function isOperator()
     {
-        return $this->role === 'operator';
+        if ($this->role === 'operator') return true;
+        $r = $this->roleRef;
+        return $r && in_array(strtolower($r->name), ['operacional', 'operador', 'operator']);
     }
 
     public function isViewer()
     {
-        return $this->role === 'viewer';
+        if ($this->role === 'viewer') return true;
+        $r = $this->roleRef;
+        return $r && in_array(strtolower($r->name), ['visualizador', 'viewer']);
     }
 }

@@ -168,6 +168,12 @@ watch(() => page.props.system_settings, (newSettings) => {
                     <Link :href="route('settings.restrictions.index')" :class="route().current('settings.restrictions.*') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
                         <span>Restrições e Envio</span>
                     </Link>
+                    <Link :href="route('settings.roles.index')" :class="route().current('settings.roles.*') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
+                        <span>Perfis</span>
+                    </Link>
+                    <Link :href="route('settings.permissions.index')" :class="route().current('settings.permissions.*') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
+                        <span>Permissões</span>
+                    </Link>
                     <Link :href="route('settings.system.index')" :class="route().current('settings.system.*') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
                         <span>Configurações do Sistema</span>
                     </Link>
