@@ -130,7 +130,7 @@ watch(() => page.props.system_settings, (newSettings) => {
 
                 <div v-show="open && showingWhatsapp" class="mt-1 space-y-1 overflow-hidden transition-all duration-300">
                     <Link :href="route('whatsapp.index')" :class="route().current('whatsapp.index') || route().current('whatsapp.show') || route().current('whatsapp.create') || route().current('whatsapp.edit') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
-                        <span>Enviar Mensagem</span>
+                        <span>Cadastro de Números</span>
                     </Link>
                     <Link :href="route('whatsapp.reports.index')" :class="route().current('whatsapp.reports.index') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
                         <span>Relatórios de Envio</span>

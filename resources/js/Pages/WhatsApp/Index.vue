@@ -247,11 +247,7 @@ const deleteNumber = (id) => {
                         </div>
                     </div>
 
-                    <div>
-                        <Toggle v-model="form.use_poli" label="Usar Poli (poliWpp)" />
-                    </div>
-
-                    <div v-if="!form.use_poli">
+                <div>
                         <InputLabel for="whapi_key" value="Whapi Key" />
                         <TextInput
                             id="whapi_key"
@@ -260,68 +256,6 @@ const deleteNumber = (id) => {
                             v-model="form.whapi_key"
                         />
                         <InputError class="mt-2" :message="form.errors.whapi_key" />
-                    </div>
-
-                    <div v-else class="space-y-4">
-                        <div>
-                            <InputLabel for="poli_key" value="Poli Key *" />
-                            <TextInput
-                                id="poli_key"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.poli_key"
-                                placeholder="Informe a chave Poli"
-                            />
-                            <InputError class="mt-2" :message="form.errors.poli_key" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="poli_customer" value="Customer (Empresa) *" />
-                            <TextInput
-                                id="poli_customer"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.poli_customer"
-                                placeholder="Informe o cliente/empresa"
-                            />
-                            <InputError class="mt-2" :message="form.errors.poli_customer" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="poli_channel" value="Channel (Canal) *" />
-                            <TextInput
-                                id="poli_channel"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.poli_channel"
-                                placeholder="Informe o canal"
-                            />
-                            <InputError class="mt-2" :message="form.errors.poli_channel" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="poli_user" value="User (Usuário) *" />
-                            <TextInput
-                                id="poli_user"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.poli_user"
-                                placeholder="Informe o usuário"
-                            />
-                            <InputError class="mt-2" :message="form.errors.poli_user" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="poli_template" value="Template Padrão" />
-                            <TextInput
-                                id="poli_template"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.poli_template"
-                                placeholder="Informe o template padrão"
-                            />
-                            <InputError class="mt-2" :message="form.errors.poli_template" />
-                        </div>
                     </div>
 
                     <div class="space-y-2">

@@ -24,15 +24,9 @@ class WhatsAppController extends Controller
             'ddi' => 'required|string|max:5',
             'ddd' => 'required|string|max:5',
             'phone' => 'required|string|max:20',
-            'whapi_key' => 'nullable|required_if:use_poli,false|string',
+            'whapi_key' => 'required|string',
             'is_default' => 'boolean',
             'status' => 'required|in:active,inactive',
-            'use_poli' => 'boolean',
-            'poli_key' => 'nullable|required_if:use_poli,true|string',
-            'poli_customer' => 'nullable|required_if:use_poli,true|string',
-            'poli_channel' => 'nullable|required_if:use_poli,true|string',
-            'poli_user' => 'nullable|required_if:use_poli,true|string',
-            'poli_template' => 'nullable|string',
         ]);
 
         if ($validated['is_default'] ?? false) {
@@ -52,15 +46,9 @@ class WhatsAppController extends Controller
             'ddi' => 'required|string|max:5',
             'ddd' => 'required|string|max:5',
             'phone' => 'required|string|max:20',
-            'whapi_key' => 'nullable|required_if:use_poli,false|string',
+            'whapi_key' => 'nullable|string',
             'is_default' => 'boolean',
             'status' => 'required|in:active,inactive',
-            'use_poli' => 'boolean',
-            'poli_key' => 'nullable|required_if:use_poli,true|string',
-            'poli_customer' => 'nullable|required_if:use_poli,true|string',
-            'poli_channel' => 'nullable|required_if:use_poli,true|string',
-            'poli_user' => 'nullable|required_if:use_poli,true|string',
-            'poli_template' => 'nullable|string',
         ]);
 
         if ($validated['is_default'] ?? false) {
