@@ -28,10 +28,15 @@ class ContaAzulService
         $this->clientId = trim(config('services.contaazul.client_id'));
         $this->clientSecret = trim(config('services.contaazul.client_secret'));
         $this->redirectUri = trim(config('services.contaazul.redirect_uri'));
-        $rawScope = trim(config('services.contaazul.scope')) ?: 'openid profile email';
+        $rawScope = (string)(trim(config('services.contaazul.scope')) ?: 'openid profile email');
+        $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
         $allowed = ['openid', 'profile', 'email', 'offline_access'];
-        $parts = preg_split('/\s+/', trim($rawScope));
+        $parts = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
+        $parts = array_map(fn($s) => strtolower(trim($s)), $parts);
         $filtered = array_values(array_unique(array_intersect($parts, $allowed)));
+        if (empty($filtered)) {
+            $filtered = ['openid','profile','email'];
+        }
         $this->scope = implode(' ', $filtered);
     }
 

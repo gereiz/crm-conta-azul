@@ -1,10 +1,10 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({
@@ -80,6 +80,13 @@ const formatDate = (dateString) => {
     return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: ptBR });
 };
 
+const page = usePage();
+const cronReport = computed(() => {
+    // Tenta obter o report da flash session ou diretamente das props
+    const v = page.props.flash?.cron_report || page.props.cron_report;
+    return typeof v === 'function' ? v() : v || null;
+});
+
 const cronEnabled = ref(true);
 const loadingCron = ref(false);
 const updateCronStatus = async () => {
@@ -122,9 +129,52 @@ onMounted(async () => {
         </template>
 
         <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
+                        <div v-if="cronReport" class="mb-4 text-sm">
+                            <details class="bg-gray-50 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-600">
+                                <summary class="cursor-pointer px-4 py-2 font-medium">
+                                    Detalhar última execução ({{ (cronReport.stats?.sent ?? 0) }} enviadas, {{ (cronReport.stats?.errors ?? 0) }} erros, {{ (cronReport.stats?.skipped ?? 0) }} ignoradas)
+                                </summary>
+                                <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-600">
+                                    <table class="min-w-full text-xs">
+                                        <thead>
+                                            <tr class="text-left text-gray-500 dark:text-gray-300">
+                                                <th class="pr-4 py-1">Cliente</th>
+                                                <th class="pr-4 py-1">Telefone</th>
+                                                <th class="pr-4 py-1">Status</th>
+                                                <th class="pr-4 py-1">Mensagem</th>
+                                                <th class="pr-4 py-1">Data/Hora</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(log, idx) in cronReport.logs" :key="idx" class="border-t border-gray-100 dark:border-gray-700">
+                                                <td class="pr-4 py-1">{{ log.client_name || 'Desconhecido' }}</td>
+                                                <td class="pr-4 py-1">{{ log.phone }}</td>
+                                                <td class="pr-4 py-1">
+                                                    <span v-if="log.status === 'success'" class="px-2 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                                        Sucesso
+                                                    </span>
+                                                    <span v-else-if="log.status === 'error'" class="px-2 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                                        Erro
+                                                    </span>
+                                                    <span v-else class="px-2 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                                        Ignorado
+                                                    </span>
+                                                </td>
+                                                <td class="pr-4 py-1 text-gray-600 dark:text-gray-300">
+                                                    {{ log.error_message || '-' }}
+                                                </td>
+                                                <td class="pr-4 py-1 text-gray-600 dark:text-gray-300">
+                                                    {{ log.sent_at || '-' }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        </div>
                         <div class="flex items-center justify-between mb-6">
                             <h3 class="text-lg font-medium">Sincronização Automática Multi-Empresa</h3>
                             <label class="relative inline-flex items-center cursor-pointer">

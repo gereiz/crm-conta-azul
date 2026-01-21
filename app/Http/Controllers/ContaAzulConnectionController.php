@@ -66,8 +66,11 @@ class ContaAzulConnectionController extends Controller
 
     public function connect(ContaAzulConnection $connection)
     {
+        if (empty($connection->ca_client_id) || empty($connection->ca_redirect_uri)) {
+            return redirect()->back()->with('error', 'Conexão inválida: Client ID ou Redirect URI ausentes.');
+        }
         $url = $this->auth->getAuthUrl($connection);
-        return Inertia::location($url);
+        return redirect()->away($url);
     }
 
     public function callback(Request $request, ContaAzulConnection $connection)
@@ -91,5 +94,24 @@ class ContaAzulConnectionController extends Controller
         }
         $this->auth->saveTokens($connection, $data);
         return redirect()->route('contaazul.connections.index')->with('success', 'Conexão reautorizada com sucesso.');
+    }
+
+    public function refreshToken(ContaAzulConnection $connection)
+    {
+        try {
+            if (!$connection->refresh_token) {
+                return response()->json(['success' => false, 'error' => 'Sem refresh token disponível. Realize a conexão manual.']);
+            }
+
+            $newToken = $this->auth->refreshToken($connection);
+
+            if ($newToken) {
+                return response()->json(['success' => true, 'message' => 'Token renovado com sucesso.']);
+            } else {
+                return response()->json(['success' => false, 'error' => 'Falha ao renovar token. O refresh token pode ter expirado.']);
+            }
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => 'Erro interno: ' . $e->getMessage()]);
+        }
     }
 }

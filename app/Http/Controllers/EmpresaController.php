@@ -59,6 +59,11 @@ class EmpresaController extends Controller
         // Flag global: ignorar verificação de "já enviado hoje"
         $ignoreFlag = $settings->firstWhere('message_type', 'ignore_sent_today');
         $messageSettings['ignore_sent_today'] = (bool)($ignoreFlag?->is_enabled ?? false);
+        // Flag global: limitar preview de links
+        $limitPreviewFlag = $settings->firstWhere('message_type', 'limit_link_preview');
+        $messageSettings['limit_link_preview'] = (bool)($limitPreviewFlag?->is_enabled ?? false);
+        $disablePreviewFlag = $settings->firstWhere('message_type', 'disable_link_preview');
+        $messageSettings['disable_link_preview'] = (bool)($disablePreviewFlag?->is_enabled ?? false);
 
         $cronRulesCollection = CompanyCronRule::where('conta_azul_connection_id', $connection->id)->get();
         $cronRules = [];
@@ -85,7 +90,7 @@ class EmpresaController extends Controller
     public function updateMessageSettings(Request $request, ContaAzulConnection $connection)
     {
         $data = $request->validate([
-            'type' => 'required|string|in:billing,due_date,boleto,birthday,ignore_sent_today',
+            'type' => 'required|string|in:billing,due_date,boleto,birthday,ignore_sent_today,limit_link_preview,disable_link_preview',
             'enabled' => 'required|boolean',
         ]);
 

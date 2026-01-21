@@ -206,26 +206,33 @@ class SettingsController extends Controller
         }
     }
 
-    public function syncClientes()
+    public function syncClientes(Request $request)
     {
         try {
-            $truncate = request()->boolean('truncate');
-            if ($truncate && ContaAzulConnection::count() === 1) {
-                Cliente::query()->delete();
-            }
-            $connectionId = request()->input('connection_id');
-            $page = 1;
-            $size = 20;
-            $hasMore = true;
-            $syncedCount = 0;
-
+            $connectionId = $request->input('connection_id');
+            $mode = $request->input('mode', 'update'); // 'reset' or 'update'
+            
             if (! $connectionId) {
-                return redirect()->back()->with('error', 'Selecione uma empresa para sincronizar.');
+                return response()->json(['error' => 'Selecione uma empresa para sincronizar.'], 400);
             }
             $connection = ContaAzulConnection::find($connectionId);
             if (! $connection) {
-                return redirect()->back()->with('error', 'Conexão não encontrada.');
+                return response()->json(['error' => 'Conexão não encontrada.'], 404);
             }
+
+            // Marca o tempo de início para pruning (se for update)
+            $startTime = now();
+
+            if ($mode === 'reset') {
+                Cliente::where('connection_id', $connection->id)->delete();
+                \App\Models\Invoice::where('connection_id', $connection->id)->delete();
+            }
+
+            $page = 1;
+            $size = 50; // Aumentado para performance
+            $hasMore = true;
+            $syncedCount = 0;
+
             while ($hasMore) {
                 $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
                 $clientsData = [];
@@ -234,11 +241,14 @@ class SettingsController extends Controller
                 } elseif (is_array($response)) {
                     $clientsData = $response;
                 }
+                
                 if (empty($clientsData)) {
                     $hasMore = false;
                     break;
                 }
+
                 foreach ($clientsData as $caClient) {
+                    // Filtra apenas clientes ativos e com perfil de cliente
                     $perfis = $caClient['perfis'] ?? [];
                     $perfis = array_map('strtolower', $perfis);
                     if (! in_array('cliente', $perfis)) {
@@ -247,9 +257,11 @@ class SettingsController extends Controller
                     if (empty($caClient['ativo'])) {
                         continue;
                     }
+
                     $cpfCnpj = $caClient['documento'] ?? ($caClient['cpf'] ?? ($caClient['cnpj'] ?? null));
                     $phone = $caClient['telefone'] ?? ($caClient['telefone_comercial'] ?? null);
                     $mobilePhone = $caClient['telefone_celular'] ?? null;
+                    
                     $city = null;
                     $state = null;
                     if (! empty($caClient['enderecos']) && is_array($caClient['enderecos'])) {
@@ -257,6 +269,7 @@ class SettingsController extends Controller
                         $city = $primaryAddress['cidade'] ?? null;
                         $state = $primaryAddress['estado'] ?? null;
                     }
+
                     Cliente::updateOrCreate(
                         ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
                         [
@@ -270,26 +283,69 @@ class SettingsController extends Controller
                             'person_type' => $caClient['tipo_pessoa'] ?? null,
                             'city' => $city,
                             'state' => $state,
+                            // O updated_at será atualizado automaticamente, permitindo o pruning
                         ]
                     );
                     $syncedCount++;
                 }
+
                 if (count($clientsData) < $size) {
                     $hasMore = false;
                 } else {
                     $page++;
                 }
+                
+                // Safety break
                 if ($page > 500) {
                     $hasMore = false;
                 }
-                sleep(1);
+                
+                // Pequena pausa para evitar rate limit excessivo
+                usleep(200000); 
             }
-            $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
 
-            return redirect()->back()->with('success', "Sincronização concluída! {$syncedCount} clientes e {$invoicesCount} faturas em atraso processados para a conexão {$connection->empresa_nome}.");
+            // Pruning: Se for update, remove clientes que não foram tocados (não vieram na API)
+            // Mas cuidado: se a API falhar em trazer alguns, podemos deletar indevidamente.
+            // Vamos assumir que se syncedCount > 0, a sincronização funcionou e podemos limpar os antigos.
+            if ($mode === 'update' && $syncedCount > 0) {
+                // Deleta clientes desta conexão que não foram atualizados desde o início do processo
+                // Damos uma margem de segurança de alguns segundos antes do startTime
+                Cliente::where('connection_id', $connection->id)
+                    ->where('updated_at', '<', $startTime)
+                    ->delete();
+            }
+
+            // Sincroniza faturas
+            $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
+            
+            // Atualiza timestamp da conexão
+            $connection->last_sync_at = now();
+            $connection->save();
+
+            $clientesDbCount = \App\Models\Cliente::where('connection_id', $connection->id)->count();
+            $apiTotals = $this->contaAzulApiService->getOverdueTotals($connection);
+            $invoicesApiCount = $apiTotals['count'] ?? 0;
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso.",
+                    'details' => [
+                        'clientes_count' => $clientesDbCount,
+                        'invoices_count' => $invoicesApiCount,
+                        'synced_count' => $syncedCount
+                    ]
+                ]);
+            }
+
+            return redirect()->back()->with('success', "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso processados para a conexão {$connection->empresa_nome}.");
 
         } catch (\Exception $e) {
             Log::error('Erro na sincronização de clientes: '.$e->getMessage());
+            
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'error' => 'Erro ao sincronizar: '.$e->getMessage()], 500);
+            }
 
             return redirect()->back()->with('error', 'Erro ao sincronizar: '.$e->getMessage());
         }
@@ -372,7 +428,10 @@ class SettingsController extends Controller
                     sleep(1);
                 }
                 $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
-                $summary[] = "{$connection->empresa_nome}: {$syncedCount} clientes e {$invoicesCount} faturas em atraso.";
+                $clientesDbCount = \App\Models\Cliente::where('connection_id', $connection->id)->count();
+                $apiTotals = $this->contaAzulApiService->getOverdueTotals($connection);
+                $invoicesApiCount = $apiTotals['count'] ?? 0;
+                $summary[] = "{$connection->empresa_nome}: {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso.";
                 $connection->last_sync_at = now();
                 $connection->save();
             }

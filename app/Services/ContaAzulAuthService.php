@@ -19,10 +19,15 @@ class ContaAzulAuthService
         $state = base64_encode(json_encode($statePayload));
         session(['contaazul_state' => $state]);
 
-        $rawScope = config('services.contaazul.scope', 'openid profile email');
+        $rawScope = (string)config('services.contaazul.scope', 'openid profile email');
+        $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
         $allowed = ['openid','profile','email','offline_access'];
-        $parts = preg_split('/\s+/', trim($rawScope));
-        $filtered = array_values(array_unique(array_intersect($parts, $allowed)));
+        $tokens = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
+        $tokens = array_map(fn($s) => strtolower(trim($s)), $tokens);
+        $filtered = array_values(array_unique(array_intersect($tokens, $allowed)));
+        if (empty($filtered)) {
+            $filtered = ['openid','profile','email'];
+        }
         $scope = implode(' ', $filtered);
 
         $params = [
@@ -37,7 +42,9 @@ class ContaAzulAuthService
         }
         $query = http_build_query($params);
 
-        return "https://auth.contaazul.com/authorize?{$query}";
+        $url = "https://auth.contaazul.com/authorize?{$query}";
+        Log::info("ContaAzul OAuth URL (conn {$connection->id}): {$url}");
+        return $url;
     }
 
     public function exchangeCode(ContaAzulConnection $connection, string $code): ?array

@@ -166,6 +166,19 @@ Route::get('/debug-connections', function () {
     return response()->json(ContaAzulConnection::orderBy('empresa_nome')->get());
 });
 
+Route::get('/debug-auth-url/{id}', function ($id) {
+    $conn = ContaAzulConnection::findOrFail($id);
+    $auth = app()->make(ContaAzulAuthService::class);
+    $url = $auth->getAuthUrl($conn);
+    return response()->json([
+        'connection_id' => $conn->id,
+        'empresa_nome' => $conn->empresa_nome,
+        'redirect_uri' => $conn->ca_redirect_uri,
+        'client_id_prefix' => substr($conn->ca_client_id ?? '', 0, 6),
+        'auth_url' => $url,
+    ]);
+});
+
 Route::get('/debug-connections/{id}/clients', function ($id) {
     $conn = ContaAzulConnection::findOrFail($id);
     $api = app()->make(ContaAzulApiService::class);

@@ -156,7 +156,7 @@ watch(selectedConnectionId, async (newVal) => {
 
     <AuthenticatedLayout>
         <div class="py-6">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
+            <div class="mx-auto max-w-screen-2xl px-4 sm:px-6 md:px-8">
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Visão Geral</h1>
                 
                 <!-- Feedback Messages -->

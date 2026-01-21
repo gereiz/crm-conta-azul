@@ -44,6 +44,8 @@ const form = useForm({
     period_unit: props.cron?.period_unit || 'days',
     days_before_due: props.cron?.days_before_due || 3,
     days_after_due: props.cron?.days_after_due || 5,
+    limit_link_preview: props.cron?.limit_link_preview ?? false,
+    disable_link_preview: props.cron?.disable_link_preview ?? false,
 });
 
 const submit = () => {
@@ -155,6 +157,17 @@ watch(() => form.type, (newType) => {
                                     <option value="birthday">Aniversariantes do Dia</option>
                                 </select>
                                 <InputError class="mt-2" :message="form.errors.type" />
+                            </div>
+                            
+                            <!-- Limitar preview de links -->
+                            <div class="flex items-center">
+                                <input id="limit_link_preview" type="checkbox" v-model="form.limit_link_preview" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                                <label for="limit_link_preview" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Limitar preview (somente primeiro link clicável)</label>
+                            </div>
+                            <!-- Remover preview de links -->
+                            <div class="flex items-center">
+                                <input id="disable_link_preview" type="checkbox" v-model="form.disable_link_preview" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                                <label for="disable_link_preview" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Remover preview (links clicáveis sem esquema e instrução “copie e cole”)</label>
                             </div>
 
                             <!-- Conditional Fields -->

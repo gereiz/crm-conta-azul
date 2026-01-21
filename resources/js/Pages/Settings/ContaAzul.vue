@@ -44,6 +44,47 @@ const selectedConnection = computed(() => {
     return props.connections?.find(c => c.id === selectedConnectionId.value) || null;
 });
 
+const showingReconnectModal = ref(false);
+const reconnectMode = ref('auto'); // auto, manual
+const reconnecting = ref(false);
+
+const openReconnectModal = () => {
+    if (!selectedConnection.value) return;
+    showingReconnectModal.value = true;
+    reconnectMode.value = 'auto';
+};
+
+const closeReconnectModal = () => {
+    if (reconnecting.value) return;
+    showingReconnectModal.value = false;
+};
+
+const confirmReconnect = async () => {
+    if (!selectedConnection.value) return;
+
+    if (reconnectMode.value === 'manual') {
+        window.location.href = route('contaazul.connections.connect', { connection: selectedConnection.value.id });
+        return;
+    }
+
+    // Automatic
+    reconnecting.value = true;
+    try {
+        const response = await axios.post(route('contaazul.connections.refresh', { connection: selectedConnection.value.id }));
+        if (response.data.success) {
+            alert('Token renovado com sucesso!');
+            closeReconnectModal();
+            router.reload();
+        } else {
+            alert('Falha ao renovar: ' + response.data.error);
+        }
+    } catch (e) {
+        alert('Erro ao tentar renovar token: ' + (e.response?.data?.error || e.message));
+    } finally {
+        reconnecting.value = false;
+    }
+};
+
 const syncClientes = (truncate = false) => {
     if (!selectedConnectionId.value) {
         alert('Selecione uma empresa para sincronizar.');
@@ -71,15 +112,81 @@ const closeSyncConfirm = () => {
     showingSyncConfirmModal.value = false;
 };
 
-const syncAll = () => {
+const showingSyncAllModal = ref(false);
+const syncAllMode = ref('update');
+const syncQueue = ref([]);
+const currentSyncIndex = ref(0);
+const syncLogs = ref([]);
+const currentSyncConnection = computed(() => {
+    if (syncQueue.value.length > 0 && currentSyncIndex.value < syncQueue.value.length) {
+        return syncQueue.value[currentSyncIndex.value];
+    }
+    return null;
+});
+
+const openSyncAllModal = () => {
     if (!props.connections || !props.connections.length) {
         alert('Nenhuma empresa para sincronizar.');
         return;
     }
+    showingSyncAllModal.value = true;
+    syncingAll.value = false;
+    syncLogs.value = [];
+};
+
+const closeSyncAllModal = () => {
+    if (syncingAll.value) return; // Não fecha se estiver rodando
+    showingSyncAllModal.value = false;
+};
+
+const startSyncAll = async (mode) => {
+    syncAllMode.value = mode;
+    // Filtra apenas conexões ativas
+    syncQueue.value = props.connections.filter(c => c.is_active);
+    
+    if (syncQueue.value.length === 0) {
+        alert('Nenhuma conexão ativa encontrada.');
+        return;
+    }
+
     syncingAll.value = true;
-    router.post(route('settings.contaazul.syncAll'), {}, {
-        onFinish: () => syncingAll.value = false,
-    });
+    currentSyncIndex.value = 0;
+    syncLogs.value = [];
+    
+    processNextSync();
+};
+
+const processNextSync = async () => {
+    if (currentSyncIndex.value >= syncQueue.value.length) {
+        syncLogs.value.push('✅ Sincronização de todas as empresas concluída!');
+        setTimeout(() => {
+            syncingAll.value = false;
+            router.reload();
+        }, 2000);
+        return;
+    }
+
+    const connection = syncQueue.value[currentSyncIndex.value];
+    syncLogs.value.push(`⏳ Sincronizando: ${connection.empresa_nome}...`);
+
+    try {
+        const response = await axios.post(route('settings.contaazul.sync'), { 
+            connection_id: connection.id, 
+            mode: syncAllMode.value 
+        });
+        
+        if (response.data.success) {
+            syncLogs.value.push(`✅ ${connection.empresa_nome}: Sucesso (${response.data.details?.clientes_count || 0} clientes)`);
+        } else {
+            syncLogs.value.push(`❌ ${connection.empresa_nome}: ${response.data.error || 'Erro desconhecido'}`);
+        }
+    } catch (error) {
+        const msg = error.response?.data?.error || error.message;
+        syncLogs.value.push(`❌ ${connection.empresa_nome}: Falha - ${msg}`);
+    } finally {
+        currentSyncIndex.value++;
+        processNextSync();
+    }
 };
 
 const showToken = () => {
@@ -172,14 +279,21 @@ const deleteConnection = (id) => {
         </template>
 
         <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
+            <div class="mx-auto max-w-screen-2xl sm:px-6 lg:px-8 space-y-6">
                 <!-- Card Sincronização -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
                         <div class="flex items-center justify-between mb-6">
                             <h3 class="text-lg font-medium">Sincronização de Clientes</h3>
-                            <a :href="selectedConnectionId ? route('contaazul.connections.connect', { connection: selectedConnectionId }) : route('contaazul.connect')" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-semibold hover:underline">
+                            <button 
+                                v-if="selectedConnectionId"
+                                @click="openReconnectModal" 
+                                class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-semibold hover:underline"
+                            >
                                 Reconectar Conta Azul
+                            </button>
+                            <a v-else :href="route('contaazul.connect')" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-semibold hover:underline">
+                                Conectar Conta Azul (Legado)
                             </a>
                         </div>
                         
@@ -216,8 +330,8 @@ const deleteConnection = (id) => {
                                     </svg>
                                     {{ syncing ? 'Sincronizando...' : 'Sincronizar Agora' }}
                                 </button>
-                                <PrimaryButton @click="syncAll" :disabled="syncingAll">
-                                    {{ syncingAll ? 'Sincronizando todas...' : 'Sincronizar Todas' }}
+                                <PrimaryButton @click="openSyncAllModal" :disabled="syncingAll">
+                                    Sincronizar Todas
                                 </PrimaryButton>
                             </div>
                         </div>
@@ -228,6 +342,7 @@ const deleteConnection = (id) => {
                     </div>
                 </div>
 
+                <!-- Modal Confirmação Single -->
                 <Modal :show="showingSyncConfirmModal" @close="closeSyncConfirm">
                     <div class="p-6">
                         <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">Sincronizar Clientes</h2>
@@ -235,6 +350,108 @@ const deleteConnection = (id) => {
                         <div class="mt-6 flex justify-end gap-3">
                             <SecondaryButton @click="() => { closeSyncConfirm(); syncClientes(false); }">Somente sincronizar</SecondaryButton>
                             <PrimaryButton @click="() => { closeSyncConfirm(); syncClientes(true); }">Deletar e sincronizar</PrimaryButton>
+                        </div>
+                    </div>
+                </Modal>
+
+                <!-- Modal Sincronização em Lote -->
+                <Modal :show="showingSyncAllModal" @close="closeSyncAllModal">
+                    <div class="p-6">
+                        <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                            Sincronização em Lote
+                        </h2>
+
+                        <div v-if="!syncingAll">
+                            <p class="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                                Você está prestes a sincronizar <strong>{{ props.connections.filter(c => c.is_active).length }}</strong> empresas ativas.
+                                Como deseja proceder?
+                            </p>
+                            
+                            <div class="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md mb-6 border border-yellow-200 dark:border-yellow-800">
+                                <h4 class="font-bold text-yellow-800 dark:text-yellow-200 text-sm mb-2">Opções:</h4>
+                                <ul class="list-disc list-inside text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                                    <li><strong>Atualizar Diferenças:</strong> Atualiza registros existentes, cria novos e remove apenas os que não existem mais na Conta Azul (Pruning). Mais seguro.</li>
+                                    <li><strong>Resetar e Sincronizar:</strong> APAGA TODOS os clientes e faturas locais das empresas e baixa tudo novamente. Use apenas se houver inconsistências graves.</li>
+                                </ul>
+                            </div>
+
+                            <div class="flex justify-end gap-3">
+                                <SecondaryButton @click="closeSyncAllModal">Cancelar</SecondaryButton>
+                                <button 
+                                    @click="startSyncAll('update')"
+                                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150"
+                                >
+                                    Atualizar Diferenças
+                                </button>
+                                <PrimaryButton @click="startSyncAll('reset')" class="bg-red-600 hover:bg-red-700 focus:ring-red-500">
+                                    Resetar e Sincronizar
+                                </PrimaryButton>
+                            </div>
+                        </div>
+
+                        <div v-else>
+                            <div class="mb-4">
+                                <div class="flex justify-between text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                    <span>Progresso Geral</span>
+                                    <span>{{ currentSyncIndex }} / {{ syncQueue.length }}</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                                    <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" :style="{ width: (currentSyncIndex / syncQueue.length * 100) + '%' }"></div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-900 text-green-400 font-mono text-xs p-4 rounded h-64 overflow-y-auto mb-4 border border-gray-700 shadow-inner">
+                                <div v-for="(log, idx) in syncLogs" :key="idx" class="mb-1">
+                                    {{ log }}
+                                </div>
+                                <div class="animate-pulse mt-2" v-if="currentSyncIndex < syncQueue.length">
+                                    _
+                                </div>
+                            </div>
+
+                            <div class="flex justify-center">
+                                <span class="text-sm text-gray-500 animate-pulse">
+                                    Por favor, não feche esta janela...
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+
+                <!-- Modal Reconexão -->
+                <Modal :show="showingReconnectModal" @close="closeReconnectModal">
+                    <div class="p-6">
+                        <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                            Reconectar Conta Azul - {{ selectedConnection?.empresa_nome }}
+                        </h2>
+
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                            Como deseja reconectar esta empresa?
+                        </p>
+
+                        <div class="space-y-4 mb-6">
+                            <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" :class="{'border-blue-500 bg-blue-50 dark:bg-blue-900/20': reconnectMode === 'auto'}">
+                                <input type="radio" v-model="reconnectMode" value="auto" class="mr-3" />
+                                <div>
+                                    <div class="font-bold text-sm">Renovação Automática (Recomendado)</div>
+                                    <div class="text-xs text-gray-500">Tenta renovar o token atual sem sair do sistema.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" :class="{'border-blue-500 bg-blue-50 dark:bg-blue-900/20': reconnectMode === 'manual'}">
+                                <input type="radio" v-model="reconnectMode" value="manual" class="mr-3" />
+                                <div>
+                                    <div class="font-bold text-sm">Reconexão Manual</div>
+                                    <div class="text-xs text-gray-500">Redireciona para o login do Conta Azul para gerar um novo token.</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="flex justify-end gap-3">
+                            <SecondaryButton @click="closeReconnectModal" :disabled="reconnecting">Cancelar</SecondaryButton>
+                            <PrimaryButton @click="confirmReconnect" :disabled="reconnecting">
+                                {{ reconnecting ? 'Processando...' : 'Confirmar' }}
+                            </PrimaryButton>
                         </div>
                     </div>
                 </Modal>

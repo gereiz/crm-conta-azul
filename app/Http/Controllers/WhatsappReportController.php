@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MessageCronLog;
-use App\Models\MessageLog;
+use App\Models\WhatsappMessageLog;
 use App\Models\ContaAzulConnection;
 use App\Models\Cliente;
 use Illuminate\Http\Request;
@@ -19,48 +18,33 @@ class WhatsappReportController extends Controller
     public function index()
     {
         $connectionId = request()->input('connection_id');
+        $startDate = request()->input('start_date');
+        $endDate = request()->input('end_date');
+        $search = request()->input('search');
+        
+        $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
+        $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
 
-        // Manual Logs (associados via telefone ao cliente)
-        $manual = DB::table('message_logs')
-            ->leftJoin('clientes', 'message_logs.to', '=', 'clientes.mobile_phone')
-            ->select(
-                'message_logs.id',
-                DB::raw("'manual' as type"),
-                'message_logs.created_at as date',
-                'message_logs.to as recipient_phone',
-                'message_logs.status',
-                'clientes.name as client_name',
-                DB::raw("NULL as cron_name"),
-                DB::raw("clientes.connection_id as connection_id")
-            )
-            ->when($connectionId, function ($q) use ($connectionId) {
-                // Filtra apenas logs que conseguiram associar com cliente da empresa selecionada
-                return $q->where('clientes.connection_id', $connectionId);
+        $query = WhatsappMessageLog::with(['connection', 'template', 'cliente', 'user'])
+            ->orderBy('sent_at', 'desc');
+
+        if ($connectionId) {
+            $query->where('connection_id', $connectionId);
+        }
+
+        if ($start && $end) {
+            $query->whereBetween('sent_at', [$start, $end]);
+        }
+
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('client_name', 'like', "%{$search}%")
+                  ->orWhere('phone_original', 'like', "%{$search}%")
+                  ->orWhere('phone_sanitized', 'like', "%{$search}%");
             });
+        }
 
-        // Cron Logs (associados ao cliente por ID)
-        $cron = DB::table('message_cron_logs')
-            ->join('message_crons', 'message_cron_logs.message_cron_id', '=', 'message_crons.id')
-            ->leftJoin('clientes', 'message_cron_logs.cliente_id', '=', 'clientes.id')
-            ->select(
-                'message_cron_logs.id',
-                DB::raw("'cron' as type"),
-                'message_cron_logs.sent_at as date',
-                'message_cron_logs.phone as recipient_phone',
-                'message_cron_logs.status',
-                DB::raw("COALESCE(message_cron_logs.client_name, clientes.name) as client_name"),
-                'message_crons.name as cron_name',
-                DB::raw("message_crons.connection_id as connection_id")
-            )
-            ->when($connectionId, function ($q) use ($connectionId) {
-                // Filtra por empresa usando o cliente associado
-                return $q->where('clientes.connection_id', $connectionId);
-            });
-
-        // Union and paginate
-        $reports = $manual->union($cron)
-            ->orderBy('date', 'desc')
-            ->paginate(20);
+        $reports = $query->paginate(20)->withQueryString();
 
         $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
 
@@ -68,87 +52,116 @@ class WhatsappReportController extends Controller
             'reports' => $reports,
             'connections' => $connections,
             'selectedConnectionId' => $connectionId,
+            'selectedStartDate' => $startDate,
+            'selectedEndDate' => $endDate,
+            'search' => $search,
         ]);
     }
 
-    public function download($type, $id)
+    public function download($id)
     {
-        if ($type === 'manual') {
-            $log = MessageLog::find($id);
-            if (!$log) abort(404);
+        $log = WhatsappMessageLog::with(['connection', 'template'])->findOrFail($id);
+        
+        $date = Carbon::parse($log->sent_at);
+        $filenameDate = $date->format('d-m-Y');
+        $safeClientName = Str::slug($log->client_name ?? 'desconhecido', '_');
+        $filename = "log_whatsapp_{$filenameDate}_{$safeClientName}.xlsx";
 
-            // Try to find client name
-            $client = Cliente::where('mobile_phone', $log->to)->first();
-            $clientName = $client ? $client->name : 'Desconhecido';
-            $date = Carbon::parse($log->created_at);
-            
-            $filenameDate = $date->format('d-m-Y');
-            $safeClientName = Str::slug($clientName, '_');
-            $filename = "envio_manual_{$filenameDate}_{$safeClientName}.xlsx";
-
-            $data = [
-                'contact' => $log->to,
-                'client' => $clientName,
-                'status' => $log->status,
-                'message' => $log->content,
-                'sentAt' => $date->format('d/m/Y H:i:s'),
-                'messageId' => $log->message_id,
-                'whatsappNumber' => $log->whatsapp_number_id,
-            ];
-
-        } elseif ($type === 'cron') {
-            $log = MessageCronLog::with('messageCron')->find($id);
-            if (!$log) abort(404);
-
-            $clientName = $log->client_name ?? 'Desconhecido';
-            $companyName = $log->messageCron->name ?? 'Automacao'; // Using Cron Name as "Company/Entity"
-            
-            $date = Carbon::parse($log->sent_at);
-            $filenameDate = $date->format('d-m-Y');
-            $safeCompanyName = Str::slug($companyName, '_');
-            
-            $filename = "envio_manual_{$filenameDate}_{$safeCompanyName}.xlsx";
-
-            $data = [
-                'contact' => $log->phone,
-                'client' => $clientName,
-                'status' => $log->status,
-                'message' => 'Template: ' . ($log->messageCron->messageTemplate->name ?? 'N/A'),
-                'sentAt' => $date->format('d/m/Y H:i:s'),
-                'messageId' => null,
-                'whatsappNumber' => $log->messageCron->whatsapp_number_id,
-            ];
-        } else {
-            abort(404);
-        }
-
-        // Generate XLSX content
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
         // Headers
-        $headers = ['Contato', 'Cliente', 'Status', 'Mensagem', 'Enviado Em', 'ID Mensagem', 'WhatsApp ID'];
+        $headers = ['Empresa', 'Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
         $sheet->fromArray([$headers], NULL, 'A1');
 
         // Data
         $rowData = [
-            $data['contact'],
-            $data['client'],
-            $data['status'],
-            $data['message'],
-            $data['sentAt'],
-            $data['messageId'],
-            $data['whatsappNumber']
+            $log->connection->empresa_nome ?? 'N/A',
+            $log->client_name,
+            $log->phone_original,
+            $log->phone_sanitized,
+            $log->message_type,
+            $log->template->name ?? 'N/A',
+            $log->total_boletos,
+            $log->status,
+            $log->error_message,
+            $date->format('d/m/Y H:i:s'),
+            $log->content
         ];
         $sheet->fromArray([$rowData], NULL, 'A2');
 
-        // Auto size columns
-        foreach (range('A', 'G') as $columnID) {
+        foreach (range('A', 'K') as $columnID) {
             $sheet->getColumnDimension($columnID)->setAutoSize(true);
         }
 
         $writer = new Xlsx($spreadsheet);
 
+        return response()->streamDownload(function() use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function downloadGroupedAutomations(Request $request)
+    {
+        $dateParam = $request->input('date');
+        $startParam = $request->input('start_date');
+        $endParam = $request->input('end_date');
+        
+        if ($startParam || $endParam) {
+            $start = $startParam ? Carbon::parse($startParam)->startOfDay() : Carbon::today()->startOfDay();
+            $end = $endParam ? Carbon::parse($endParam)->endOfDay() : ($start ? $start->copy()->endOfDay() : Carbon::today()->endOfDay());
+        } else {
+            $date = $dateParam ? Carbon::parse($dateParam) : Carbon::today();
+            $start = $date->copy()->startOfDay();
+            $end = $date->copy()->endOfDay();
+        }
+
+        $logs = WhatsappMessageLog::with(['connection', 'template'])
+            ->whereBetween('sent_at', [$start, $end])
+            ->orderBy('sent_at', 'asc')
+            ->get();
+
+        $groups = $logs->groupBy('connection_id');
+
+        $spreadsheet = new Spreadsheet();
+        $first = true;
+
+        foreach ($groups as $connectionId => $groupLogs) {
+            $companyName = $groupLogs->first()->connection->empresa_nome ?? 'Sem Empresa';
+            $sheet = $first ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
+            $first = false;
+            $sheet->setTitle(Str::substr(Str::slug($companyName), 0, 31));
+
+            $headers = ['Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
+            $sheet->fromArray([$headers], NULL, 'A1');
+
+            $row = 2;
+            foreach ($groupLogs as $log) {
+                $rowData = [
+                    $log->client_name,
+                    $log->phone_original,
+                    $log->phone_sanitized,
+                    $log->message_type,
+                    $log->template->name ?? 'N/A',
+                    $log->total_boletos,
+                    $log->status,
+                    $log->error_message,
+                    Carbon::parse($log->sent_at)->format('d/m/Y H:i:s'),
+                    $log->content
+                ];
+                $sheet->fromArray([$rowData], NULL, 'A' . $row);
+                $row++;
+            }
+
+            foreach (range('A', 'J') as $columnID) {
+                $sheet->getColumnDimension($columnID)->setAutoSize(true);
+            }
+        }
+
+        $filename = "relatorio_whatsapp_agrupado_" . $start->format('d-m-Y') . ".xlsx";
+        $writer = new Xlsx($spreadsheet);
         return response()->streamDownload(function() use ($writer) {
             $writer->save('php://output');
         }, $filename, [

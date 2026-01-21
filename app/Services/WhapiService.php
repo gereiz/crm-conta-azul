@@ -5,10 +5,56 @@ namespace App\Services;
 use App\Models\WhatsappNumber;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class WhapiService
 {
     protected $baseUrl = 'https://gate.whapi.cloud';
+
+    public function getConnectionStatus(WhatsappNumber $whatsapp)
+    {
+        if (!$whatsapp || $whatsapp->status !== 'active') {
+            return ['connected' => false, 'error' => 'Número inativo no sistema ou não encontrado.'];
+        }
+
+        try {
+            // Tenta endpoint de configurações do canal (mais robusto e disponível para todos os tipos)
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$whatsapp->whapi_key}",
+                'Accept' => 'application/json',
+            ])->timeout(10)->get("{$this->baseUrl}/settings");
+
+            if ($response->successful()) {
+                return ['connected' => true, 'error' => null];
+            }
+            
+            $status = $response->status();
+            $body = $response->json();
+            $msg = $body['error']['message'] ?? $response->body(); 
+            
+            Log::warning("Whapi Connection Check Failed (ID: {$whatsapp->id}): Status {$status} - {$msg}");
+
+            if ($status === 401) {
+                return ['connected' => false, 'error' => 'Não autorizado (401). Token inválido ou sessão expirada.'];
+            }
+
+            if ($status === 404) {
+                 return ['connected' => false, 'error' => 'Recurso não encontrado (404). Verifique se o token pertence a um canal válido.'];
+            }
+
+            return ['connected' => false, 'error' => "Erro na API Whapi ({$status}): " . Str::limit($msg, 100)];
+
+        } catch (\Exception $e) {
+            Log::error("Erro ao verificar conexão Whapi (ID: {$whatsapp->id}): " . $e->getMessage());
+            return ['connected' => false, 'error' => 'Erro de comunicação: ' . $e->getMessage()];
+        }
+    }
+
+    public function isConnected(WhatsappNumber $whatsapp)
+    {
+        $status = $this->getConnectionStatus($whatsapp);
+        return $status['connected'];
+    }
 
     public function sendMessage($whatsappId, $to, $message)
     {
@@ -19,11 +65,26 @@ class WhapiService
             return ['success' => false, 'message' => 'WhatsApp não configurado ou inativo.'];
         }
 
-        // Formatar número para padrão internacional (apenas números)
-        $to = preg_replace('/\D/', '', $to);
+        // Normalização BR (somente dígitos, sem '+', prefixa 55 se ausente, remove zeros iniciais)
+        $to = preg_replace('/\D/', '', $to ?? '');
+        $to = ltrim($to, '0');
+
+        // Se o número tiver 10 ou 11 dígitos, assumimos que é BR sem DDI
+        if (in_array(strlen($to), [10, 11])) {
+            $to = '55' . $to;
+        }
+        // Se já tiver 12 ou 13 dígitos e começar com 55, mantemos (já tem DDI)
+        // Números internacionais devem vir com DDI completo, então confiamos se não cair na regra acima
+
 
         $endpoint = "{$this->baseUrl}/messages/text";
         
+        // Tenta validar o número na Whapi para obter o ID correto (corrige 9º dígito em regiões específicas)
+        $validId = $this->validateNumber($whatsapp, $to);
+        if ($validId) {
+            $to = $validId;
+        }
+
         $response = Http::withHeaders([
             'Authorization' => "Bearer {$whatsapp->whapi_key}",
             'Content-Type' => 'application/json',
@@ -32,6 +93,7 @@ class WhapiService
             'to' => $to,
             'body' => $message,
             'typing_time' => 0,
+            'no_link_preview' => true, // Parâmetro correto conforme documentação Whapi
         ]);
 
         if ($response->successful()) {
@@ -89,5 +151,31 @@ class WhapiService
             Log::error("Erro ao verificar saúde Whapi: " . $e->getMessage());
             return ['status' => 'down', 'error' => $e->getMessage()];
         }
+    }
+
+    protected function validateNumber($whatsapp, $number)
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$whatsapp->whapi_key}",
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ])->post("{$this->baseUrl}/contacts", [
+                'blocking' => 'wait',
+                'contacts' => [$number],
+                'force_check' => false
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                // Retorna o wa_id correto se o número for válido
+                if (!empty($data['contacts'][0]['status']) && $data['contacts'][0]['status'] === 'valid') {
+                    return $data['contacts'][0]['wa_id']; // Ex: 553399657810@s.whatsapp.net
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning("Erro ao validar número na Whapi: " . $e->getMessage());
+        }
+        return null;
     }
 }

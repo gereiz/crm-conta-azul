@@ -107,7 +107,7 @@ const saveRule = async (type) => {
         </template>
 
         <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+            <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
                 <!-- Dados da Empresa -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
@@ -165,6 +165,28 @@ const saveRule = async (type) => {
                                     <input type="checkbox" :checked="!!toggles['ignore_sent_today']" @change="toggleType('ignore_sent_today')" class="sr-only peer">
                                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                                     <span class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">{{ toggles['ignore_sent_today'] ? 'Ativo' : 'Inativo' }}</span>
+                                </label>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-4 rounded">
+                                <div>
+                                    <div class="font-medium">Limitar preview de links</div>
+                                    <div class="text-xs text-gray-500">Mantém somente o primeiro link clicável para evitar travas de preview</div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" :checked="!!toggles['limit_link_preview']" @change="toggleType('limit_link_preview')" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                    <span class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">{{ toggles['limit_link_preview'] ? 'Ativo' : 'Inativo' }}</span>
+                                </label>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-4 rounded">
+                                <div>
+                                    <div class="font-medium">Remover preview de links</div>
+                                    <div class="text-xs text-gray-500">Links permanecem clicáveis sem esquema; adiciona instrução “copie e cole”</div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" :checked="!!toggles['disable_link_preview']" @change="toggleType('disable_link_preview')" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                    <span class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">{{ toggles['disable_link_preview'] ? 'Ativo' : 'Inativo' }}</span>
                                 </label>
                             </div>
                         </div>

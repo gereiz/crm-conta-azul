@@ -58,6 +58,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{connection}', [ContaAzulConnectionController::class, 'destroy'])->name('destroy');
         Route::get('/{connection}/connect', [ContaAzulConnectionController::class, 'connect'])->name('connect');
         Route::get('/{connection}/callback', [ContaAzulConnectionController::class, 'callback'])->name('callback');
+        Route::post('/{connection}/refresh', [ContaAzulConnectionController::class, 'refreshToken'])->name('refresh');
     });
 
     // Configurações
@@ -97,7 +98,8 @@ Route::middleware('auth')->group(function () {
     Route::post('empresas/{connection}/settings/messages', [EmpresaController::class, 'updateMessageSettings'])->name('empresas.settings.messages');
     Route::post('empresas/{connection}/settings/cron', [EmpresaController::class, 'saveCronRule'])->name('empresas.settings.cron');
     Route::get('whatsapp/reports', [\App\Http\Controllers\WhatsappReportController::class, 'index'])->name('whatsapp.reports.index');
-    Route::get('whatsapp/reports/{type}/{id}/download', [\App\Http\Controllers\WhatsappReportController::class, 'download'])->name('whatsapp.reports.download');
+    Route::get('whatsapp/reports/{id}/download', [\App\Http\Controllers\WhatsappReportController::class, 'download'])->name('whatsapp.reports.download');
+    Route::get('whatsapp/reports/cron/download-grouped', [\App\Http\Controllers\WhatsappReportController::class, 'downloadGroupedAutomations'])->name('whatsapp.reports.cron.download_grouped');
     Route::resource('whatsapp', WhatsAppController::class);
     
     // Envio de Mensagens

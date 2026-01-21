@@ -34,7 +34,9 @@ const variables = [
     { code: '@@invoicePastDueQuantity@@', label: 'Qtd. cobranças vencidas' },
     { code: '@@invoicePastDueDates@@', label: 'Datas de vencimento' },
     { code: '@@invoiceTotalValue@@', label: 'Valor total vencido' },
-    { code: '@@invoicePastDuePairs@@', label: 'Pares data - boleto' }
+    { code: '@@invoicePastDuePairs@@', label: 'Pares data - boleto' },
+    { code: '@@invoiceTotalOpenQuantity@@', label: 'Total de boletos em aberto (vencidos + a vencer)' },
+    { code: '@@invoiceTotalOpenValue@@', label: 'Valor total de boletos em aberto (vencidos + a vencer)' }
 ];
 
 // Emoji list (common ones)
@@ -158,7 +160,7 @@ const toggleEmojiPicker = () => {
         </template>
 
         <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
                         

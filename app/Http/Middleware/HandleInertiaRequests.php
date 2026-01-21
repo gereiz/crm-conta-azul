@@ -44,6 +44,8 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
                 'message' => fn () => $request->session()->get('message'),
+                'cron_report' => fn () => $request->session()->get('cron_report'),
+                'whatsapp_error' => fn () => $request->session()->get('whatsapp_error'),
             ],
             'system_settings' => [
                 'system_name' => $settings->system_name ?? '',

@@ -13,6 +13,8 @@ class MessageCronLog extends Model
         'phone',
         'status',
         'error_message',
+        'content',
+        'invoice_count',
         'sent_at'
     ];
 

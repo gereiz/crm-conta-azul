@@ -18,12 +18,16 @@ class MessageCron extends Model
         'days_after_due',
         'send_time',
         'is_active',
+        'limit_link_preview',
+        'disable_link_preview',
         'last_run_at',
         'created_by'
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'limit_link_preview' => 'boolean',
+        'disable_link_preview' => 'boolean',
         'last_run_at' => 'datetime',
     ];
 

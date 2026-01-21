@@ -23,4 +23,14 @@ class Cliente extends Model
         'state',
         'birthdate',
     ];
+
+    public function setPhoneAttribute($value)
+    {
+        $this->attributes['phone'] = $value !== null ? preg_replace('/\D/', '', (string) $value) : null;
+    }
+
+    public function setMobilePhoneAttribute($value)
+    {
+        $this->attributes['mobile_phone'] = $value !== null ? preg_replace('/\D/', '', (string) $value) : null;
+    }
 }

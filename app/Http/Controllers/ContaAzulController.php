@@ -26,10 +26,7 @@ class ContaAzulController extends Controller
         try {
             $url = $this->contaAzulService->getAuthUrl();
             Log::info('Redirecionando para Conta Azul: ' . $url);
-            
-            // Para redirecionamentos externos em apps Inertia, use Inertia::location
-            // ou garanta que a requisição não seja via XHR/Inertia
-            return Inertia::location($url);
+            return redirect()->away($url);
         } catch (\Exception $e) {
             Log::error('Erro ao conectar Conta Azul: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Erro na configuração: ' . $e->getMessage());

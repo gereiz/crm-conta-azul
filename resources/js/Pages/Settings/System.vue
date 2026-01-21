@@ -55,7 +55,7 @@ onMounted(() => {
         </template>
 
         <div class="py-12">
-            <div class="mx-auto max-w-5xl sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
                 <div class="bg-white dark:bg-gray-800 shadow-sm sm:rounded-xl p-6">
                     <div class="mb-4 flex items-center justify-between">
                         <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">

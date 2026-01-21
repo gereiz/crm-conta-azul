@@ -60,6 +60,8 @@ class MessageCronController extends Controller
             'days_after_due' => 'nullable|integer',
             'send_time' => 'required|date_format:H:i',
             'is_active' => 'boolean',
+            'limit_link_preview' => 'boolean',
+            'disable_link_preview' => 'boolean',
         ]);
 
         $validated['created_by'] = Auth::id();
@@ -96,6 +98,8 @@ class MessageCronController extends Controller
             'days_after_due' => 'nullable|integer',
             'send_time' => 'required|date_format:H:i',
             'is_active' => 'boolean',
+            'limit_link_preview' => 'boolean',
+            'disable_link_preview' => 'boolean',
         ]);
 
         $cron->update($validated);
@@ -113,10 +117,27 @@ class MessageCronController extends Controller
     {
         $this->authorize('update', $cron);
 
+        $start = now();
         $stats = $service->processCron($cron);
+        $logs = \App\Models\WhatsappMessageLog::where('message_cron_id', $cron->id)
+            ->where('sent_at', '>=', $start)
+            ->orderBy('sent_at', 'desc')
+            ->get(['client_name', 'phone_original', 'phone_sanitized', 'status', 'error_message', 'sent_at']);
+        $report = [
+            'stats' => $stats,
+            'logs' => $logs->map(function ($l) {
+                return [
+                    'client_name' => $l->client_name,
+                    'phone' => $l->phone_sanitized ?? $l->phone_original,
+                    'status' => $l->status,
+                    'error_message' => $l->error_message,
+                    'sent_at' => $l->sent_at?->format('d/m/Y H:i'),
+                ];
+            }),
+        ];
 
         $message = "Execução finalizada. Enviadas: {$stats['sent']}, Erros: {$stats['errors']}, Ignoradas: {$stats['skipped']}.";
         
-        return redirect()->back()->with('success', $message);
+        return redirect()->back()->with('success', $message)->with('cron_report', $report);
     }
 }

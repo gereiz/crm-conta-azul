@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref, computed, nextTick } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { ref, computed, nextTick, watch } from 'vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import Modal from '@/Components/Modal.vue';
@@ -335,6 +335,40 @@ const sendWhatsapp = () => {
         },
     });
 };
+
+// WhatsApp Error Handling
+const showWhatsappErrorModal = ref(false);
+const whatsappErrorData = ref(null);
+const selectedRetryNumberId = ref('');
+const page = usePage();
+
+watch(() => page.props.flash.whatsapp_error, (newVal) => {
+    if (newVal) {
+        whatsappErrorData.value = newVal;
+        showWhatsappErrorModal.value = true;
+        // Pre-select the first available number if any
+        if (newVal.available_numbers && newVal.available_numbers.length > 0) {
+            selectedRetryNumberId.value = newVal.available_numbers[0].id;
+        }
+    }
+}, { deep: true });
+
+const closeWhatsappErrorModal = () => {
+    showWhatsappErrorModal.value = false;
+    whatsappErrorData.value = null;
+    page.props.flash.whatsapp_error = null;
+};
+
+const retrySend = () => {
+    if (!selectedRetryNumberId.value) return;
+    
+    // Update form with new number
+    msgForm.whatsapp_id = selectedRetryNumberId.value;
+    closeWhatsappErrorModal();
+    
+    // Retry sending
+    sendWhatsapp();
+};
 </script>
 
 <template>
@@ -348,7 +382,7 @@ const sendWhatsapp = () => {
         </template>
 
         <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
                 
                 <!-- Filtros -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6 p-6">
@@ -634,6 +668,53 @@ const sendWhatsapp = () => {
                     <SecondaryButton @click="closeModal">
                         Fechar
                     </SecondaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Modal Erro WhatsApp -->
+        <Modal :show="showWhatsappErrorModal" @close="closeWhatsappErrorModal">
+            <div class="p-6">
+                <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full dark:bg-red-900">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <div class="mt-3 text-center sm:mt-5">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100" id="modal-title">
+                        {{ whatsappErrorData?.title || 'Erro no Envio' }}
+                    </h3>
+                    <div class="mt-2">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ whatsappErrorData?.message }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-5 sm:mt-6" v-if="whatsappErrorData?.available_numbers?.length > 0">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Selecione outro número para enviar:
+                    </label>
+                    <select v-model="selectedRetryNumberId" class="block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm">
+                        <option v-for="num in whatsappErrorData.available_numbers" :key="num.id" :value="num.id">
+                            {{ num.description }} ({{ num.ddi }}{{ num.ddd }}{{ num.phone }})
+                        </option>
+                    </select>
+                </div>
+                <div class="mt-5 sm:mt-6" v-else>
+                    <p class="text-sm text-red-500 text-center font-bold">Não há outros números ativos disponíveis.</p>
+                </div>
+
+                <div class="mt-5 sm:mt-6 flex gap-3 justify-end">
+                    <SecondaryButton @click="closeWhatsappErrorModal">
+                        Cancelar Envio
+                    </SecondaryButton>
+                    <PrimaryButton 
+                        @click="retrySend" 
+                        class="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+                        :disabled="!selectedRetryNumberId"
+                        v-if="whatsappErrorData?.available_numbers?.length > 0"
+                    >
+                        Confirmar Novo Envio
+                    </PrimaryButton>
                 </div>
             </div>
         </Modal>
