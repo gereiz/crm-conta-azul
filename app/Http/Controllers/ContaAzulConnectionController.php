@@ -21,7 +21,15 @@ class ContaAzulConnectionController extends Controller
 
     public function index()
     {
-        $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
+        try {
+            $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            // Se falhar ao descriptografar na listagem, retorna lista vazia ou trata o erro
+            // O ideal seria forçar limpeza via comando, mas aqui evitamos o crash da página
+            $connections = collect([]);
+            session()->flash('error', 'Erro de criptografia ao carregar conexões. Verifique a APP_KEY ou limpe os dados.');
+        }
+
         return Inertia::render('Settings/ContaAzul', [
             'connections' => $connections,
             'lastSync' => \App\Models\Cliente::latest('updated_at')->value('updated_at'),

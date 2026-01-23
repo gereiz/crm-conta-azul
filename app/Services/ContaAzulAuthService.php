@@ -31,15 +31,19 @@ class ContaAzulAuthService
         $scope = implode(' ', $filtered);
 
         $params = [
-            'client_id' => $connection->ca_client_id,
-            'redirect_uri' => $connection->ca_redirect_uri,
+            'client_id' => trim($connection->ca_client_id),
+            'redirect_uri' => trim($connection->ca_redirect_uri),
             'state' => $state,
             'response_type' => 'code',
             'scope' => $scope,
+            'prompt' => 'login consent select_account',
+            'max_age' => 0,
         ];
-        if (!empty($connection->email_desenvolvedor)) {
+        // Comentado para forçar o usuário a digitar/selecionar a conta manualmente
+        // e evitar que o Conta Azul assuma a conta errada automaticamente.
+        /*if (!empty($connection->email_desenvolvedor)) {
             $params['login_hint'] = $connection->email_desenvolvedor;
-        }
+        }*/
         $query = http_build_query($params);
 
         $url = "https://auth.contaazul.com/authorize?{$query}";
@@ -49,14 +53,20 @@ class ContaAzulAuthService
 
     public function exchangeCode(ContaAzulConnection $connection, string $code): ?array
     {
-        $credentials = base64_encode("{$connection->ca_client_id}:{$connection->ca_client_secret}");
+        $clientId = trim($connection->ca_client_id);
+        $clientSecret = trim($connection->ca_client_secret);
+        $redirectUri = trim($connection->ca_redirect_uri);
 
-        $response = Http::withHeaders([
+        $credentials = base64_encode("{$clientId}:{$clientSecret}");
+
+        $response = Http::withOptions([
+            'verify' => false,
+        ])->withHeaders([
             'Authorization' => "Basic {$credentials}"
         ])->asForm()->post('https://auth.contaazul.com/oauth2/token', [
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'redirect_uri' => $connection->ca_redirect_uri,
+            'redirect_uri' => $redirectUri,
         ]);
 
         if ($response->failed()) {
@@ -75,7 +85,9 @@ class ContaAzulAuthService
 
         $credentials = base64_encode("{$connection->ca_client_id}:{$connection->ca_client_secret}");
 
-        $response = Http::withHeaders([
+        $response = Http::withOptions([
+            'verify' => false,
+        ])->withHeaders([
             'Authorization' => "Basic {$credentials}"
         ])->asForm()->post('https://auth.contaazul.com/oauth2/token', [
             'grant_type' => 'refresh_token',

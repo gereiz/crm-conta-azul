@@ -63,7 +63,31 @@ const confirmReconnect = async () => {
     if (!selectedConnection.value) return;
 
     if (reconnectMode.value === 'manual') {
-        window.location.href = route('contaazul.connections.connect', { connection: selectedConnection.value.id });
+        // Opção 1: Tenta abrir direto (funciona se não tiver sessão presa)
+        const connectUrl = route('contaazul.connections.connect', { connection: selectedConnection.value.id });
+        
+        // Vamos oferecer uma UX melhor: copiar o link para anônima
+        const userChoice = confirm(
+            'Para garantir que você conecte a conta correta, recomendamos abrir o link em uma JANELA ANÔNIMA.\n\n' +
+            'Clique em OK para abrir o link normalmente (pode pegar a conta errada se já estiver logado).\n' +
+            'Clique em CANCELAR para copiar o link e abrir você mesmo na janela anônima.'
+        );
+
+        if (userChoice) {
+            window.open(connectUrl, '_blank');
+            reconnecting.value = false;
+            showingReconnectModal.value = false;
+        } else {
+            // Copiar para área de transferência
+            navigator.clipboard.writeText(connectUrl).then(() => {
+                alert('Link copiado! Abra uma janela anônima (Ctrl+Shift+N) e cole o link na barra de endereços.');
+            }).catch(() => {
+                prompt('Copie o link abaixo e abra em uma janela anônima:', connectUrl);
+            });
+            reconnecting.value = false;
+            showingReconnectModal.value = false;
+        }
+        
         return;
     }
 

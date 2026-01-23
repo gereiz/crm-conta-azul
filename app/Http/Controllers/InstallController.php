@@ -96,14 +96,26 @@ class InstallController extends Controller
         $envLines = file($envPath, FILE_IGNORE_NEW_LINES);
         $newEnvLines = [];
         $replacedKeys = [];
+        $existingAppKey = null;
 
         foreach ($envLines as $line) {
             $keyMatch = [];
             // Match KEY=VALUE or KEY="VALUE"
             if (preg_match('/^([^=]+)=(.*)$/', $line, $keyMatch)) {
                 $currentKey = $keyMatch[1];
+                if ($currentKey === 'APP_KEY' && !empty($keyMatch[2])) {
+                    $existingAppKey = trim($keyMatch[2], '"\'');
+                }
+                
                 if (array_key_exists($currentKey, $replacements)) {
-                    $val = $replacements[$currentKey];
+                    // Se a chave for APP_KEY e já existir, mantém a antiga
+                    if ($currentKey === 'APP_KEY' && !empty($existingAppKey)) {
+                        $val = $existingAppKey;
+                        $key = $existingAppKey; // Atualiza a variável local $key usada depois
+                    } else {
+                        $val = $replacements[$currentKey];
+                    }
+                    
                     // Quote value if it contains spaces
                     if (str_contains($val, ' ')) {
                         $val = '"' . $val . '"';
@@ -218,11 +230,31 @@ class InstallController extends Controller
 
     public function createUser()
     {
-        return Inertia::render('Install/Admin');
+        // Verifica se já existem administradores para oferecer a opção de pular
+        $hasAdmin = User::where('role', 'admin')
+            ->orWhereHas('roleRef', function($q) {
+                $q->where('name', 'Administrador');
+            })->exists();
+
+        return Inertia::render('Install/Admin', [
+            'hasAdmin' => $hasAdmin
+        ]);
     }
 
     public function storeUser(Request $request)
     {
+        // Se o usuário optar por pular a criação (skip=true) e já existir admin
+        if ($request->boolean('skip')) {
+            $hasAdmin = User::where('role', 'admin')
+                ->orWhereHas('roleRef', function($q) {
+                    $q->where('name', 'Administrador');
+                })->exists();
+                
+            if ($hasAdmin) {
+                return redirect()->route('install.finish');
+            }
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
