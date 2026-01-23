@@ -8,7 +8,7 @@ import InputError from '@/Components/InputError.vue';
 
 const form = useForm({
     app_url: window.location.origin,
-    db_host: '127.0.0.1',
+    db_host: 'mysql', // Default for Docker/Easypanel usually
     db_port: '3306',
     db_database: 'crm_conta_azul',
     db_username: 'root',
