@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
     default-mysql-client \
+    cron \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
@@ -49,6 +50,11 @@ RUN npm install && npm run build
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
+# Configurar Cron para o Scheduler do Laravel
+RUN echo "* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>&1" > /etc/cron.d/laravel-scheduler \
+    && chmod 0644 /etc/cron.d/laravel-scheduler \
+    && crontab /etc/cron.d/laravel-scheduler
+
 # Criar script de inicialização
 # Adicionamos package:discover e storage:link
 RUN echo '#!/bin/bash\n\
@@ -81,6 +87,9 @@ if [ -f .env ]; then\n\
     chown www-data:www-data .env\n\
     chmod 664 .env\n\
 fi\n\
+\n\
+# Iniciar o cron\n\
+cron\n\
 \n\
 apache2-foreground' > /usr/local/bin/start-container \
     && chmod +x /usr/local/bin/start-container

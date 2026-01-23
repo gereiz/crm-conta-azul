@@ -177,7 +177,21 @@ class InstallController extends Controller
     {
         try {
             // Force config reload to pick up new .env values
+            // Re-assert config just in case session driver changed or process persisted
+            $config = parse_ini_file(base_path('.env'));
+            if ($config) {
+                config([
+                    'database.default' => $config['DB_CONNECTION'] ?? 'mysql',
+                    'database.connections.mysql.host' => $config['DB_HOST'] ?? '127.0.0.1',
+                    'database.connections.mysql.port' => $config['DB_PORT'] ?? '3306',
+                    'database.connections.mysql.database' => $config['DB_DATABASE'] ?? 'forge',
+                    'database.connections.mysql.username' => $config['DB_USERNAME'] ?? 'forge',
+                    'database.connections.mysql.password' => $config['DB_PASSWORD'] ?? '',
+                ]);
+            }
+
             DB::purge('mysql');
+            DB::reconnect('mysql');
             
             Artisan::call('migrate:fresh', ['--force' => true]);
             Artisan::call('db:seed', ['--force' => true]);
