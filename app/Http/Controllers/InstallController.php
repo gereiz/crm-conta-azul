@@ -53,9 +53,7 @@ class InstallController extends Controller
 
         $envContent = file_get_contents(base_path('.env.example'));
         
-        // Ensure APP_KEY exists in replacements or is handled
-        // Usually .env.example has APP_KEY= which we want to populate or let key:generate handle
-        // Here we just set basic DB vars. key:generate will be called after.
+        $key = 'base64:' . base64_encode(random_bytes(32));
 
         $replacements = [
             'APP_URL' => $request->app_url,
@@ -64,6 +62,7 @@ class InstallController extends Controller
             'DB_DATABASE' => $request->db_database,
             'DB_USERNAME' => $request->db_username,
             'DB_PASSWORD' => $request->db_password ?? '',
+            'APP_KEY' => $key,
         ];
 
         foreach ($replacements as $key => $value) {
@@ -72,15 +71,10 @@ class InstallController extends Controller
 
         file_put_contents(base_path('.env'), $envContent);
 
-        // Reload dotenv to ensure new values are available for key:generate if needed
-        // But key:generate modifies .env directly.
-        
-        // Generate Key
-        // Important: key:generate writes to .env. If we just wrote to .env, it should work.
-        // However, Laravel caches config. We might need to clear config.
+        // Force set configuration in runtime to allow current request to proceed
+        config(['app.key' => $key]);
+
         Artisan::call('config:clear');
-        Artisan::call('key:generate', ['--force' => true]);
-        Artisan::call('config:clear'); // Clear again to load the new key into runtime if possible, though Env is loaded at boot.
 
         return redirect()->route('install.database');
     }
