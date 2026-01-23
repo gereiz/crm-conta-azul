@@ -170,10 +170,19 @@ class InstallController extends Controller
 
     public function database()
     {
-        return Inertia::render('Install/Database');
+        $hasTables = false;
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('migrations')) {
+                $hasTables = true;
+            }
+        } catch (\Exception $e) {}
+
+        return Inertia::render('Install/Database', [
+            'hasTables' => $hasTables
+        ]);
     }
 
-    public function migrate()
+    public function migrate(Request $request)
     {
         try {
             // Force config reload to pick up new .env values
@@ -192,9 +201,25 @@ class InstallController extends Controller
 
             DB::purge('mysql');
             DB::reconnect('mysql');
+
+            // Check if database is already populated
+            $hasTables = false;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('migrations')) {
+                    $hasTables = true;
+                }
+            } catch (\Exception $e) {}
             
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            Artisan::call('db:seed', ['--force' => true]);
+            if ($hasTables) {
+                // If tables exist, just update migrations without wiping data
+                Artisan::call('migrate', ['--force' => true]);
+                // Skip seeders to avoid duplication
+                return redirect()->route('install.admin');
+            } else {
+                // Fresh install
+                Artisan::call('migrate:fresh', ['--force' => true]);
+                Artisan::call('db:seed', ['--force' => true]);
+            }
             
             return redirect()->route('install.admin');
         } catch (\Exception $e) {
