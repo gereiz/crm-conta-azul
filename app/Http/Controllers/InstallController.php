@@ -55,6 +55,30 @@ class InstallController extends Controller
         
         $key = 'base64:' . base64_encode(random_bytes(32));
 
+        // Test database connection BEFORE saving to .env
+        try {
+            // Temporarily set config to test connection
+            config([
+                'database.connections.install_test' => [
+                    'driver' => 'mysql',
+                    'host' => $request->db_host,
+                    'port' => $request->db_port,
+                    'database' => $request->db_database,
+                    'username' => $request->db_username,
+                    'password' => $request->db_password,
+                    'charset' => 'utf8mb4',
+                    'collation' => 'utf8mb4_unicode_ci',
+                    'prefix' => '',
+                    'strict' => true,
+                    'engine' => null,
+                ]
+            ]);
+            
+            DB::connection('install_test')->getPdo();
+        } catch (\Exception $e) {
+            return back()->withErrors(['db_host' => 'Erro de conexão: ' . $e->getMessage()]);
+        }
+
         $replacements = [
             'APP_URL' => $request->app_url,
             'DB_HOST' => $request->db_host,
@@ -63,7 +87,8 @@ class InstallController extends Controller
             'DB_USERNAME' => $request->db_username,
             'DB_PASSWORD' => $request->db_password ?? '',
             'APP_KEY' => $key,
-            'DB_CONNECTION' => 'mysql', // Ensure it's mysql, not sqlite from example if any
+            'DB_CONNECTION' => 'mysql',
+            'SESSION_DRIVER' => 'file', // Force file session during/after install to avoid DB lockouts
         ];
 
         // Read .env file line by line to ensure correct replacement
@@ -114,6 +139,7 @@ class InstallController extends Controller
             'database.connections.mysql.database' => $request->db_database,
             'database.connections.mysql.username' => $request->db_username,
             'database.connections.mysql.password' => $request->db_password,
+            'session.driver' => 'file',
         ]);
 
         // Purge session database connection to ensure it uses the new config

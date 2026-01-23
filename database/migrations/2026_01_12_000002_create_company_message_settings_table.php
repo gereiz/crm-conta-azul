@@ -14,7 +14,7 @@ return new class extends Migration {
                 $table->string('message_type');
                 $table->boolean('is_enabled')->default(false);
                 $table->timestamps();
-                $table->unique(['conta_azul_connection_id', 'message_type']);
+                $table->unique(['conta_azul_connection_id', 'message_type'], 'cms_conn_type_unique');
             });
         }
     }
