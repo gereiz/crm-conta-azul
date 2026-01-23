@@ -31,9 +31,30 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        $settings = Schema::hasTable('system_settings')
-            ? SystemSetting::latest()->first()
-            : null;
+        // Se estiver em rotas de instalação, ignora verificação de tabelas
+        if ($request->is('install*')) {
+            return [
+                ...parent::share($request),
+                'auth' => ['user' => null],
+                'flash' => [],
+                'system_settings' => [
+                    'system_name' => 'Instalador',
+                    'primary_color' => '#6366F1',
+                    'secondary_color' => '#22C55E',
+                    'logo' => null,
+                    'favicon' => null,
+                ],
+            ];
+        }
+
+        try {
+            $settings = Schema::hasTable('system_settings')
+                ? SystemSetting::latest()->first()
+                : null;
+        } catch (\Exception $e) {
+            // Se falhar conexão com banco (ex: sqlite não existe), assume null
+            $settings = null;
+        }
 
         return [
             ...parent::share($request),
