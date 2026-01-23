@@ -72,7 +72,7 @@ class InstallController extends Controller
 
         file_put_contents(base_path('.env'), $envContent);
 
-        // Update runtime config for DB to allow next step to work if needed immediately
+        // Force set configuration in runtime to allow current request to proceed
         config([
             'app.key' => $key,
             'database.default' => 'mysql',
@@ -83,7 +83,22 @@ class InstallController extends Controller
             'database.connections.mysql.password' => $request->db_password,
         ]);
 
+        // Purge session database connection to ensure it uses the new config
+        try {
+            // Se o driver for database, purge nele
+            if (config('session.driver') === 'database') {
+                DB::purge('mysql');
+            }
+            // Purge na conexão padrão também para garantir
+            DB::purge(config('database.default'));
+        } catch (\Exception $e) {}
+
         Artisan::call('config:clear');
+        
+        // Force Re-connect database with new config for the rest of request
+        try {
+            DB::reconnect('mysql');
+        } catch (\Exception $e) {}
         
         try {
             $newEncrypter = new \Illuminate\Encryption\Encrypter(base64_decode(substr($key, 7)), config('app.cipher'));
