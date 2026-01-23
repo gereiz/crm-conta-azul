@@ -19,7 +19,14 @@
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
         @php
-            $settings = \App\Models\SystemSetting::latest()->first();
+            try {
+                $settings = \Illuminate\Support\Facades\Schema::hasTable('system_settings') 
+                    ? \App\Models\SystemSetting::latest()->first() 
+                    : null;
+            } catch (\Exception $e) {
+                $settings = null;
+            }
+            
             $primaryHex = $settings->primary_color ?? '#6366F1';
             $secondaryHex = $settings->secondary_color ?? '#22C55E';
             $hexToRgb = function ($hex) {
