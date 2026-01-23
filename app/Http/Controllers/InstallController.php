@@ -63,6 +63,7 @@ class InstallController extends Controller
             'DB_USERNAME' => $request->db_username,
             'DB_PASSWORD' => $request->db_password ?? '',
             'APP_KEY' => $key,
+            'DB_CONNECTION' => 'mysql', // Ensure it's mysql, not sqlite from example if any
         ];
 
         foreach ($replacements as $key => $value) {
@@ -71,18 +72,23 @@ class InstallController extends Controller
 
         file_put_contents(base_path('.env'), $envContent);
 
-        // Force set configuration in runtime to allow current request to proceed
-        config(['app.key' => $key]);
+        // Update runtime config for DB to allow next step to work if needed immediately
+        config([
+            'app.key' => $key,
+            'database.default' => 'mysql',
+            'database.connections.mysql.host' => $request->db_host,
+            'database.connections.mysql.port' => $request->db_port,
+            'database.connections.mysql.database' => $request->db_database,
+            'database.connections.mysql.username' => $request->db_username,
+            'database.connections.mysql.password' => $request->db_password,
+        ]);
 
         Artisan::call('config:clear');
         
-        // Force session cookie encryption key update
-        // We need to re-encrypter with the new key to allow response cookies (like session) to be encrypted correctly
         try {
             $newEncrypter = new \Illuminate\Encryption\Encrypter(base64_decode(substr($key, 7)), config('app.cipher'));
             app()->instance('encrypter', $newEncrypter);
         } catch (\Exception $e) {
-            // Fallback if encryption fails immediately, but config update should be enough for next request
         }
 
         return redirect()->route('install.database');
