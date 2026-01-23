@@ -66,11 +66,44 @@ class InstallController extends Controller
             'DB_CONNECTION' => 'mysql', // Ensure it's mysql, not sqlite from example if any
         ];
 
-        foreach ($replacements as $key => $value) {
-            $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$value}", $envContent);
+        // Read .env file line by line to ensure correct replacement
+        $envPath = base_path('.env');
+        $envLines = file($envPath, FILE_IGNORE_NEW_LINES);
+        $newEnvLines = [];
+        $replacedKeys = [];
+
+        foreach ($envLines as $line) {
+            $keyMatch = [];
+            // Match KEY=VALUE or KEY="VALUE"
+            if (preg_match('/^([^=]+)=(.*)$/', $line, $keyMatch)) {
+                $currentKey = $keyMatch[1];
+                if (array_key_exists($currentKey, $replacements)) {
+                    $val = $replacements[$currentKey];
+                    // Quote value if it contains spaces
+                    if (str_contains($val, ' ')) {
+                        $val = '"' . $val . '"';
+                    }
+                    $newEnvLines[] = "{$currentKey}={$val}";
+                    $replacedKeys[] = $currentKey;
+                } else {
+                    $newEnvLines[] = $line;
+                }
+            } else {
+                $newEnvLines[] = $line;
+            }
         }
 
-        file_put_contents(base_path('.env'), $envContent);
+        // Add missing keys
+        foreach ($replacements as $key => $val) {
+            if (!in_array($key, $replacedKeys)) {
+                if (str_contains($val, ' ')) {
+                    $val = '"' . $val . '"';
+                }
+                $newEnvLines[] = "{$key}={$val}";
+            }
+        }
+
+        file_put_contents($envPath, implode("\n", $newEnvLines));
 
         // Force set configuration in runtime to allow current request to proceed
         config([
