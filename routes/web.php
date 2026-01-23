@@ -21,6 +21,19 @@ use App\Http\Controllers\ContaAzulConnectionController;
 use App\Http\Controllers\BillingRestrictionController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\InstallController;
+
+// Rotas de Instalação (Públicas, mas protegidas pelo middleware CheckInstalled)
+Route::prefix('install')->name('install.')->group(function () {
+    Route::get('/', [InstallController::class, 'index'])->name('index');
+    Route::get('/environment', [InstallController::class, 'environment'])->name('environment');
+    Route::post('/environment', [InstallController::class, 'saveEnvironment'])->name('environment.save');
+    Route::get('/database', [InstallController::class, 'database'])->name('database');
+    Route::post('/database', [InstallController::class, 'migrate'])->name('migrate');
+    Route::get('/admin', [InstallController::class, 'createUser'])->name('admin');
+    Route::post('/admin', [InstallController::class, 'storeUser'])->name('admin.store');
+    Route::get('/finish', [InstallController::class, 'finish'])->name('finish');
+});
 
 Route::get('/', function () {
     return redirect()->route('login');
