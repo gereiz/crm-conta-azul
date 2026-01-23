@@ -75,6 +75,15 @@ class InstallController extends Controller
         config(['app.key' => $key]);
 
         Artisan::call('config:clear');
+        
+        // Force session cookie encryption key update
+        // We need to re-encrypter with the new key to allow response cookies (like session) to be encrypted correctly
+        try {
+            $newEncrypter = new \Illuminate\Encryption\Encrypter(base64_decode(substr($key, 7)), config('app.cipher'));
+            app()->instance('encrypter', $newEncrypter);
+        } catch (\Exception $e) {
+            // Fallback if encryption fails immediately, but config update should be enough for next request
+        }
 
         return redirect()->route('install.database');
     }
