@@ -79,11 +79,19 @@ class ContaAzulAuthService
 
     public function refreshToken(ContaAzulConnection $connection): ?string
     {
-        if (!$connection->refresh_token) {
+        try {
+            $refreshToken = $connection->refresh_token;
+            $clientSecret = $connection->ca_client_secret;
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            Log::error("Erro de descriptografia ao renovar token (conn {$connection->id}): " . $e->getMessage());
             return null;
         }
 
-        $credentials = base64_encode("{$connection->ca_client_id}:{$connection->ca_client_secret}");
+        if (!$refreshToken) {
+            return null;
+        }
+
+        $credentials = base64_encode("{$connection->ca_client_id}:{$clientSecret}");
 
         $response = Http::withOptions([
             'verify' => false,
@@ -91,7 +99,7 @@ class ContaAzulAuthService
             'Authorization' => "Basic {$credentials}"
         ])->asForm()->post('https://auth.contaazul.com/oauth2/token', [
             'grant_type' => 'refresh_token',
-            'refresh_token' => $connection->refresh_token,
+            'refresh_token' => $refreshToken,
         ]);
 
         if ($response->failed()) {
@@ -113,15 +121,26 @@ class ContaAzulAuthService
 
     public function getValidToken(ContaAzulConnection $connection, bool $forceRefresh = false): ?string
     {
+        try {
+            $accessToken = $connection->access_token;
+            $expiresAt = $connection->token_expires_at;
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            Log::warning("Falha de descriptografia no token da conexão {$connection->id}. Tratando como inválido.");
+            $accessToken = null;
+            $expiresAt = null;
+            // Força refresh ou reconexão
+            $forceRefresh = true;
+        }
+
         if (
-            !$connection->access_token ||
+            !$accessToken ||
             $forceRefresh ||
-            ($connection->token_expires_at && $connection->token_expires_at->lt(Carbon::now()->addMinutes(5)))
+            ($expiresAt && $expiresAt->lt(Carbon::now()->addMinutes(5)))
         ) {
             return $this->refreshToken($connection);
         }
 
-        return $connection->access_token;
+        return $accessToken;
     }
 
     public function saveTokens(ContaAzulConnection $connection, array $tokenData): ContaAzulConnection
