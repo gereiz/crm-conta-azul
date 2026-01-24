@@ -30,20 +30,24 @@ class ContaAzulAuthService
         }
         $scope = implode(' ', $filtered);
 
+        // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
+        $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
+
+        // Fallback de segurança caso ambos estejam vazios (evita erro)
+        if (empty($redirectUri)) {
+            $redirectUri = route('contaazul.callback');
+        }
+
         $params = [
             'client_id' => trim($connection->ca_client_id),
-            'redirect_uri' => trim($connection->ca_redirect_uri),
+            'redirect_uri' => $redirectUri,
             'state' => $state,
             'response_type' => 'code',
             'scope' => $scope,
             'prompt' => 'login consent select_account',
             'max_age' => 0,
         ];
-        // Comentado para forçar o usuário a digitar/selecionar a conta manualmente
-        // e evitar que o Conta Azul assuma a conta errada automaticamente.
-        /*if (!empty($connection->email_desenvolvedor)) {
-            $params['login_hint'] = $connection->email_desenvolvedor;
-        }*/
+        
         $query = http_build_query($params);
 
         $url = "https://auth.contaazul.com/authorize?{$query}";
@@ -55,7 +59,12 @@ class ContaAzulAuthService
     {
         $clientId = trim($connection->ca_client_id);
         $clientSecret = trim($connection->ca_client_secret);
-        $redirectUri = trim($connection->ca_redirect_uri);
+        
+        // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
+        $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
+        if (empty($redirectUri)) {
+            $redirectUri = route('contaazul.callback');
+        }
 
         $credentials = base64_encode("{$clientId}:{$clientSecret}");
 
