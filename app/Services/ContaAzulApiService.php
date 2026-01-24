@@ -51,6 +51,13 @@ class ContaAzulApiService
             }
         }
 
+        if ($response->status() === 429 && $retry && $attempts < 5) {
+            $waitTime = 5 * ($attempts + 1); // 5s, 10s, 15s...
+            Log::warning("Rate limit Conta Azul ({$endpoint}). Aguardando {$waitTime}s para tentar novamente (Tentativa {$attempts}/5).");
+            sleep($waitTime);
+            return $this->request($connection, $method, $endpoint, $params, $retry, $attempts + 1);
+        }
+
         if ($response->failed()) {
             Log::error("Erro na requisição Conta Azul [{$endpoint}] conex {$connection->id}: ".$response->body());
             if ($response->status() === 401) {
@@ -104,12 +111,22 @@ class ContaAzulApiService
             'url' => $response['url'] ?? null,
             'payment_type' => $response['metodo_pagamento'] ?? null,
         ];
+        
+        // Estratégia melhorada para encontrar URL
         if (empty($details['url']) && isset($response['solicitacoes_cobrancas']) && is_array($response['solicitacoes_cobrancas'])) {
-            $ultima = end($response['solicitacoes_cobrancas']);
-            if (isset($ultima['url'])) {
-                $details['url'] = $ultima['url'];
+            // Tenta encontrar a primeira solicitação válida com URL, preferindo as mais recentes (se ordenado) ou qualquer uma válida
+            // Iteramos de trás para frente para pegar a última (geralmente a mais atual)
+            $solicitacoes = array_reverse($response['solicitacoes_cobrancas']);
+            foreach ($solicitacoes as $solicitacao) {
+                if (!empty($solicitacao['url'])) {
+                    $details['url'] = $solicitacao['url'];
+                    break;
+                }
             }
         }
+        
+        // Fallback: Se ainda não tem URL, tenta construir manualmente se houver token ou ID conhecido
+        // (Isso depende de como a CA expõe links públicos, às vezes não expõe sem solicitação)
 
         return $details;
     }
@@ -171,7 +188,9 @@ class ContaAzulApiService
                 if ($details) {
                     $invoiceDetails = $details;
                 }
-                usleep(200000);
+                // Aumentando delay para evitar Rate Limit (429)
+                // Antes era 0.2s, agora 0.5s
+                usleep(500000);
             }
             $valorOriginal = isset($item['total']) ? (float) $item['total'] : 0.0;
             $valorPago = isset($item['pago']) ? (float) $item['pago'] : null;

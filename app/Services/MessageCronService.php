@@ -613,13 +613,20 @@ class MessageCronService
             return (float) ($inv->saldo_devedor ?? $inv->nao_pago ?? 0);
         });
         $firstUrl = collect($invoices)->first(function ($inv) {
-            return !empty($inv->link_boleto) && $this->isUrlReachable($inv->link_boleto);
+            return !empty($inv->link_boleto);
         });
         $allUrls = collect($invoices)->pluck('link_boleto')->filter()->implode("\n");
-        $pairs = collect($invoices)->map(function ($inv) {
+        $pairs = collect($invoices)->map(function ($inv) use ($cron) {
             $due = Carbon::parse($inv->data_vencimento)->format('d/m/Y');
             $url = trim($inv->link_boleto ?? '');
-            $display = ($url !== '' && $this->isUrlReachable($url)) ? "\n{$url}" : 'boleto não disponível';
+            
+            if ($url !== '') {
+                $display = "\n{$url}";
+            } else {
+                $display = 'boleto não disponível';
+                Log::warning("Boleto não disponível para fatura ID {$inv->id} (CA ID: {$inv->ca_id}) do cliente {$inv->cliente->name}. Motivo: URL vazia no banco de dados.");
+            }
+            
             return $due . ' - ' . $display;
         })->implode("\n");
 
@@ -685,12 +692,16 @@ class MessageCronService
     protected function isUrlReachable(string $url): bool
     {
         try {
-            $response = Http::timeout(5)->get($url);
+            $response = Http::withOptions([
+                'verify' => false,
+            ])->timeout(10)->get($url);
+            
             if ($response->ok()) return true;
             // Considera redirecionamentos e 3xx como válidos para preview
             if ($response->status() >= 300 && $response->status() < 400) return true;
             return false;
         } catch (\Exception $e) {
+            Log::warning("Falha ao verificar link do boleto ({$url}): " . $e->getMessage());
             return false;
         }
     }
