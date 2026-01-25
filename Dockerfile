@@ -58,16 +58,19 @@ RUN echo "* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>
 # Criar script de inicialização
 # Adicionamos package:discover e storage:link
 RUN echo '#!/bin/bash\n\
+\n\
+# Se NÃO existe .env (primeira instalação ou ambiente limpo), cria a partir do example\n\
 if [ ! -f .env ]; then\n\
     cp .env.example .env\n\
     # Força driver de sessão para file para evitar erro de banco na instalação\n\
     sed -i "s/SESSION_DRIVER=database/SESSION_DRIVER=file/g" .env\n\
-fi\n\
-\n\
-# Garante que a APP_KEY seja gerada se estiver vazia\n\
-if ! grep -q "^APP_KEY=base64:" .env; then\n\
+    \n\
+    # Gera chave APENAS se o .env acabou de ser criado\n\
     php artisan key:generate --force\n\
 fi\n\
+\n\
+# IMPORTANTE: Em produção, o .env deve ser persistido via volume ou injetado.\n\
+# NÃO geramos nova chave se o arquivo já existir para evitar invalidar dados criptografados.\n\
 \n\
 # Remove arquivo de instalação antigo se existir (para garantir o setup)\n\
 rm -f storage/installed\n\
