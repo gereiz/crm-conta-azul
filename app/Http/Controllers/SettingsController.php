@@ -21,11 +21,41 @@ class SettingsController extends Controller
 
     protected $contaAzulApiService;
 
-    public function __construct(ContaAzulService $contaAzulService, ContaAzulAuthService $contaAzulAuthService, ContaAzulApiService $contaAzulApiService)
+    protected $futureMessageService;
+
+    public function __construct(
+        ContaAzulService $contaAzulService, 
+        ContaAzulAuthService $contaAzulAuthService, 
+        ContaAzulApiService $contaAzulApiService,
+        \App\Services\FutureMessageService $futureMessageService
+    )
     {
         $this->contaAzulService = $contaAzulService;
         $this->contaAzulAuthService = $contaAzulAuthService;
         $this->contaAzulApiService = $contaAzulApiService;
+        $this->futureMessageService = $futureMessageService;
+    }
+
+    public function runArtisanCommand(Request $request)
+    {
+        $command = $request->input('command');
+        $allowedCommands = [
+            'message:calculate-future' => 'Cálculo de Envios Futuros',
+            'contaazul:sync-stale' => 'Sincronização de Dados Obsoletos',
+            'contaazul:refresh-tokens' => 'Renovação de Tokens',
+        ];
+
+        if (!array_key_exists($command, $allowedCommands)) {
+            return response()->json(['error' => 'Comando não permitido.'], 403);
+        }
+
+        try {
+            \Illuminate\Support\Facades\Artisan::call($command);
+            $output = \Illuminate\Support\Facades\Artisan::output();
+            return response()->json(['success' => true, 'output' => $output]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Erro ao executar comando: ' . $e->getMessage()], 500);
+        }
     }
 
     public function system()
@@ -322,6 +352,13 @@ class SettingsController extends Controller
             $connection->last_sync_at = now();
             $connection->save();
 
+            // Recalcula envios futuros
+            try {
+                $this->futureMessageService->calculateForConnection($connection);
+            } catch (\Exception $e) {
+                Log::error('Erro ao calcular envios futuros após sync: ' . $e->getMessage());
+            }
+
             $clientesDbCount = \App\Models\Cliente::where('connection_id', $connection->id)->count();
             $apiTotals = $this->contaAzulApiService->getOverdueTotals($connection);
             $invoicesApiCount = $apiTotals['count'] ?? 0;
@@ -434,6 +471,13 @@ class SettingsController extends Controller
                 $summary[] = "{$connection->empresa_nome}: {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso.";
                 $connection->last_sync_at = now();
                 $connection->save();
+                
+                // Recalcula envios futuros
+                try {
+                    $this->futureMessageService->calculateForConnection($connection);
+                } catch (\Exception $e) {
+                    Log::error("Erro ao calcular envios futuros após sync geral (conn {$connection->id}): " . $e->getMessage());
+                }
             }
             return redirect()->back()->with('success', 'Sincronização concluída: '.implode(' | ', $summary));
         } catch (\Exception $e) {

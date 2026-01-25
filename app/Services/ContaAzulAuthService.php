@@ -19,14 +19,14 @@ class ContaAzulAuthService
         $state = base64_encode(json_encode($statePayload));
         session(['contaazul_state' => $state]);
 
-        $rawScope = (string)config('services.contaazul.scope', 'openid profile email');
+        $rawScope = (string)config('services.contaazul.scope', 'openid profile email sales');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
-        $allowed = ['openid','profile','email','offline_access'];
+        $allowed = ['openid','profile','email','offline_access','sales','customer','service','product','contract'];
         $tokens = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
         $tokens = array_map(fn($s) => strtolower(trim($s)), $tokens);
         $filtered = array_values(array_unique(array_intersect($tokens, $allowed)));
         if (empty($filtered)) {
-            $filtered = ['openid','profile','email'];
+            $filtered = ['openid','profile','email','sales'];
         }
         $scope = implode(' ', $filtered);
 

@@ -101,6 +101,21 @@ const updateCronStatus = async () => {
     }
 };
 
+const runSystemCommand = async (command) => {
+    if (!confirm('Deseja executar este comando manualmente?')) return;
+    
+    try {
+        const { data } = await axios.post(route('settings.cron.run-command'), { command });
+        if (data.success) {
+            alert('Comando executado com sucesso!\n\nSaída:\n' + data.output);
+        } else {
+            alert('Erro ao executar comando: ' + data.error);
+        }
+    } catch (e) {
+        alert('Erro na requisição: ' + (e.response?.data?.error || e.message));
+    }
+};
+
 onMounted(async () => {
     try {
         const { data } = await axios.get(route('settings.cron.contaazul.status'));
@@ -130,7 +145,9 @@ onMounted(async () => {
 
         <div class="py-12">
             <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                
+                <!-- Section: User Crons -->
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-8">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
                         <div v-if="cronReport" class="mb-4 text-sm">
                             <details class="bg-gray-50 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-600">
@@ -175,15 +192,11 @@ onMounted(async () => {
                                 </div>
                             </details>
                         </div>
+
                         <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-lg font-medium">Sincronização Automática Multi-Empresa</h3>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" v-model="cronEnabled" @change="updateCronStatus" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                <span class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">{{ cronEnabled ? 'Habilitado' : 'Desabilitado' }}</span>
-                            </label>
+                            <h3 class="text-lg font-medium">Suas Automações</h3>
                         </div>
-                        
+
                         <div v-if="crons.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
                             Nenhuma automação cadastrada.
                         </div>
@@ -252,6 +265,55 @@ onMounted(async () => {
                         </div>
                     </div>
                 </div>
+
+                <!-- Section: System Crons -->
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 text-gray-900 dark:text-gray-100">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-medium">Automações do Sistema (Multi-Empresa)</h3>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" v-model="cronEnabled" @change="updateCronStatus" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                <span class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">{{ cronEnabled ? 'Habilitado' : 'Desabilitado' }}</span>
+                            </label>
+                        </div>
+
+                        <!-- System Commands Section -->
+                        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <h4 class="text-md font-semibold mb-3 text-gray-800 dark:text-gray-200">Execução Manual de Tarefas do Sistema</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="p-3 bg-white dark:bg-gray-800 rounded shadow-sm border border-gray-100 dark:border-gray-700">
+                                    <div class="font-medium text-sm mb-1">Cálculo de Envios Futuros</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 h-8">
+                                        Atualiza a lista de "Envios Futuros" com base nas regras atuais. (message:calculate-future)
+                                    </div>
+                                    <button @click="runSystemCommand('message:calculate-future')" class="w-full px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 rounded text-xs font-semibold transition-colors">
+                                        Executar Agora
+                                    </button>
+                                </div>
+                                <div class="p-3 bg-white dark:bg-gray-800 rounded shadow-sm border border-gray-100 dark:border-gray-700">
+                                    <div class="font-medium text-sm mb-1">Sincronizar Dados Obsoletos</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 h-8">
+                                        Sincroniza dados de empresas que não foram atualizadas nas últimas 24h. (contaazul:sync-stale)
+                                    </div>
+                                    <button @click="runSystemCommand('contaazul:sync-stale')" class="w-full px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 rounded text-xs font-semibold transition-colors">
+                                        Executar Agora
+                                    </button>
+                                </div>
+                                <div class="p-3 bg-white dark:bg-gray-800 rounded shadow-sm border border-gray-100 dark:border-gray-700">
+                                    <div class="font-medium text-sm mb-1">Renovar Tokens</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 h-8">
+                                        Força a renovação de tokens de acesso próximos da expiração. (contaazul:refresh-tokens)
+                                    </div>
+                                    <button @click="runSystemCommand('contaazul:refresh-tokens')" class="w-full px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 rounded text-xs font-semibold transition-colors">
+                                        Executar Agora
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </AuthenticatedLayout>

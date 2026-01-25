@@ -11,3 +11,4 @@ Artisan::command('inspire', function () {
 Schedule::command('message:process-crons')->everyMinute();
 Schedule::command('contaazul:sync-stale')->dailyAt('00:00');
 Schedule::command('contaazul:refresh-tokens')->everyThirtyMinutes();
+Schedule::command('message:calculate-future')->dailyAt('00:00');

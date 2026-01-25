@@ -65,10 +65,19 @@ class EmpresaController extends Controller
         $disablePreviewFlag = $settings->firstWhere('message_type', 'disable_link_preview');
         $messageSettings['disable_link_preview'] = (bool)($disablePreviewFlag?->is_enabled ?? false);
 
-        $cronRulesCollection = CompanyCronRule::where('conta_azul_connection_id', $connection->id)->get();
+        $specificRules = CompanyCronRule::where('conta_azul_connection_id', $connection->id)->get();
+        $globalRules = CompanyCronRule::whereNull('conta_azul_connection_id')->get();
+        
         $cronRules = [];
         foreach ($messageTypes as $t) {
-            $found = $cronRulesCollection->firstWhere('message_type', $t['key']);
+            $found = $specificRules->firstWhere('message_type', $t['key']);
+            $isGlobal = false;
+            
+            if (!$found) {
+                $found = $globalRules->firstWhere('message_type', $t['key']);
+                $isGlobal = (bool)$found;
+            }
+
             $cronRules[$t['key']] = $found ? [
                 'rule_type' => $found->rule_type,
                 'day_of_month' => $found->day_of_month,
@@ -76,6 +85,7 @@ class EmpresaController extends Controller
                 'interval_days' => $found->interval_days,
                 'exclude_weekends' => $found->exclude_weekends,
                 'is_active' => $found->is_active,
+                'is_global' => $isGlobal,
             ] : null;
         }
 
@@ -117,6 +127,7 @@ class EmpresaController extends Controller
             'interval_days' => 'nullable|integer|min:1|max:365',
             'exclude_weekends' => 'boolean',
             'is_active' => 'boolean',
+            'apply_to_all' => 'boolean',
         ]);
 
         $payload = [
@@ -129,14 +140,28 @@ class EmpresaController extends Controller
             'message_type' => $data['message_type'],
         ];
 
-        CompanyCronRule::updateOrCreate(
-            [
-                'conta_azul_connection_id' => $connection->id,
-                'message_type' => $data['message_type'],
-            ],
-            $payload
-        );
+        if ($request->boolean('apply_to_all')) {
+            // Salva como regra global (para todas as empresas)
+            CompanyCronRule::updateOrCreate(
+                [
+                    'conta_azul_connection_id' => null,
+                    'message_type' => $data['message_type'],
+                ],
+                $payload
+            );
+            $msg = 'Regra salva para TODAS as empresas.';
+        } else {
+            // Salva regra específica para esta empresa
+            CompanyCronRule::updateOrCreate(
+                [
+                    'conta_azul_connection_id' => $connection->id,
+                    'message_type' => $data['message_type'],
+                ],
+                $payload
+            );
+            $msg = 'Regra salva com sucesso.';
+        }
 
-        return redirect()->back()->with('success', 'Regra de envio automático salva.');
+        return redirect()->back()->with('success', $msg);
     }
 }

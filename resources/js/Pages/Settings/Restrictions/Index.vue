@@ -54,8 +54,8 @@ const openCreate = () => {
 
 const openEdit = (r) => {
     editing.value = r;
-    editForm.id = r.id;
-    editForm.connection_id = r.connection_id;
+    // Se connection_id for null, setar como 'global' para o select funcionar
+    editForm.connection_id = r.connection_id === null ? 'global' : r.connection_id;
     editForm.type = r.type;
     editForm.value = r.value;
     editForm.is_active = !!r.is_active;
@@ -178,20 +178,22 @@ watch(() => editForm.connection_id, () => {
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tipo</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Valor</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Criada em</th>
-                                        <th class="px-6 py-3"></th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     <tr v-for="r in list" :key="r.id">
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                                            {{ r.connection?.empresa_nome || 'Empresa' }}
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                                                  :class="r.type === 'description_contains' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : r.type === 'invoice_equals' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'">
-                                                {{ typeLabel(r.type) }}
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            <span v-if="r.connection" class="text-blue-600 dark:text-blue-400 font-semibold">{{ r.connection.empresa_nome }}</span>
+                                            <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                                Global (Todas as Empresas)
                                             </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <span v-if="r.type === 'client_equals'">Cliente Igual a</span>
+                                            <span v-else-if="r.type === 'invoice_equals'">ID da Venda Igual a</span>
+                                            <span v-else-if="r.type === 'description_contains'">Descrição Contém</span>
+                                            <span v-else>{{ r.type }}</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                                             {{ r.value }}
@@ -250,6 +252,7 @@ watch(() => editForm.connection_id, () => {
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Empresa</label>
                     <select v-model="createForm.connection_id" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm">
                         <option value="">Selecione</option>
+                        <option value="global" class="font-bold text-purple-600 dark:text-purple-400">★ Aplicar para TODAS as Empresas (Global)</option>
                         <option v-for="c in props.connections" :key="c.id" :value="c.id">{{ c.empresa_nome }}</option>
                     </select>
                 </div>
@@ -300,6 +303,7 @@ watch(() => editForm.connection_id, () => {
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Empresa</label>
                     <select v-model="editForm.connection_id" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm">
                         <option value="">Selecione</option>
+                        <option value="global" class="font-bold text-purple-600 dark:text-purple-400">★ Aplicar para TODAS as Empresas (Global)</option>
                         <option v-for="c in props.connections" :key="c.id" :value="c.id">{{ c.empresa_nome }}</option>
                     </select>
                 </div>

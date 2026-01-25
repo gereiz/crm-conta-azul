@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class ContaAzulService
 {
-    protected $baseUrl = 'https://api-v2.contaazul.com/v1';
+    protected $baseUrl = 'https://api.contaazul.com/v1';
 
     protected $clientId;
 
@@ -28,14 +28,14 @@ class ContaAzulService
         $this->clientId = trim(config('services.contaazul.client_id'));
         $this->clientSecret = trim(config('services.contaazul.client_secret'));
         $this->redirectUri = trim(config('services.contaazul.redirect_uri'));
-        $rawScope = (string)(trim(config('services.contaazul.scope')) ?: 'openid profile email');
+        $rawScope = (string)(trim(config('services.contaazul.scope')) ?: 'openid profile email sales');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
-        $allowed = ['openid', 'profile', 'email', 'offline_access'];
+        $allowed = ['openid', 'profile', 'email', 'offline_access', 'sales', 'customer', 'service', 'product', 'contract'];
         $parts = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
         $parts = array_map(fn($s) => strtolower(trim($s)), $parts);
         $filtered = array_values(array_unique(array_intersect($parts, $allowed)));
         if (empty($filtered)) {
-            $filtered = ['openid','profile','email'];
+            $filtered = ['openid','profile','email','sales'];
         }
         $this->scope = implode(' ', $filtered);
     }

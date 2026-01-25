@@ -25,6 +25,8 @@ const rules = ref(Object.fromEntries((props.messageTypes || []).map(t => {
         interval_days: r?.interval_days || null,
         exclude_weekends: !!(r?.exclude_weekends),
         is_active: r?.is_active ?? true,
+        apply_to_all: false, // Default false for UI
+        is_global: !!(r?.is_global),
     }];
 })));
 
@@ -212,6 +214,9 @@ const saveRule = async (type) => {
                                 <div class="text-sm">
                                     <span class="font-medium">{{ t.label }}</span>
                                     <span class="text-gray-500"> — {{ ruleSummary(t.key) }}</span>
+                                    <span v-if="rules[t.key]?.is_global" class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                        Global
+                                    </span>
                                 </div>
                                 <PrimaryButton as="button" @click="openRuleModal(t.key)">Editar</PrimaryButton>
                             </div>
@@ -261,6 +266,15 @@ const saveRule = async (type) => {
                                             <input type="checkbox" v-model="currentRule.is_active" class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500 dark:bg-gray-900 dark:border-gray-700" />
                                             <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Regra ativa</span>
                                         </label>
+                                    </div>
+                                    <div class="mt-2 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-200 dark:border-yellow-800">
+                                        <label class="inline-flex items-center">
+                                            <input type="checkbox" v-model="currentRule.apply_to_all" class="rounded border-gray-300 text-yellow-600 shadow-sm focus:ring-yellow-500 dark:bg-gray-900 dark:border-gray-700" />
+                                            <span class="ml-2 text-sm font-bold text-yellow-800 dark:text-yellow-200">Aplicar esta regra para TODAS as empresas</span>
+                                        </label>
+                                        <p class="text-xs text-yellow-700 dark:text-yellow-300 mt-1 ml-6">
+                                            Atenção: Isso criará uma regra padrão que será usada por qualquer empresa que não tenha regra específica configurada.
+                                        </p>
                                     </div>
                                     <div class="mt-6 flex justify-end gap-3">
                                         <SecondaryButton @click="closeRuleModal">Fechar</SecondaryButton>

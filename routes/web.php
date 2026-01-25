@@ -86,6 +86,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/system/json', [SettingsController::class, 'systemJson'])->name('system.json');
         Route::get('/cron/conta-azul', [SettingsController::class, 'contaAzulCronStatus'])->name('cron.contaazul.status');
         Route::post('/cron/conta-azul', [SettingsController::class, 'contaAzulCronToggle'])->name('cron.contaazul.toggle');
+        Route::post('/cron/run-command', [SettingsController::class, 'runArtisanCommand'])->name('cron.run-command');
 
         // Mensagens Padrão
         Route::resource('templates', WhatsappTemplateController::class);
@@ -113,6 +114,10 @@ Route::middleware('auth')->group(function () {
     Route::get('whatsapp/reports', [\App\Http\Controllers\WhatsappReportController::class, 'index'])->name('whatsapp.reports.index');
     Route::get('whatsapp/reports/{id}/download', [\App\Http\Controllers\WhatsappReportController::class, 'download'])->name('whatsapp.reports.download');
     Route::get('whatsapp/reports/cron/download-grouped', [\App\Http\Controllers\WhatsappReportController::class, 'downloadGroupedAutomations'])->name('whatsapp.reports.cron.download_grouped');
+    
+    // Envios Futuros
+    Route::get('whatsapp/future-messages', [\App\Http\Controllers\FutureMessageController::class, 'index'])->name('whatsapp.future.index');
+    
     Route::resource('whatsapp', WhatsAppController::class);
     
     // Envio de Mensagens

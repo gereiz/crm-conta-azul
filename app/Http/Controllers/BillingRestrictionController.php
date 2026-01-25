@@ -21,24 +21,36 @@ class BillingRestrictionController extends Controller
 
     public function store(Request $request)
     {
+        // Ajusta connection_id antes da validação
+        if ($request->input('connection_id') === 'global') {
+            $request->merge(['connection_id' => null]);
+        }
+
         $validated = $request->validate([
-            'connection_id' => 'required|exists:conta_azul_connections,id',
+            'connection_id' => 'nullable|exists:conta_azul_connections,id',
             'type' => 'required|in:client_equals,invoice_equals,description_contains',
             'value' => 'required|string|max:255',
             'is_active' => 'boolean',
         ]);
+        
         BillingRestriction::create($validated);
         return redirect()->back()->with('success', 'Regra criada com sucesso.');
     }
 
     public function update(Request $request, BillingRestriction $restriction)
     {
+        // Ajusta connection_id antes da validação
+        if ($request->input('connection_id') === 'global') {
+            $request->merge(['connection_id' => null]);
+        }
+
         $validated = $request->validate([
-            'connection_id' => 'required|exists:conta_azul_connections,id',
+            'connection_id' => 'nullable|exists:conta_azul_connections,id',
             'type' => 'required|in:client_equals,invoice_equals,description_contains',
             'value' => 'required|string|max:255',
             'is_active' => 'boolean',
         ]);
+        
         $restriction->update($validated);
         return redirect()->back()->with('success', 'Regra atualizada com sucesso.');
     }

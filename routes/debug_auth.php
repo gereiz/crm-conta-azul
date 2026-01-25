@@ -117,7 +117,7 @@ Route::get('/debug-clientes-direct', function () {
         $resp = Http::withToken($token)
             ->withHeaders(['Accept' => 'application/json'])
             ->timeout(60)
-            ->get("https://api-v2.contaazul.com/v1/{$endpoint}", $params);
+            ->get("https://api.contaazul.com/v1/{$endpoint}", $params);
         return response()->json([
             'status' => $resp->status(),
             'data' => $resp->json(),

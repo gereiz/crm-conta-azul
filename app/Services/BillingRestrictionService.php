@@ -9,9 +9,18 @@ class BillingRestrictionService
 {
     public function isBlocked(int $connectionId, array $context = []): bool
     {
-        $rules = BillingRestriction::where('connection_id', $connectionId)
+        // Regras Específicas
+        $specificRules = BillingRestriction::where('connection_id', $connectionId)
             ->where('is_active', true)
             ->get();
+        
+        // Regras Globais
+        $globalRules = BillingRestriction::whereNull('connection_id')
+            ->where('is_active', true)
+            ->get();
+            
+        // Combina todas as regras
+        $rules = $specificRules->merge($globalRules);
 
         if ($rules->isEmpty()) {
             return false;

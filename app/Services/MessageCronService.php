@@ -51,6 +51,15 @@ class MessageCronService
                     ->where('message_type', $cron->type)
                     ->where('is_active', true)
                     ->first();
+                
+                // Se não houver regra específica, busca regra global (connection_id = null)
+                if (!$rule) {
+                    $rule = CompanyCronRule::whereNull('conta_azul_connection_id')
+                        ->where('message_type', $cron->type)
+                        ->where('is_active', true)
+                        ->first();
+                }
+
                 if ($rule && !$this->passesCompanyRule($rule)) {
                     Log::info("Cron {$cron->id} ignorado: regra da empresa não permite execução hoje.");
                     $stats['skipped'] = 0;
@@ -196,9 +205,12 @@ class MessageCronService
 
     protected function processBoleto(MessageCron $cron, string $batchId)
     {
-        $today = Carbon::now()->format('Y-m-d');
+        // Regra ajustada: Enviar até X dias após emissão
+        // Usamos period_value como "Dias após emissão"
+        $days = (int) ($cron->period_value ?? 0);
+        $targetDate = Carbon::now()->subDays($days)->format('Y-m-d');
         
-        $query = Invoice::whereDate('data_emissao', $today);
+        $query = Invoice::whereDate('data_emissao', $targetDate);
         if (!empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
         }

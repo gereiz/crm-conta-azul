@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 class ContaAzulApiService
 {
-    protected string $baseUrl = 'https://api-v2.contaazul.com/v1';
+    protected string $baseUrl = 'https://api.contaazul.com/v1';
 
     protected ContaAzulAuthService $auth;
 
