@@ -113,9 +113,12 @@ class ContaAzulConnectionController extends Controller
     public function callback(Request $request, ContaAzulConnection $connection)
     {
         $state = $request->input('state');
-        $savedState = session('contaazul_state');
+        
+        // Try specific state key first, then fallback to global
+        $savedState = session('contaazul_state_' . $connection->id) ?? session('contaazul_state');
 
         if (!$state || $state !== $savedState) {
+            \Illuminate\Support\Facades\Log::warning("Callback ContaAzul: State mismatch for Conn {$connection->id}. Received: $state | Saved: $savedState");
             return redirect()->route('contaazul.connections.index')->with('error', 'Falha na autenticação Conta Azul (State inválido).');
         }
 

@@ -17,7 +17,10 @@ class ContaAzulAuthService
         ];
 
         $state = base64_encode(json_encode($statePayload));
-        session(['contaazul_state' => $state]);
+        // Use session array key to allow multiple connection attempts or specific connection state
+        session(['contaazul_state_' . $connection->id => $state]);
+        // Fallback for generic controller if needed, but we should prefer specific
+        session(['contaazul_state' => $state]); 
 
         $rawScope = (string)config('services.contaazul.scope', 'openid profile aws.cognito.signin.user.admin');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
