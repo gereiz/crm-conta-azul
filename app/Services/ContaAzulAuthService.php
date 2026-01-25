@@ -22,10 +22,11 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        // Escopos corrigidos para Nova API v1
-        // 'sales' engloba acesso a clientes e vendas.
-        // Removido 'offline_access' pois estava gerando invalid_scope em algumas contas.
-        $scope = 'sales';
+        // Retornando aos escopos originais que funcionavam antes da migração forçada
+        // O usuário relatou que "openid profile email" funcionava corretamente.
+        // Vamos respeitar a configuração do .env ou usar esse padrão seguro.
+        
+        $scope = 'openid profile email';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
