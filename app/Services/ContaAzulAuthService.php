@@ -19,12 +19,12 @@ class ContaAzulAuthService
         $state = base64_encode(json_encode($statePayload));
         session(['contaazul_state' => $state]);
 
-        $rawScope = (string)config('services.contaazul.scope', 'openid profile email sales customer service product contract');
+        $rawScope = (string)config('services.contaazul.scope', 'openid profile email offline_access sales customer');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
         
         // Escopos mínimos obrigatórios para o funcionamento do sistema
-        $mandatory = ['sales', 'customer'];
-        $allowed = ['openid','profile','email','offline_access','sales','customer','service','product','contract'];
+        $mandatory = ['sales', 'customer', 'offline_access'];
+        $allowed = ['openid','profile','email','offline_access','sales','customer'];
         
         $tokens = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
         $tokens = array_merge($tokens, $mandatory); // Garante que os obrigatórios estejam presentes
