@@ -87,7 +87,7 @@ class DashboardController extends Controller
         $endDate = Carbon::today();
         $startDate = Carbon::today()->subDays($periodDays - 1);
         
-        $logs = \App\Models\WhatsappMessageLog::with('messageCron.connection')
+        $logs = \App\Models\WhatsappMessageLog::with(['messageCron.connection', 'connection'])
             ->whereBetween('sent_at', [$startDate->startOfDay(), $endDate->endOfDay()])
             ->where('status', 'success')
             ->get();
@@ -110,11 +110,19 @@ class DashboardController extends Controller
             if (!$dateKey) continue;
 
             $companyName = 'Desconhecida';
-            if ($log->messageCron && $log->messageCron->connection) {
+            
+            // 1. Tenta pegar da conexão associada ao log (se existir)
+            if ($log->connection) {
+                $companyName = $log->connection->empresa_nome;
+            } 
+            // 2. Se não tiver conexão direta, tenta via MessageCron (se houver relação)
+            elseif ($log->messageCron && $log->messageCron->connection) {
                 $companyName = $log->messageCron->connection->empresa_nome;
-            } elseif ($log->messageCron && $log->messageCron->connection_id) {
-                 $c = $connections->firstWhere('id', $log->messageCron->connection_id);
-                 $companyName = $c ? $c->empresa_nome : 'Empresa ID ' . $log->messageCron->connection_id;
+            } 
+            // 3. Tenta via ID da conexão salvo no log (fallback)
+            elseif ($log->connection_id) {
+                 $c = $connections->firstWhere('id', $log->connection_id);
+                 $companyName = $c ? $c->empresa_nome : 'Empresa ID ' . $log->connection_id;
             }
 
             if (!isset($companiesData[$companyName])) {
