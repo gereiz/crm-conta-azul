@@ -189,18 +189,20 @@ Route::get('/debug-connections/{id}/clients', function ($id) {
     ]);
     return response()->json($data);
 });
-function dump_response($response) {
-    $json = $response->json();
-    $status = $response->status();
-    
-    echo "Status: <strong>$status</strong><br>";
-    echo "Resposta: <pre>" . json_encode($json, JSON_PRETTY_PRINT) . "</pre>";
+if (!function_exists('dump_response')) {
+    function dump_response($response) {
+        $json = $response->json();
+        $status = $response->status();
+        
+        echo "Status: <strong>$status</strong><br>";
+        echo "Resposta: <pre>" . json_encode($json, JSON_PRETTY_PRINT) . "</pre>";
 
-    if (isset($json['error']) && $json['error'] === 'invalid_grant') {
-        echo "<p style='color:green'>✅ <strong>SUCESSO:</strong> O Conta Azul rejeitou o código (esperado), mas ACEITOU suas credenciais!</p>";
-    } elseif (isset($json['code']) && $json['code'] === 'invalid_client') {
-        echo "<p style='color:red'>❌ <strong>FALHA:</strong> O Conta Azul rejeitou suas credenciais (Client ID ou Secret incorretos).</p>";
-    } else {
-        echo "<p style='color:orange'>⚠️ Resultado inconclusivo.</p>";
+        if (isset($json['error']) && $json['error'] === 'invalid_grant') {
+            echo "<p style='color:green'>✅ <strong>SUCESSO:</strong> O Conta Azul rejeitou o código (esperado), mas ACEITOU suas credenciais!</p>";
+        } elseif (isset($json['code']) && $json['code'] === 'invalid_client') {
+            echo "<p style='color:red'>❌ <strong>FALHA:</strong> O Conta Azul rejeitou suas credenciais (Client ID ou Secret incorretos).</p>";
+        } else {
+            echo "<p style='color:orange'>⚠️ Resultado inconclusivo.</p>";
+        }
     }
 }
