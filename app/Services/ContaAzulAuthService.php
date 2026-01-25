@@ -22,19 +22,9 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        $rawScope = (string)config('services.contaazul.scope', 'openid profile email offline_access');
-        $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
-        
-        // Se a variável de ambiente não estiver definida ou vazia, usa o padrão seguro
-        if (empty($rawScope)) {
-            $rawScope = 'openid profile email offline_access';
-        }
-        
-        // Na nova API, não usamos mais sales/customer na autenticação pública padrão
-        // Se o usuário configurou sales/customer manualmente no .env, vamos respeitar,
-        // mas o padrão deve ser o set mínimo funcional.
-        
-        $scope = $rawScope;
+        // Escopos exatos conforme documentação oficial:
+        // https://developers.contaazul.com/authorize-multiple-clients#1-direcionar-o-cliente-para-a-tela-de-autorização
+        $scope = 'openid profile aws.cognito.signin.user.admin';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
