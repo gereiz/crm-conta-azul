@@ -68,7 +68,29 @@ class ContaAzulAuthService
     public function exchangeCode(ContaAzulConnection $connection, string $code): ?array
     {
         $clientId = trim($connection->ca_client_id);
-        $clientSecret = trim($connection->ca_client_secret);
+        
+        try {
+            $clientSecret = trim($connection->ca_client_secret);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            Log::warning("Erro de descriptografia no Client Secret da conexão {$connection->id}. Tentando fallback do .env.");
+            // Fallback: tenta pegar do .env se não conseguir decifrar do banco
+            $clientSecret = config('services.contaazul.client_secret');
+            
+            if (empty($clientSecret)) {
+                Log::error("Client Secret não encontrado no .env e falha de descriptografia no banco para conexão {$connection->id}.");
+                return null;
+            }
+
+            // Opcional: Atualizar o banco com o valor do .env para corrigir o registro corrompido
+            // Isso assume que o .env tem o valor correto para esta conexão
+            try {
+                $connection->ca_client_secret = $clientSecret;
+                $connection->save();
+                Log::info("Client Secret da conexão {$connection->id} corrigido automaticamente usando valor do .env.");
+            } catch (\Exception $saveError) {
+                Log::error("Falha ao tentar corrigir Client Secret no banco: " . $saveError->getMessage());
+            }
+        }
         
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
@@ -102,8 +124,23 @@ class ContaAzulAuthService
             $refreshToken = $connection->refresh_token;
             $clientSecret = $connection->ca_client_secret;
         } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
-            Log::error("Erro de descriptografia ao renovar token (conn {$connection->id}): " . $e->getMessage());
-            return null;
+            Log::warning("Erro de descriptografia ao renovar token (conn {$connection->id}). Tentando recuperar.");
+            
+            // Tenta recuperar Client Secret do .env se falhar
+            $clientSecret = config('services.contaazul.client_secret');
+            
+            // Se o refresh token estiver corrompido, não há o que fazer além de retornar null
+            // O getValidToken vai lidar com isso forçando nova autenticação
+            if (empty($clientSecret)) {
+                return null;
+            }
+            
+            // Se conseguimos o secret, mas o refresh token falhou, retornamos null
+            try {
+                $refreshToken = $connection->refresh_token;
+            } catch (\Exception $ex) {
+                return null;
+            }
         }
 
         if (!$refreshToken) {
