@@ -52,4 +52,9 @@ class WhatsappMessageLog extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function messageCron()
+    {
+        return $this->belongsTo(MessageCron::class, 'message_cron_id');
+    }
 }

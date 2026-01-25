@@ -50,4 +50,9 @@ class MessageCron extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function connection()
+    {
+        return $this->belongsTo(ContaAzulConnection::class, 'connection_id');
+    }
 }

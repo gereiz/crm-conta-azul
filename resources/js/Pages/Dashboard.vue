@@ -7,6 +7,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 
 const props = defineProps({
     stats: Object,
+    chartData: Object, // Recebe os dados do gráfico
     flash: Object,
     shouldSync: Boolean,
     connections: Array,
@@ -16,6 +17,7 @@ const props = defineProps({
 const page = usePage();
 const flash = computed(() => props.flash || page.props.flash || {});
 const stats = computed(() => props.stats || page.props.stats || {});
+const chartData = computed(() => props.chartData || page.props.chartData || { labels: [], datasets: [] }); // Computado para garantir acesso
 const isAdmin = computed(() => (page.props.auth?.user?.role ?? '') === 'admin');
 
 const whapiStatus = ref(null);
@@ -119,6 +121,33 @@ const syncFinancials = async () => {
         setTimeout(() => { syncNotice.value.visible = false; }, 3000);
     }
 };
+
+const chartPeriod = ref(7);
+const loadingChart = ref(false);
+const localChartData = ref(props.chartData || { labels: [], datasets: [] });
+
+// Se os dados vierem do backend via props, inicializa localChartData
+watch(() => props.chartData, (newVal) => {
+    if (newVal) localChartData.value = newVal;
+}, { immediate: true });
+
+const fetchChartData = async () => {
+    loadingChart.value = true;
+    try {
+        const response = await axios.get(route('dashboard.chart-data', { period: chartPeriod.value }));
+        if (response.data.success) {
+            localChartData.value = response.data.chartData;
+        }
+    } catch (error) {
+        console.error('Erro ao buscar dados do gráfico:', error);
+    } finally {
+        loadingChart.value = false;
+    }
+};
+
+watch(chartPeriod, () => {
+    fetchChartData();
+});
 
 const fetchStats = async () => {
     try {
@@ -285,95 +314,64 @@ watch(selectedConnectionId, async (newVal) => {
                 <!-- Recent Activity / Charts Placeholder -->
                 <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
-                <div class="flex items-center justify-between mb-6">
-                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">Envios da Semana</h3>
-                  <select class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
-                    <option>Últimos 7 dias</option>
-                    <option>Este mês</option>
-                  </select>
-                </div>
-                
-                <!-- Simple CSS Bar Chart -->
-                <div class="h-64 flex items-end justify-between gap-2 px-2">
-                  <!-- Bar 1 -->
-                  <div class="flex flex-col items-center flex-1 group">
-                    <div class="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg relative h-32 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-all duration-300">
-                      <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-lg transition-all duration-500" style="height: 40%"></div>
-                      <!-- Tooltip -->
-                      <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded transition-opacity duration-200 whitespace-nowrap z-10">
-                        12 Envios
-                      </div>
-                    </div>
-                    <span class="text-xs text-gray-400 mt-2">Seg</span>
-                  </div>
-                  
-                  <!-- Bar 2 -->
-                  <div class="flex flex-col items-center flex-1 group">
-                    <div class="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg relative h-32 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-all duration-300">
-                      <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-lg transition-all duration-500" style="height: 65%"></div>
-                      <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded transition-opacity duration-200 whitespace-nowrap z-10">
-                        24 Envios
-                      </div>
-                    </div>
-                    <span class="text-xs text-gray-400 mt-2">Ter</span>
-                  </div>
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Envios</h3>
+                            <select v-model="chartPeriod" :disabled="loadingChart" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                                <option :value="7">Últimos 7 dias</option>
+                                <option :value="15">Últimos 15 dias</option>
+                                <option :value="30">Últimos 30 dias</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Stacked Bar Chart (CSS Pure) -->
+                        <div class="h-64 flex items-end justify-between gap-2 px-2 relative" :class="{ 'opacity-50': loadingChart }">
+                            <!-- Y-Axis Lines (Background) -->
+                            <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                            </div>
 
-                  <!-- Bar 3 -->
-                  <div class="flex flex-col items-center flex-1 group">
-                    <div class="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg relative h-32 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-all duration-300">
-                      <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-lg transition-all duration-500" style="height: 30%"></div>
-                      <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded transition-opacity duration-200 whitespace-nowrap z-10">
-                        8 Envios
-                      </div>
-                    </div>
-                    <span class="text-xs text-gray-400 mt-2">Qua</span>
-                  </div>
+                            <div v-for="(label, index) in localChartData.labels" :key="index" class="flex flex-col items-center flex-1 group h-full justify-end">
+                                <div class="w-full rounded-t-lg relative flex flex-col justify-end overflow-hidden transition-all duration-300 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50" style="height: 100%;">
+                                    
+                                    <!-- Stacked Segments -->
+                                    <template v-for="(dataset, dIndex) in localChartData.datasets" :key="dIndex">
+                                        <div 
+                                            v-if="dataset.data[index] > 0"
+                                            :style="{ height: (dataset.data[index] * 5) + '%', backgroundColor: dataset.backgroundColor }"
+                                            class="w-full transition-all duration-500 relative group/segment"
+                                            :title="dataset.label + ': ' + dataset.data[index]"
+                                        >
+                                            <!-- Tooltip per segment -->
+                                            <div class="opacity-0 group-hover/segment:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[10px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20">
+                                                {{ dataset.label }}: {{ dataset.data[index] }}
+                                            </div>
+                                        </div>
+                                    </template>
 
-                  <!-- Bar 4 -->
-                  <div class="flex flex-col items-center flex-1 group">
-                    <div class="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg relative h-32 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-all duration-300">
-                      <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-lg transition-all duration-500" style="height: 85%"></div>
-                      <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded transition-opacity duration-200 whitespace-nowrap z-10">
-                        42 Envios
-                      </div>
+                                    <!-- Total Tooltip (Top of bar) -->
+                                    <div class="opacity-0 group-hover:opacity-100 absolute top-0 left-1/2 -translate-x-1/2 mt-[-20px] text-gray-600 dark:text-gray-300 text-xs font-bold pointer-events-none z-10">
+                                        {{ localChartData.datasets.reduce((acc, ds) => acc + (ds.data[index] || 0), 0) }}
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-gray-400 mt-2 font-medium rotate-45 sm:rotate-0 origin-left">{{ label }}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Legend -->
+                        <div class="mt-6 flex flex-wrap gap-3 justify-center">
+                            <div v-for="(dataset, i) in localChartData.datasets" :key="i" class="flex items-center">
+                                <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: dataset.backgroundColor }"></span>
+                                <span class="text-xs text-gray-600 dark:text-gray-400">{{ dataset.label }}</span>
+                            </div>
+                            <div v-if="localChartData.datasets.length === 0" class="text-xs text-gray-400 italic">
+                                Nenhum envio registrado no período.
+                            </div>
+                        </div>
                     </div>
-                    <span class="text-xs text-gray-400 mt-2">Qui</span>
-                  </div>
-
-                  <!-- Bar 5 -->
-                  <div class="flex flex-col items-center flex-1 group">
-                    <div class="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg relative h-32 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-all duration-300">
-                      <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-lg transition-all duration-500" style="height: 50%"></div>
-                      <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded transition-opacity duration-200 whitespace-nowrap z-10">
-                        18 Envios
-                      </div>
-                    </div>
-                    <span class="text-xs text-gray-400 mt-2">Sex</span>
-                  </div>
-                  
-                  <!-- Bar 6 -->
-                  <div class="flex flex-col items-center flex-1 group">
-                    <div class="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg relative h-32 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-all duration-300">
-                      <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-lg transition-all duration-500" style="height: 15%"></div>
-                      <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded transition-opacity duration-200 whitespace-nowrap z-10">
-                        4 Envios
-                      </div>
-                    </div>
-                    <span class="text-xs text-gray-400 mt-2">Sáb</span>
-                  </div>
-                  
-                  <!-- Bar 7 -->
-                  <div class="flex flex-col items-center flex-1 group">
-                    <div class="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg relative h-32 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-all duration-300">
-                      <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-lg transition-all duration-500" style="height: 10%"></div>
-                      <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded transition-opacity duration-200 whitespace-nowrap z-10">
-                        2 Envios
-                      </div>
-                    </div>
-                    <span class="text-xs text-gray-400 mt-2">Dom</span>
-                  </div>
-                </div>
-              </div>
                     
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
                         <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Status do Sistema</h3>

@@ -55,6 +55,9 @@ Route::post('/dashboard/select-connection', [DashboardController::class, 'select
 Route::get('/dashboard/stats', [DashboardController::class, 'stats'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard.stats');
+Route::get('/dashboard/chart-data', [DashboardController::class, 'chartData'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.chart-data');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

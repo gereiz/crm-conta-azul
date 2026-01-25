@@ -76,6 +76,72 @@ class DashboardController extends Controller
         }
     }
 
+    public function chartData(Request $request)
+    {
+        $periodDays = (int) $request->input('period', 7);
+        $allowedPeriods = [7, 15, 30];
+        if (!in_array($periodDays, $allowedPeriods)) {
+            $periodDays = 7;
+        }
+
+        $endDate = Carbon::today();
+        $startDate = Carbon::today()->subDays($periodDays - 1);
+        
+        $logs = \App\Models\WhatsappMessageLog::with('messageCron.connection')
+            ->whereBetween('sent_at', [$startDate->startOfDay(), $endDate->endOfDay()])
+            ->where('status', 'success')
+            ->get();
+
+        $chartData = [
+            'labels' => [],
+            'datasets' => []
+        ];
+
+        $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
+        foreach ($period as $date) {
+            $chartData['labels'][] = $date->format('d/m');
+        }
+
+        $connections = ContaAzulConnection::all();
+        $companiesData = [];
+        
+        foreach ($logs as $log) {
+            $dateKey = $log->sent_at ? Carbon::parse($log->sent_at)->format('d/m') : null;
+            if (!$dateKey) continue;
+
+            $companyName = 'Desconhecida';
+            if ($log->messageCron && $log->messageCron->connection) {
+                $companyName = $log->messageCron->connection->empresa_nome;
+            } elseif ($log->messageCron && $log->messageCron->connection_id) {
+                 $c = $connections->firstWhere('id', $log->messageCron->connection_id);
+                 $companyName = $c ? $c->empresa_nome : 'Empresa ID ' . $log->messageCron->connection_id;
+            }
+
+            if (!isset($companiesData[$companyName])) {
+                $companiesData[$companyName] = array_fill_keys($chartData['labels'], 0);
+            }
+            
+            $companiesData[$companyName][$dateKey]++;
+        }
+
+        $colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
+        $colorIndex = 0;
+
+        foreach ($companiesData as $companyName => $dataByDay) {
+            $chartData['datasets'][] = [
+                'label' => $companyName,
+                'data' => array_values($dataByDay),
+                'backgroundColor' => $colors[$colorIndex % count($colors)],
+            ];
+            $colorIndex++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'chartData' => $chartData
+        ]);
+    }
+
     public function index(Request $request)
     {
         $selectedConnectionId = $request->input('connection_id') ?? session('dashboard_connection_id');
@@ -125,11 +191,15 @@ class DashboardController extends Controller
             session(['dashboard_synced' => true]);
         }
 
+        $chartRequest = new Request(['period' => 7]);
+        $initialChartData = $this->chartData($chartRequest)->getData()->chartData;
+
         return Inertia::render('Dashboard', [
             'stats' => $stats,
             'shouldSync' => $shouldSync,
             'connections' => $connections,
             'selectedConnectionId' => $selectedConnectionId,
+            'chartData' => $initialChartData,
         ]);
     }
 

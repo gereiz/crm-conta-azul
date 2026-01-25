@@ -62,7 +62,36 @@ class ContaAzulConnectionController extends Controller
             'ca_redirect_uri' => 'required|url|max:255',
             'is_active' => 'boolean',
         ]);
-        $connection->update($data);
+
+        // Tratamento para evitar falha de descriptografia se a chave mudou
+        // Se a APP_KEY mudou, o acesso aos atributos criptografados (como ca_client_secret)
+        // vai lançar exceção na leitura implícita que o Eloquent pode fazer antes do update.
+        // Mas o update sobrescreve. O problema é se o update tenta ler os valores antigos para comparar "dirty".
+        // Para garantir, forçamos a definição dos atributos sem leitura prévia se possível,
+        // ou capturamos a exceção para permitir a sobrescrita.
+        
+        try {
+            $connection->update($data);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            // Se falhou ao descriptografar, significa que os dados antigos estão corrompidos (chave mudou).
+            // Como estamos fornecendo TODOS os dados sensíveis novamente no request (secret, etc),
+            // podemos forçar a gravação direta ignorando o estado anterior.
+            
+            $connection->empresa_nome = $data['empresa_nome'];
+            $connection->email_desenvolvedor = $data['email_desenvolvedor'];
+            $connection->ca_client_id = $data['ca_client_id'];
+            $connection->ca_client_secret = $data['ca_client_secret']; // Será encriptado com a NOVA chave
+            $connection->ca_redirect_uri = $data['ca_redirect_uri'];
+            $connection->is_active = $data['is_active'];
+            
+            // Limpa tokens antigos pois eles também estarão corrompidos
+            $connection->access_token = null;
+            $connection->refresh_token = null;
+            $connection->token_expires_at = null;
+            
+            $connection->save();
+        }
+
         return redirect()->back()->with('success', 'Conexão atualizada.');
     }
 
