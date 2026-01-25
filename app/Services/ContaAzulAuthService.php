@@ -25,8 +25,10 @@ class ContaAzulAuthService
         // Retornando aos escopos originais que funcionavam antes da migração forçada
         // O usuário relatou que "openid profile email" funcionava corretamente.
         // Vamos respeitar a configuração do .env ou usar esse padrão seguro.
+        // Atualização: Adicionando 'sales' para permitir acesso a clientes, e 'offline_access' para renovação.
+        // Esta combinação (identidade + negócio + offline) é a mais completa e padrão.
         
-        $scope = 'openid profile email';
+        $scope = 'openid profile email sales offline_access';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
