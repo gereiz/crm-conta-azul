@@ -22,13 +22,9 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        // Retornando aos escopos originais que funcionavam antes da migração forçada
-        // O usuário relatou que "openid profile email" funcionava corretamente.
-        // Vamos respeitar a configuração do .env ou usar esse padrão seguro.
-        // Atualização: Adicionando 'sales' para permitir acesso a clientes, e 'offline_access' para renovação.
-        // Esta combinação (identidade + negócio + offline) é a mais completa e padrão.
-        
-        $scope = 'openid profile email sales offline_access';
+        // Escopo único e exclusivo conforme Documentação Oficial API v2 (Multi-clientes)
+        // https://developers.contaazul.com/authorize-multiple-clients
+        $scope = 'openid profile aws.cognito.signin.user.admin';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
