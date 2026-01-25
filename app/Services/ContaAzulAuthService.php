@@ -19,23 +19,23 @@ class ContaAzulAuthService
         $state = base64_encode(json_encode($statePayload));
         session(['contaazul_state' => $state]);
 
-        $rawScope = (string)config('services.contaazul.scope', 'openid profile email offline_access sales customer');
+        $rawScope = (string)config('services.contaazul.scope', 'openid profile aws.cognito.signin.user.admin');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
         
-        // Escopos mínimos obrigatórios para o funcionamento do sistema
-        $mandatory = ['sales', 'customer', 'offline_access'];
-        $allowed = ['openid','profile','email','offline_access','sales','customer'];
+        // Escopos da Nova API - fixos conforme documentação
+        // https://developers.contaazul.com/migration#nova-api
+        $mandatory = ['openid', 'profile', 'aws.cognito.signin.user.admin'];
+        $allowed = ['openid', 'profile', 'aws.cognito.signin.user.admin'];
         
-        $tokens = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
-        $tokens = array_merge($tokens, $mandatory); // Garante que os obrigatórios estejam presentes
-        $tokens = array_map(fn($s) => strtolower(trim($s)), $tokens);
+        // Se usar a Nova API, não processamos espaços/vírgulas para separar sales/customer
+        // pois o escopo é uma string única fixa ou composta por esses 3.
         
-        $filtered = array_values(array_unique(array_intersect($tokens, $allowed)));
+        // No entanto, para manter compatibilidade caso o .env ainda tenha os antigos,
+        // vamos forçar o uso dos novos se a configuração indicar Nova API, 
+        // mas aqui vamos simplificar: ignorar o que vem do config e forçar os novos
+        // pois a API antiga foi descontinuada.
         
-        if (empty($filtered)) {
-            $filtered = ['openid','profile','email','sales','customer'];
-        }
-        $scope = implode(' ', $filtered);
+        $scope = 'openid profile aws.cognito.signin.user.admin';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
