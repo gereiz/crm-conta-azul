@@ -56,20 +56,31 @@ class ContaAzulAuthService
         $clientId = trim($connection->ca_client_id);
         
         try {
-            $clientSecret = trim($connection->ca_client_secret);
+            // Tenta obter o segredo do banco. Se a APP_KEY mudou, isso vai lançar exceção.
+            // Para novas conexões, o segredo pode vir vazio se foi salvo incorretamente antes.
+            $clientSecret = $connection->ca_client_secret;
+            if (empty($clientSecret)) {
+                 throw new \Illuminate\Contracts\Encryption\DecryptException("Client Secret vazio no banco.");
+            }
+            $clientSecret = trim($clientSecret);
         } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
-            Log::warning("Erro de descriptografia no Client Secret da conexão {$connection->id}. Tentando fallback do .env.");
-            // Fallback: tenta pegar do .env se não conseguir decifrar do banco
+            Log::warning("Erro de descriptografia ou secret vazio na conexão {$connection->id}. Tentando fallback do .env.");
+            
+            // Fallback: tenta pegar do .env
             $clientSecret = config('services.contaazul.client_secret');
             
             if (empty($clientSecret)) {
+                // Última tentativa: se o usuário acabou de preencher o formulário de conexão,
+                // o request original pode ter o client_secret. Mas aqui estamos no serviço.
+                // Se falhar aqui, é fatal.
                 Log::error("Client Secret não encontrado no .env e falha de descriptografia no banco para conexão {$connection->id}.");
-                return null;
+                return ['error' => 'decrypt_error'];
             }
 
             // Opcional: Atualizar o banco com o valor do .env para corrigir o registro corrompido
-            // Isso assume que o .env tem o valor correto para esta conexão
             try {
+                // IMPORTANTE: Ao salvar aqui, o Eloquent usará a APP_KEY atual para criptografar.
+                // Isso "conserta" o registro para o futuro.
                 $connection->ca_client_secret = $clientSecret;
                 $connection->save();
                 Log::info("Client Secret da conexão {$connection->id} corrigido automaticamente usando valor do .env.");
