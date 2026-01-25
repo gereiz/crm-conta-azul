@@ -22,24 +22,19 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        $rawScope = (string)config('services.contaazul.scope', 'openid profile aws.cognito.signin.user.admin sales customer');
+        $rawScope = (string)config('services.contaazul.scope', 'openid profile email offline_access');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
         
-        // Escopos da Nova API - fixos conforme documentação
-        // https://developers.contaazul.com/migration#nova-api
-        // Adicionado sales e customer para acesso completo
-        $mandatory = ['openid', 'profile', 'aws.cognito.signin.user.admin', 'sales', 'customer'];
-        $allowed = ['openid', 'profile', 'aws.cognito.signin.user.admin', 'sales', 'customer'];
+        // Se a variável de ambiente não estiver definida ou vazia, usa o padrão seguro
+        if (empty($rawScope)) {
+            $rawScope = 'openid profile email offline_access';
+        }
         
-        // Se usar a Nova API, não processamos espaços/vírgulas para separar sales/customer
-        // pois o escopo é uma string única fixa ou composta por esses 3.
+        // Na nova API, não usamos mais sales/customer na autenticação pública padrão
+        // Se o usuário configurou sales/customer manualmente no .env, vamos respeitar,
+        // mas o padrão deve ser o set mínimo funcional.
         
-        // No entanto, para manter compatibilidade caso o .env ainda tenha os antigos,
-        // vamos forçar o uso dos novos se a configuração indicar Nova API, 
-        // mas aqui vamos simplificar: ignorar o que vem do config e forçar os novos
-        // pois a API antiga foi descontinuada.
-        
-        $scope = 'openid profile aws.cognito.signin.user.admin sales customer';
+        $scope = $rawScope;
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
