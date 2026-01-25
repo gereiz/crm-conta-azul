@@ -24,9 +24,8 @@ class ContaAzulAuthService
 
         // Escopos corrigidos para Nova API v1
         // 'sales' engloba acesso a clientes e vendas.
-        // 'offline_access' é obrigatório para refresh tokens.
-        // Removidos escopos internos (aws.cognito...) e inexistentes (customer) que causavam invalid_scope.
-        $scope = 'sales offline_access';
+        // Removido 'offline_access' pois estava gerando invalid_scope em algumas contas.
+        $scope = 'sales';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
