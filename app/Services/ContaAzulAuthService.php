@@ -22,13 +22,14 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        $rawScope = (string)config('services.contaazul.scope', 'openid profile aws.cognito.signin.user.admin');
+        $rawScope = (string)config('services.contaazul.scope', 'openid profile aws.cognito.signin.user.admin sales customer');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
         
         // Escopos da Nova API - fixos conforme documentação
         // https://developers.contaazul.com/migration#nova-api
-        $mandatory = ['openid', 'profile', 'aws.cognito.signin.user.admin'];
-        $allowed = ['openid', 'profile', 'aws.cognito.signin.user.admin'];
+        // Adicionado sales e customer para acesso completo
+        $mandatory = ['openid', 'profile', 'aws.cognito.signin.user.admin', 'sales', 'customer'];
+        $allowed = ['openid', 'profile', 'aws.cognito.signin.user.admin', 'sales', 'customer'];
         
         // Se usar a Nova API, não processamos espaços/vírgulas para separar sales/customer
         // pois o escopo é uma string única fixa ou composta por esses 3.
@@ -38,7 +39,7 @@ class ContaAzulAuthService
         // mas aqui vamos simplificar: ignorar o que vem do config e forçar os novos
         // pois a API antiga foi descontinuada.
         
-        $scope = 'openid profile aws.cognito.signin.user.admin';
+        $scope = 'openid profile aws.cognito.signin.user.admin sales customer';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
