@@ -65,8 +65,12 @@ if [ ! -f .env ]; then\n\
     # Força driver de sessão para file para evitar erro de banco na instalação\n\
     sed -i "s/SESSION_DRIVER=database/SESSION_DRIVER=file/g" .env\n\
     \n\
-    # Gera chave APENAS se o .env acabou de ser criado\n\
-    php artisan key:generate --force\n\
+    # Gera chave APENAS se o .env acabou de ser criado E APP_KEY não foi informada via env var\n\
+    if [ -z "$APP_KEY" ]; then\n\
+        php artisan key:generate --force\n\
+    else\n\
+        echo "APP_KEY definida no ambiente. Ignorando geracao de nova chave."\n\
+    fi\n\
 fi\n\
 \n\
 # IMPORTANTE: Em produção, o .env deve ser persistido via volume ou injetado.\n\
