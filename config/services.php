@@ -39,7 +39,7 @@ return [
         'client_id' => env('CONTA_AZUL_CLIENT_ID'),
         'client_secret' => env('CONTA_AZUL_CLIENT_SECRET'),
         'redirect_uri' => env('CONTA_AZUL_REDIRECT_URI'),
-        'scope' => env('CONTA_AZUL_SCOPE', 'openid profile email offline_access'),
+        'scope' => env('CONTA_AZUL_SCOPE', 'openid profile email'),
     ],
 
 ];

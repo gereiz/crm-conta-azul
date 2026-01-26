@@ -65,18 +65,13 @@ if [ ! -f .env ]; then\n\
     # Força driver de sessão para file para evitar erro de banco na instalação\n\
     sed -i "s/SESSION_DRIVER=database/SESSION_DRIVER=file/g" .env\n\
     \n\
-    # Gera chave APENAS se o .env acabou de ser criado E APP_KEY não foi informada via env var\n\
-    if [ -z "$APP_KEY" ]; then\n\
-        # Tenta ler do .env se existir (caso tenha sido copiado do example mas não populado)\n\
-        # Se NÃO encontrar a linha APP_KEY= (ou ela estiver vazia), gera a chave\n\
-        # Mas para garantir que NUNCA sobrescreva, vamos ser ainda mais restritivos:\n\
-        # Só gera se APP_KEY= estiver LITERALMENTE vazio (APP_KEY=)\n\
-        if grep -q "^APP_KEY=$" .env; then\n\
-             php artisan key:generate --force\n\
-        fi\n\
-    else\n\
-        echo "APP_KEY definida no ambiente. Ignorando geracao de nova chave."\n\
-    fi\n\
+    # Desabilitada geracao automatica de chave em producao para evitar conflitos\n\
+    # O usuario deve configurar APP_KEY nas variaveis de ambiente\n\
+    # if [ -z "$APP_KEY" ]; then\n\
+    #    if grep -q "^APP_KEY=$" .env; then\n\
+    #         php artisan key:generate --force\n\
+    #    fi\n\
+    # fi\n\
 fi\n\
 \n\
 # IMPORTANTE: Em produção, o .env deve ser persistido via volume ou injetado.\n\

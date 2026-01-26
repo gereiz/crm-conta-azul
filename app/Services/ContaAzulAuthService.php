@@ -24,7 +24,7 @@ class ContaAzulAuthService
 
         // Usando o escopo definido no arquivo de configuração (que vem do .env)
         // Isso permite que o usuário controle os escopos sem alterar o código.
-        // O valor padrão do config é 'openid profile email offline_access' (definido em config/services.php)
+        // O valor padrão do config é 'openid profile email' (definido em config/services.php)
         // Mas se o .env tiver 'openid profile email', será respeitado.
         $scope = config('services.contaazul.scope', 'openid profile email');
 
