@@ -318,7 +318,9 @@ class MessageCronService
             'invoice_ca_id' => $invoice->ca_id,
             'descricao' => $invoice->descricao,
         ];
-        if ($invoice->connection_id && $this->restrictionService->isBlocked((int) $invoice->connection_id, $context)) {
+
+        // Verifica restrições dinâmicas (Globais e Específicas) cadastradas no banco
+        if ($this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context)) {
             WhatsappMessageLog::create([
                 'connection_id' => $invoice->connection_id,
                 'message_cron_id' => $cron->id,
@@ -530,6 +532,46 @@ class MessageCronService
 
     protected function sendGroupedMessageForClient(MessageCron $cron, Cliente $cliente, $invoices, string $batchId)
     {
+        // Filtrar faturas com restrição dinâmica (via BillingRestrictionService)
+        $validInvoices = collect($invoices)->reject(function($invoice) use ($cron, $cliente) {
+             $context = [
+                'cliente_nome' => $cliente->name ?? ($invoice->cliente_nome ?? ''),
+                'cliente_ca_id' => $cliente->ca_id ?? $invoice->cliente_ca_id,
+                'invoice_ca_id' => $invoice->ca_id,
+                'descricao' => $invoice->descricao,
+            ];
+            
+            // Verifica se esta fatura específica está bloqueada
+            return $this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context);
+        });
+
+        // Se todas foram bloqueadas, loga e pula
+        if ($validInvoices->isEmpty()) {
+            $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
+            $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
+            
+            WhatsappMessageLog::create([
+                'connection_id' => $cron->connection_id ?? ($cliente->connection_id ?? null),
+                'message_cron_id' => $cron->id,
+                'cliente_id' => $cliente->id,
+                'client_name' => $cliente->name,
+                'phone_original' => $originalPhone,
+                'phone_sanitized' => $sanitizedPhone,
+                'message_type' => $cron->type,
+                'message_template_id' => $cron->message_template_id,
+                'total_boletos' => count($invoices),
+                'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
+                'status' => 'skipped',
+                'error_message' => 'Bloqueado por regra de restrição (todas as faturas)',
+                'batch_id' => $batchId,
+                'sent_at' => now(),
+            ]);
+            return 'skipped';
+        }
+
+        // Atualiza a lista de faturas para usar apenas as válidas
+        $invoices = $validInvoices->all();
+
         $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
         if (!$originalPhone) {
             $this->logError($cron, $cliente, null, "Cliente sem telefone cadastrado.", is_countable($invoices) ? count($invoices) : null);
