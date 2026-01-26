@@ -145,7 +145,7 @@ const statusClass = (status) => {
                                         {{ item.cliente?.name || item.cliente?.company_name || '-' }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ typeLabel(item.message_type) }}
+                                        {{ typeLabel(item) }}
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                                         <div v-if="item.event_date">
