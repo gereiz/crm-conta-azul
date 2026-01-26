@@ -22,12 +22,14 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        // Diagnóstico Final: O usuário relatou que a sincronização funcionava com escopos antigos.
-        // O erro 401 persiste mesmo com escopos V2 limitados.
-        // Hipótese: O "jeito antigo" que funcionava provavelmente usava escopos V1 implícitos ou uma combinação específica.
-        // Tentativa de restauração baseada no .env fornecido pelo usuário (openid profile email) + sales para tentar forçar acesso.
-        // Nota: Se 'email' for o segredo, vamos testar. Se não, voltaremos para o padrão V2 puro.
-        $scope = 'openid profile email sales';
+        // Diagnóstico Final: O erro na tela de login da Conta Azul ("An error was encountered...") geralmente é
+        // causado por 'redirect_mismatch' ou escopos inválidos na URL.
+        // A URL gerada está usando: scope=openid+profile+email+sales
+        // Se a conta for V2 pura, isso quebra.
+        // Se a conta for V1 legado, pode funcionar, MAS 'sales' é o suspeito.
+        // Vamos tentar remover 'sales' e manter apenas os escopos de identidade padrão para garantir o login primeiro.
+        // Depois lidamos com a falta de permissão na API. O login é prioritário.
+        $scope = 'openid profile email';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
