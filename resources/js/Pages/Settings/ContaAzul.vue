@@ -5,6 +5,7 @@ import { ref, computed } from 'vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import BatchSyncModal from '@/Components/BatchSyncModal.vue';
 import axios from 'axios';
 import TextInput from '@/Components/TextInput.vue';
 
@@ -182,7 +183,7 @@ const startSyncAll = async (mode) => {
 
 const processNextSync = async () => {
     if (currentSyncIndex.value >= syncQueue.value.length) {
-        syncLogs.value.push('✅ Sincronização de todas as empresas concluída!');
+        syncLogs.value.push({ status: 'success', message: 'Sincronização de todas as empresas concluída!' });
         setTimeout(() => {
             syncingAll.value = false;
             router.reload();
@@ -191,7 +192,7 @@ const processNextSync = async () => {
     }
 
     const connection = syncQueue.value[currentSyncIndex.value];
-    syncLogs.value.push(`⏳ Sincronizando: ${connection.empresa_nome}...`);
+    syncLogs.value.push({ status: 'syncing', message: `Sincronizando: ${connection.empresa_nome}...` });
 
     try {
         const response = await axios.post(route('settings.contaazul.sync'), { 
@@ -199,14 +200,28 @@ const processNextSync = async () => {
             mode: syncAllMode.value 
         });
         
+        // Remove a mensagem de "Sincronizando..." para não duplicar visualmente ou atualiza status
+        // Vamos manter o histórico
+        
         if (response.data.success) {
-            syncLogs.value.push(`✅ ${connection.empresa_nome}: Sucesso (${response.data.details?.clientes_count || 0} clientes)`);
+            const clientes = response.data.details?.clientes_count || 0;
+            const faturas = response.data.details?.invoices_count || 0;
+            syncLogs.value.push({ 
+                status: 'success', 
+                message: `${connection.empresa_nome}: Sucesso (${clientes} clientes, ${faturas} faturas)` 
+            });
         } else {
-            syncLogs.value.push(`❌ ${connection.empresa_nome}: ${response.data.error || 'Erro desconhecido'}`);
+            syncLogs.value.push({ 
+                status: 'error', 
+                message: `${connection.empresa_nome}: ${response.data.error || 'Erro desconhecido'}` 
+            });
         }
     } catch (error) {
         const msg = error.response?.data?.error || error.message;
-        syncLogs.value.push(`❌ ${connection.empresa_nome}: Falha - ${msg}`);
+        syncLogs.value.push({ 
+            status: 'error', 
+            message: `${connection.empresa_nome}: Falha - ${msg}` 
+        });
     } finally {
         currentSyncIndex.value++;
         processNextSync();
@@ -412,35 +427,16 @@ const deleteConnection = (id) => {
                                 </PrimaryButton>
                             </div>
                         </div>
-
-                        <div v-else>
-                            <div class="mb-4">
-                                <div class="flex justify-between text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                                    <span>Progresso Geral</span>
-                                    <span>{{ currentSyncIndex }} / {{ syncQueue.length }}</span>
-                                </div>
-                                <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                    <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" :style="{ width: (currentSyncIndex / syncQueue.length * 100) + '%' }"></div>
-                                </div>
-                            </div>
-
-                            <div class="bg-gray-900 text-green-400 font-mono text-xs p-4 rounded h-64 overflow-y-auto mb-4 border border-gray-700 shadow-inner">
-                                <div v-for="(log, idx) in syncLogs" :key="idx" class="mb-1">
-                                    {{ log }}
-                                </div>
-                                <div class="animate-pulse mt-2" v-if="currentSyncIndex < syncQueue.length">
-                                    _
-                                </div>
-                            </div>
-
-                            <div class="flex justify-center">
-                                <span class="text-sm text-gray-500 animate-pulse">
-                                    Por favor, não feche esta janela...
-                                </span>
-                            </div>
-                        </div>
                     </div>
                 </Modal>
+
+                <!-- Novo Componente de Progresso -->
+                <BatchSyncModal 
+                    :show="syncingAll"
+                    :progress="currentSyncIndex"
+                    :total="syncQueue.length"
+                    :logs="syncLogs"
+                />
 
                 <!-- Modal Reconexão -->
                 <Modal :show="showingReconnectModal" @close="closeReconnectModal">

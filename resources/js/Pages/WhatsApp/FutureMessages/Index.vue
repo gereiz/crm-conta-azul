@@ -48,6 +48,11 @@ const typeLabel = (type) => {
     return map[type] || type;
 };
 
+const formatCurrency = (value) => {
+    if (!value) return '-';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
 const statusLabel = (status) => {
     const map = {
         'pending': 'A enviar',
@@ -146,8 +151,12 @@ const statusClass = (status) => {
                                         <div v-if="item.event_date">
                                             Data: {{ formatDate(item.event_date) }}
                                         </div>
-                                        <div v-if="item.invoice" class="text-xs text-gray-400 mt-1">
-                                            Doc: {{ item.invoice.descricao || 'Fatura' }}
+                                        <div v-if="item.invoice" class="text-xs text-gray-500 mt-1 space-y-0.5">
+                                            <div class="font-medium text-gray-700 dark:text-gray-300">{{ item.invoice.descricao || 'Fatura' }}</div>
+                                            <div>Valor: {{ formatCurrency(item.invoice.valor_original || item.invoice.saldo_devedor) }}</div>
+                                            <div v-if="item.invoice.link_boleto">
+                                                <a :href="item.invoice.link_boleto" target="_blank" class="text-blue-600 hover:text-blue-800 underline">Ver Boleto</a>
+                                            </div>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">

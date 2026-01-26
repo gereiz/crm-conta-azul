@@ -53,11 +53,14 @@ class ContaAzulApiService
 
         // Fallback: Se a API antiga retornar erro (401, 404, etc), tenta a V2 antes de desistir
         if ($response->failed() && $urlToUse === $this->baseUrl) {
-            Log::warning("Erro na API antiga (Status: {$response->status()}). Tentando API V2...");
+            if ($response->status() !== 401) { // Só loga se não for 401 para evitar spam
+                Log::warning("Erro na API antiga (Status: {$response->status()}). Tentando API V2...");
+            }
             return $this->request($connection, $method, $endpoint, $params, $retry, $attempts, 'https://api-v2.contaazul.com/v1');
         }
 
         if ($response->status() === 401 && $retry) {
+            // Se for 401, tenta renovar token antes de qualquer coisa, mesmo na API antiga
             $newToken = $this->auth->getValidToken($connection, true);
             if ($newToken) {
                 return $this->request($connection, $method, $endpoint, $params, false, $attempts, $customBaseUrl);
