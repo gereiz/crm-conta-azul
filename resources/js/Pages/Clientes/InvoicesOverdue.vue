@@ -106,6 +106,40 @@ const calculateLateDays = (dateString) => {
     return diffDays > 0 ? diffDays.toString() : '0';
 };
 
+const getInvoiceStatus = (dateString) => {
+    if (!dateString) return 'UNKNOWN';
+    const datePart = dateString.split('T')[0];
+    const [year, month, day] = datePart.split('-');
+    const dueDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Normalize dueDate to midnight for accurate comparison
+    dueDate.setHours(0, 0, 0, 0);
+
+    if (dueDate.getTime() < today.getTime()) {
+        return 'OVERDUE';
+    } else if (dueDate.getTime() === today.getTime()) {
+        return 'TODAY';
+    } else {
+        return 'FUTURE';
+    }
+};
+
+const getStatusConfig = (dateString) => {
+    const status = getInvoiceStatus(dateString);
+    switch (status) {
+        case 'OVERDUE':
+            return { label: 'Atrasado', class: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' };
+        case 'TODAY':
+            return { label: 'Hoje', class: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' };
+        case 'FUTURE':
+            return { label: 'Futuro', class: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' };
+        default:
+            return { label: '-', class: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' };
+    }
+};
+
 // Filter Logic
 const startDate = ref(props.filters?.start_date || '');
 const endDate = ref(props.filters?.end_date || '');
@@ -543,7 +577,12 @@ const retrySend = () => {
                         
                         <div>
                             <p class="text-sm text-gray-500">Vencimento</p>
-                            <p class="font-medium dark:text-gray-200">{{ formatDate(selectedInvoice.data_vencimento) }}</p>
+                            <div class="flex items-center gap-2">
+                                <p class="font-medium dark:text-gray-200">{{ formatDate(selectedInvoice.data_vencimento) }}</p>
+                                <span :class="['px-2 inline-flex text-xs leading-5 font-semibold rounded-full', getStatusConfig(selectedInvoice.data_vencimento).class]">
+                                    {{ getStatusConfig(selectedInvoice.data_vencimento).label }}
+                                </span>
+                            </div>
                         </div>
                         <div>
                             <p class="text-sm text-gray-500">Emissão</p>
