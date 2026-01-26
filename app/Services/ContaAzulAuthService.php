@@ -22,12 +22,11 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        // Diagnóstico Final: O erro invalid_scope persiste em produção.
-        // Hipótese 1: 'offline_access' requer aprovação extra da Conta Azul. Removendo para teste.
-        // Hipótese 2: 'sales' requer aprovação.
-        // Vamos tentar a combinação mínima que permite login (cognito) + dados (sales).
-        // Se falhar, a conta NÃO tem permissão de 'sales' e precisa de suporte.
-        $scope = 'openid profile aws.cognito.signin.user.admin sales';
+        // Diagnóstico Final Confirmado: A conta NÃO tem permissão para 'sales' ou 'customer' com Auth V2.
+        // Ação: Reverter para escopo puramente de identidade V2 para permitir o login.
+        // Consequência: O login funcionará, mas a sincronização de dados falhará (401).
+        // Solução Definitiva: O usuário DEVE contatar o suporte da Conta Azul para liberar escopos de ERP.
+        $scope = 'openid profile aws.cognito.signin.user.admin';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
