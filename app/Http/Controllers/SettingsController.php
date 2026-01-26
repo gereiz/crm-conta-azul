@@ -313,6 +313,7 @@ class SettingsController extends Controller
                             'person_type' => $caClient['tipo_pessoa'] ?? null,
                             'city' => $city,
                             'state' => $state,
+                            'birthdate' => $caClient['data_nascimento'] ?? null,
                             // O updated_at será atualizado automaticamente, permitindo o pruning
                         ]
                     );
@@ -450,6 +451,7 @@ class SettingsController extends Controller
                                 'person_type' => $caClient['tipo_pessoa'] ?? null,
                                 'city' => $city,
                                 'state' => $state,
+                                'birthdate' => $caClient['data_nascimento'] ?? null,
                             ]
                         );
                         $syncedCount++;

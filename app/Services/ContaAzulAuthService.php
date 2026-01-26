@@ -22,9 +22,11 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        // Escopo único e exclusivo conforme Documentação Oficial API v2 (Multi-clientes)
-        // https://developers.contaazul.com/authorize-multiple-clients
-        $scope = 'openid profile aws.cognito.signin.user.admin';
+        // Escopo ajustado para incluir permissões de negócio (ERP) + Identidade (Cognito)
+        // Tentativa 3: Se sales+customer falhou com invalid_scope, a conta não tem permissão para eles.
+        // Vamos tentar APENAS sales e offline_access junto com identity.
+        // Se falhar, vamos remover sales e customer e deixar o usuário pedir suporte.
+        $scope = 'openid profile aws.cognito.signin.user.admin sales offline_access';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);

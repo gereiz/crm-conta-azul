@@ -196,95 +196,9 @@ const saveRule = async (type) => {
                 </div>
 
                 <!-- Regras de Envio Automático (Cron) -->
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900 dark:text-gray-100">
-                        <h3 class="text-lg font-medium mb-4">Regras de Envio Automático (Cron)</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Mensagem</label>
-                                <select v-model="selectedType" @change="openRuleModal(selectedType)" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm">
-                                    <option value="" disabled>Selecione um tipo</option>
-                                    <option v-for="t in messageTypes" :key="t.key" :value="t.key">{{ t.label }}</option>
-                                </select>
-                                <div class="mt-2 text-xs text-gray-500">Selecione um tipo para configurar a regra em um modal.</div>
-                            </div>
-                        </div>
-                        <div class="mt-6 space-y-2">
-                            <div v-for="t in messageTypes" :key="t.key" class="flex items-center justify-between px-4 py-2 border border-gray-200 dark:border-gray-700 rounded">
-                                <div class="text-sm">
-                                    <span class="font-medium">{{ t.label }}</span>
-                                    <span class="text-gray-500"> — {{ ruleSummary(t.key) }}</span>
-                                    <span v-if="rules[t.key]?.is_global" class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                                        Global
-                                    </span>
-                                </div>
-                                <PrimaryButton as="button" @click="openRuleModal(t.key)">Editar</PrimaryButton>
-                            </div>
-                        </div>
-                        <Modal :show="showRuleModal" @close="closeRuleModal">
-                            <div class="p-6">
-                                <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-                                    Configurar Regra: {{ messageTypes.find(mt => mt.key === selectedType)?.label || '' }}
-                                </h2>
-                                <div v-if="currentRule" class="mt-4 space-y-4">
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Regra</label>
-                                            <select v-model="currentRule.rule_type" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm">
-                                                <option value="monthly_day">Dia do mês</option>
-                                                <option value="weekly_day">Dia da semana</option>
-                                                <option value="interval_days">Intervalo em dias</option>
-                                            </select>
-                                        </div>
-                                        <div v-if="currentRule.rule_type === 'monthly_day'">
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dia do mês</label>
-                                            <input type="number" v-model.number="currentRule.day_of_month" min="1" max="31" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm" />
-                                        </div>
-                                        <div v-if="currentRule.rule_type === 'weekly_day'">
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dia da semana</label>
-                                            <select v-model.number="currentRule.day_of_week" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm">
-                                                <option :value="0">Domingo</option>
-                                                <option :value="1">Segunda</option>
-                                                <option :value="2">Terça</option>
-                                                <option :value="3">Quarta</option>
-                                                <option :value="4">Quinta</option>
-                                                <option :value="5">Sexta</option>
-                                                <option :value="6">Sábado</option>
-                                            </select>
-                                        </div>
-                                        <div v-if="currentRule.rule_type === 'interval_days'">
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Intervalo (dias)</label>
-                                            <input type="number" v-model.number="currentRule.interval_days" min="1" max="365" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm" />
-                                        </div>
-                                    </div>
-                                    <div class="mt-2 flex items-center gap-4">
-                                        <label class="inline-flex items-center">
-                                            <input type="checkbox" v-model="currentRule.exclude_weekends" class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500 dark:bg-gray-900 dark:border-gray-700" />
-                                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Ignorar fins de semana</span>
-                                        </label>
-                                        <label class="inline-flex items-center">
-                                            <input type="checkbox" v-model="currentRule.is_active" class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500 dark:bg-gray-900 dark:border-gray-700" />
-                                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Regra ativa</span>
-                                        </label>
-                                    </div>
-                                    <div class="mt-2 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-200 dark:border-yellow-800">
-                                        <label class="inline-flex items-center">
-                                            <input type="checkbox" v-model="currentRule.apply_to_all" class="rounded border-gray-300 text-yellow-600 shadow-sm focus:ring-yellow-500 dark:bg-gray-900 dark:border-gray-700" />
-                                            <span class="ml-2 text-sm font-bold text-yellow-800 dark:text-yellow-200">Aplicar esta regra para TODAS as empresas</span>
-                                        </label>
-                                        <p class="text-xs text-yellow-700 dark:text-yellow-300 mt-1 ml-6">
-                                            Atenção: Isso criará uma regra padrão que será usada por qualquer empresa que não tenha regra específica configurada.
-                                        </p>
-                                    </div>
-                                    <div class="mt-6 flex justify-end gap-3">
-                                        <SecondaryButton @click="closeRuleModal">Fechar</SecondaryButton>
-                                        <PrimaryButton @click="saveRule(selectedType)">Salvar</PrimaryButton>
-                                    </div>
-                                </div>
-                            </div>
-                        </Modal>
-                    </div>
-                </div>
+                <!-- <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                   ... (conteúdo oculto para evitar confusão)
+                </div> -->
             </div>
         </div>
     </AuthenticatedLayout>

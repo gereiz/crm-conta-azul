@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Log;
 class ContaAzulApiService
 {
     // URL Base da Nova API V2
-    // Documentação: https://developers.contaazul.com/introduction
-    protected string $baseUrl = 'https://api-v2.contaazul.com/v1';
+    // A documentação diz 'api-v2', mas o DNS público não resolve.
+    // Solução: Continuar usando 'api.contaazul.com/v1', que responde corretamente às requisições autenticadas V2.
+    protected string $baseUrl = 'https://api.contaazul.com/v1';
 
     protected ContaAzulAuthService $auth;
 

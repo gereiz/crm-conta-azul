@@ -1,8 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import TextInput from '@/Components/TextInput.vue';
+import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
     connections: Object,
@@ -10,26 +11,63 @@ const props = defineProps({
 });
 
 const search = ref(props.filters.search || '');
+const sort = ref(props.filters.sort || 'empresa_nome');
+const direction = ref(props.filters.direction || 'asc');
 
 // Debounce search
 let timeout = null;
 watch(search, (value) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
-        router.get(route('empresas.index'), { search: value }, {
-            preserveState: true,
-            replace: true,
-        });
+        applyFilters();
     }, 500);
 });
 
-const getConnectionsList = () => {
-    if (Array.isArray(props.connections)) return props.connections;
-    if (props.connections && props.connections.data) return props.connections.data;
-    return [];
+const applyFilters = () => {
+    router.get(route('empresas.index'), {
+        search: search.value,
+        sort: sort.value,
+        direction: direction.value,
+    }, {
+        preserveState: true,
+        replace: true,
+    });
 };
 
-const connectionsList = getConnectionsList();
+const sortBy = (field) => {
+    if (sort.value === field) {
+        direction.value = direction.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sort.value = field;
+        direction.value = 'asc';
+    }
+    applyFilters();
+};
+
+const getSortIcon = (field) => {
+    if (sort.value !== field) return '↕'; // Seta neutra
+    return direction.value === 'asc' ? '↑' : '↓';
+};
+
+const connectionsList = computed(() => {
+    if (props.connections && props.connections.data) return props.connections.data;
+    return [];
+});
+
+const getActiveMessageTypes = (settings) => {
+    if (!settings) return [];
+    const types = {
+        'billing': { label: 'Cobrança', color: 'bg-red-100 text-red-800' },
+        'due_date': { label: 'Vencimento', color: 'bg-yellow-100 text-yellow-800' },
+        'boleto': { label: 'Boleto', color: 'bg-blue-100 text-blue-800' },
+        'birthday': { label: 'Aniversário', color: 'bg-purple-100 text-purple-800' },
+    };
+
+    return settings
+        .filter(s => s.is_enabled && types[s.message_type])
+        .map(s => types[s.message_type]);
+};
+
 </script>
 
 <template>
@@ -63,17 +101,20 @@ const connectionsList = getConnectionsList();
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Empresa
+                                    <th @click="sortBy('empresa_nome')" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
+                                        Empresa <span class="ml-1">{{ getSortIcon('empresa_nome') }}</span>
                                     </th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Status
+                                        Tipos de Mensagem
                                     </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Última Sincronização
+                                    <th @click="sortBy('is_active')" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
+                                        Status <span class="ml-1">{{ getSortIcon('is_active') }}</span>
                                     </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Token expira
+                                    <th @click="sortBy('last_sync_at')" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
+                                        Última Sincronização <span class="ml-1">{{ getSortIcon('last_sync_at') }}</span>
+                                    </th>
+                                    <th @click="sortBy('token_expires_at')" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
+                                        Token expira <span class="ml-1">{{ getSortIcon('token_expires_at') }}</span>
                                     </th>
                                     <th scope="col" class="relative px-6 py-3 text-right">
                                         <span class="sr-only">Ações</span>
@@ -85,6 +126,18 @@ const connectionsList = getConnectionsList();
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ c.empresa_nome }}</div>
                                         <div class="text-xs text-gray-500">{{ c.email_desenvolvedor || '—' }}</div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex flex-wrap gap-1">
+                                            <span v-for="(type, index) in getActiveMessageTypes(c.message_settings)" :key="index" 
+                                                  :class="type.color" 
+                                                  class="px-2 py-0.5 text-[10px] font-semibold rounded-full border border-opacity-20">
+                                                {{ type.label }}
+                                            </span>
+                                            <span v-if="getActiveMessageTypes(c.message_settings).length === 0" class="text-xs text-gray-400">
+                                                Nenhum ativo
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span :class="c.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
@@ -110,12 +163,17 @@ const connectionsList = getConnectionsList();
                                     </td>
                                 </tr>
                                 <tr v-if="connectionsList.length === 0">
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                    <td colspan="6" class="px-6 py-4 text-center text-gray-500">
                                         Nenhuma empresa encontrada.
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    
+                    <!-- Paginação -->
+                    <div class="p-4 border-t border-gray-200 dark:border-gray-700" v-if="connections.links">
+                         <Pagination :links="connections.links" />
                     </div>
                 </div>
 

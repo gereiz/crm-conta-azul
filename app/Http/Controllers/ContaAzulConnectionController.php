@@ -127,7 +127,18 @@ class ContaAzulConnectionController extends Controller
         }
 
         $code = $request->input('code');
+        $error = $request->input('error');
+        
+        if ($error) {
+            $errorDesc = $request->input('error_description');
+            \Illuminate\Support\Facades\Log::error("Erro no callback Conta Azul: $error - $errorDesc");
+            return redirect()->route('contaazul.connections.index')->with('error', "Falha na autorização: $errorDesc");
+        }
+
         $data = $this->auth->exchangeCode($connection, $code);
+
+        // DEBUG: Log do payload de token completo para ver escopos
+        \Illuminate\Support\Facades\Log::info("Token Payload Recebido (Conn {$connection->id}): " . json_encode($data));
 
         if (isset($data['error']) && $data['error'] === 'decrypt_error') {
             return redirect()->route('contaazul.connections.index')->with('error', 'A senha do aplicativo (Client Secret) está corrompida no banco. Por favor, edite a conexão e insira a senha novamente.');

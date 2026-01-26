@@ -12,6 +12,11 @@ class MessageCron extends Model
         'whatsapp_number_id',
         'connection_id',
         'type',
+        'rule_type',
+        'day_of_month',
+        'day_of_week',
+        'interval_days',
+        'exclude_weekends',
         'period_value',
         'period_unit',
         'days_before_due',
@@ -26,9 +31,12 @@ class MessageCron extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'exclude_weekends' => 'boolean',
         'limit_link_preview' => 'boolean',
         'disable_link_preview' => 'boolean',
         'last_run_at' => 'datetime',
+        'day_of_month' => 'array',
+        'day_of_week' => 'array',
     ];
 
     public function messageTemplate()

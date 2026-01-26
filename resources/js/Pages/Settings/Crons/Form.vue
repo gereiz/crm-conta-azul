@@ -39,6 +39,13 @@ const form = useForm({
     connection_id: props.cron?.connection_id || '',
     type: props.cron?.type || '',
     
+    // Execution Rules
+    rule_type: props.cron?.rule_type || 'daily',
+    day_of_month: props.cron?.day_of_month || [],
+    day_of_week: props.cron?.day_of_week || [],
+    interval_days: props.cron?.interval_days || null,
+    exclude_weekends: props.cron?.exclude_weekends ?? false,
+
     // Type specific
     period_value: props.cron?.period_value || 30,
     period_unit: props.cron?.period_unit || 'days',
@@ -157,6 +164,71 @@ watch(() => form.type, (newType) => {
                                     <option value="birthday">Aniversariantes do Dia</option>
                                 </select>
                                 <InputError class="mt-2" :message="form.errors.type" />
+                            </div>
+
+                            <!-- Regras de Agendamento (Quando executar) -->
+                            <div class="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                <h3 class="font-medium text-blue-900 dark:text-blue-100">Regras de Agendamento (Quando executar?)</h3>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <InputLabel for="rule_type" value="Frequência" />
+                                        <select id="rule_type" v-model="form.rule_type" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-primary-500 dark:focus:border-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 rounded-md shadow-sm" required>
+                                            <option value="daily">Todo dia (Verificar diariamente)</option>
+                                            <option value="monthly_day">Dia específico do mês</option>
+                                            <option value="weekly_day">Dia específico da semana</option>
+                                            <option value="interval_days">Intervalo de dias</option>
+                                        </select>
+                                        <InputError class="mt-2" :message="form.errors.rule_type" />
+                                    </div>
+
+                                    <!-- Campos Condicionais da Regra -->
+                                    <div v-if="form.rule_type === 'monthly_day'">
+                                        <InputLabel value="Dias do mês (selecione um ou mais)" />
+                                        <div class="mt-2 grid grid-cols-7 gap-2">
+                                            <label v-for="d in 31" :key="d" class="flex flex-col items-center justify-center p-2 border rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                   :class="form.day_of_month.includes(d) ? 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900 dark:border-blue-400 dark:text-blue-200' : 'border-gray-300 dark:border-gray-600'">
+                                                <input type="checkbox" :value="d" v-model="form.day_of_month" class="hidden">
+                                                <span class="text-sm font-medium">{{ d }}</span>
+                                            </label>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-1">Selecione os dias em que a automação deve rodar.</p>
+                                        <InputError class="mt-2" :message="form.errors.day_of_month" />
+                                    </div>
+                                    
+                                    <div v-if="form.rule_type === 'weekly_day'">
+                                        <InputLabel value="Dias da semana (selecione um ou mais)" />
+                                        <div class="mt-2 space-y-2">
+                                            <div class="flex flex-wrap gap-2">
+                                                <label v-for="(day, index) in ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']" :key="index"
+                                                       class="inline-flex items-center px-3 py-1.5 border rounded-full cursor-pointer transition-colors"
+                                                       :class="form.day_of_week.includes(index) ? 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900 dark:border-blue-400 dark:text-blue-200' : 'bg-white border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'">
+                                                    <input type="checkbox" :value="index" v-model="form.day_of_week" class="hidden">
+                                                    <span class="text-sm">{{ day }}</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <InputError class="mt-2" :message="form.errors.day_of_week" />
+                                    </div>
+
+                                    <div v-if="form.rule_type === 'interval_days'">
+                                        <InputLabel for="interval_days" value="A cada X dias" />
+                                        <TextInput id="interval_days" type="number" class="mt-1 block w-full" v-model="form.interval_days" min="1" />
+                                        <InputError class="mt-2" :message="form.errors.interval_days" />
+                                    </div>
+                                </div>
+
+                                <!-- Exclude Weekends -->
+                                <div class="flex items-center">
+                                    <input id="exclude_weekends" type="checkbox" v-model="form.exclude_weekends" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                                    <label for="exclude_weekends" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Não enviar em finais de semana (Sábado/Domingo)</label>
+                                </div>
+                                <p class="text-xs text-blue-600 dark:text-blue-400">
+                                    <span v-if="form.rule_type === 'daily'">A automação rodará todos os dias no horário configurado.</span>
+                                    <span v-if="form.rule_type === 'monthly_day'">A automação rodará apenas nos dias {{ form.day_of_month.join(', ') || 'X' }} de cada mês.</span>
+                                    <span v-if="form.rule_type === 'weekly_day'">A automação rodará apenas nos dias da semana selecionados.</span>
+                                    <span v-if="form.rule_type === 'interval_days'">A automação rodará em ciclos de {{ form.interval_days || 'X' }} dias.</span>
+                                </p>
                             </div>
                             
                             <!-- Limitar preview de links -->
