@@ -22,9 +22,11 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        // Adicionando 'aws.cognito.signin.user.admin' aos escopos legados (openid profile email)
-        // conforme solicitação do usuário para tentar habilitar acesso híbrido.
-        $scope = 'openid profile email aws.cognito.signin.user.admin';
+        // Usando o escopo definido no arquivo de configuração (que vem do .env)
+        // Isso permite que o usuário controle os escopos sem alterar o código.
+        // O valor padrão do config é 'openid profile email offline_access' (definido em config/services.php)
+        // Mas se o .env tiver 'openid profile email', será respeitado.
+        $scope = config('services.contaazul.scope', 'openid profile email');
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);

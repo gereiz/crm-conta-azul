@@ -69,7 +69,9 @@ if [ ! -f .env ]; then\n\
     if [ -z "$APP_KEY" ]; then\n\
         # Tenta ler do .env se existir (caso tenha sido copiado do example mas não populado)\n\
         # Se NÃO encontrar a linha APP_KEY= (ou ela estiver vazia), gera a chave\n\
-        if ! grep -q "^APP_KEY=.\+" .env; then\n\
+        # Mas para garantir que NUNCA sobrescreva, vamos ser ainda mais restritivos:\n\
+        # Só gera se APP_KEY= estiver LITERALMENTE vazio (APP_KEY=)\n\
+        if grep -q "^APP_KEY=$" .env; then\n\
              php artisan key:generate --force\n\
         fi\n\
     else\n\
