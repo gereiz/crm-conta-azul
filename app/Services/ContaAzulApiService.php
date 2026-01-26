@@ -19,8 +19,9 @@ class ContaAzulApiService
         $this->auth = $auth;
     }
 
-    public function request(ContaAzulConnection $connection, string $method, string $endpoint, array $params = [], bool $retry = true, int $attempts = 0)
+    public function request(ContaAzulConnection $connection, string $method, string $endpoint, array $params = [], bool $retry = true, int $attempts = 0, ?string $customBaseUrl = null)
     {
+        $urlToUse = $customBaseUrl ?? $this->baseUrl;
         $accessToken = $this->auth->getValidToken($connection);
         if (! $accessToken) {
             Log::warning("Sem token válido para conexão {$connection->id}");
@@ -32,22 +33,34 @@ class ContaAzulApiService
             $response = Http::withToken($accessToken)
                 ->withHeaders(['Accept' => 'application/json'])
                 ->timeout(120)
-                ->{$method}("{$this->baseUrl}/{$endpoint}", $params);
+                ->{$method}("{$urlToUse}/{$endpoint}", $params);
         } catch (\Exception $e) {
+            // Fallback: Se falhar na URL antiga, tenta a nova V2
+            if ($urlToUse === $this->baseUrl) {
+                Log::warning("Falha de conexão na API antiga ({$e->getMessage()}). Tentando API V2...");
+                return $this->request($connection, $method, $endpoint, $params, $retry, $attempts, 'https://api-v2.contaazul.com/v1');
+            }
+
             if ($retry && $attempts < 2) {
                 sleep(2);
 
-                return $this->request($connection, $method, $endpoint, $params, $retry, $attempts + 1);
+                return $this->request($connection, $method, $endpoint, $params, $retry, $attempts + 1, $customBaseUrl);
             }
             Log::error("Erro na requisição Conta Azul [{$endpoint}] conex {$connection->id}: ".$e->getMessage());
 
             return null;
         }
 
+        // Fallback: Se a API antiga retornar erro (401, 404, etc), tenta a V2 antes de desistir
+        if ($response->failed() && $urlToUse === $this->baseUrl) {
+            Log::warning("Erro na API antiga (Status: {$response->status()}). Tentando API V2...");
+            return $this->request($connection, $method, $endpoint, $params, $retry, $attempts, 'https://api-v2.contaazul.com/v1');
+        }
+
         if ($response->status() === 401 && $retry) {
             $newToken = $this->auth->getValidToken($connection, true);
             if ($newToken) {
-                return $this->request($connection, $method, $endpoint, $params, false, $attempts);
+                return $this->request($connection, $method, $endpoint, $params, false, $attempts, $customBaseUrl);
             }
         }
 
@@ -55,15 +68,21 @@ class ContaAzulApiService
             $waitTime = 5 * ($attempts + 1); // 5s, 10s, 15s...
             Log::warning("Rate limit Conta Azul ({$endpoint}). Aguardando {$waitTime}s para tentar novamente (Tentativa {$attempts}/5).");
             sleep($waitTime);
-            return $this->request($connection, $method, $endpoint, $params, $retry, $attempts + 1);
+            return $this->request($connection, $method, $endpoint, $params, $retry, $attempts + 1, $customBaseUrl);
+        }
+
+        if ($response->status() === 401) {
+            // Se for erro de token inválido, pode ser que o token da V2 precise de uma URL base diferente
+            // ou que o escopo 'sales' esteja faltando mesmo.
+            // Log detalhado para debug
+            Log::warning("Token rejeitado (401) na URL: {$urlToUse}/{$endpoint}");
+            
+            // Retorna null para sinalizar falha sem quebrar a execução (SettingsController trata isso)
+            return null;
         }
 
         if ($response->failed()) {
             Log::error("Erro na requisição Conta Azul [{$endpoint}] conex {$connection->id}: ".$response->body());
-            if ($response->status() === 401) {
-                throw new \Exception("Sessão expirada na conexão {$connection->id}. Reautorize a Conta Azul.");
-
-            }
 
             return null;
         }
