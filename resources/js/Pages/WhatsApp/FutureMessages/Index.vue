@@ -157,6 +157,9 @@ const statusClass = (status) => {
                                             <div v-if="item.invoice.link_boleto">
                                                 <a :href="item.invoice.link_boleto" target="_blank" class="text-blue-600 hover:text-blue-800 underline">Ver Boleto</a>
                                             </div>
+                                            <div v-else class="text-gray-400 italic">
+                                                (Sem link de boleto)
+                                            </div>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">

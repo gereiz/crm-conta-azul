@@ -191,10 +191,6 @@ class FutureMessageService
         // NOVA REGRA: Emissão = Faturas com vencimento futuro (> hoje) E com link_boleto existente.
         // Independentemente da data de emissão real, o gatilho é a disponibilidade do boleto para faturas futuras.
         
-        // Intervalo: De amanhã até X dias no futuro (baseado na config do cron ou fixo?)
-        // O usuário disse: "Faturas com vencimento futuro e com link de boleto".
-        // Vamos considerar "Futuro" como > Hoje.
-        
         $today = Carbon::today()->format('Y-m-d');
         
         // Busca faturas com vencimento > hoje e com link_boleto preenchido
@@ -214,6 +210,15 @@ class FutureMessageService
         
         $query->where('data_vencimento', '<=', $limitDate);
 
+        // AQUI: Agendar para a data de vencimento da fatura, não para hoje
+        // Mas o sistema precisa enviar HOJE (targetDate) se a fatura vence no futuro?
+        // Se for "Aviso de Emissão", enviamos assim que possível.
+        // Se a fatura vence em 25/02 e hoje é 26/01.
+        // Se agendarmos para 26/01 (hoje), aparecerá na lista de hoje.
+        // Se agendarmos para 25/02, só aparecerá em fevereiro.
+        // O conceito de "Emissão" é avisar "Seu boleto está disponível".
+        // Então deve ser agendado para o targetDate (dia de execução da automação).
+        
         $invoices = $query->get();
 
         foreach ($invoices as $invoice) {
@@ -226,14 +231,7 @@ class FutureMessageService
 
             if ($alreadySent) continue;
             
-            // Agenda para o targetDate (que é hoje na iteração 0, amanhã na 1...)
-            // Mas a lógica de loop do Service calcula para [Hoje, Hoje+1, Hoje+2].
-            // Se a fatura já está pronta HOJE, ela deve aparecer no schedule de HOJE.
-            // Se estamos calculando schedule futuro (amanhã), ela também estaria pronta amanhã.
-            // Para evitar duplicidade visual no grid (aparecer em 25/01, 26/01...),
-            // devemos agendar para a "data de execução" mais próxima, que é o targetDate atual.
-            // Se o usuário filtrar "Amanhã", ele verá que ela será enviada amanhã (se não for enviada hoje).
-            
+            // Agenda para o targetDate (dia da execução da regra)
             $this->createSchedule($cron, $invoice->cliente, $invoice, $invoice->data_vencimento, $targetDate);
         }
     }
@@ -241,8 +239,7 @@ class FutureMessageService
     protected function scheduleDueDate(MessageCron $cron, Carbon $targetDate)
     {
         // NOVA REGRA: Vencimento = Faturas com vencimento futuro (> hoje) E SEM link_boleto.
-        // Isso serve como aviso de vencimento / lembrete de pagamento, mesmo sem o boleto gerado ainda na API
-        // (ou boleto que não é gerado via ContaAzul, apenas registrado).
+        // Isso serve como aviso de vencimento / lembrete de pagamento, mesmo sem o boleto gerado ainda na API.
         
         $today = Carbon::today()->format('Y-m-d');
         
@@ -271,9 +268,6 @@ class FutureMessageService
             if (!$invoice->cliente) continue;
             
             // Verifica se já enviou HOJE (ou neste ciclo)
-            // Para due_date, podemos enviar lembretes em dias diferentes (ex: 5 dias antes, 1 dia antes).
-            // Mas para o MESMO cron id, enviamos uma vez para aquela data alvo.
-            
             $this->createSchedule($cron, $invoice->cliente, $invoice, $invoice->data_vencimento, $targetDate);
         }
     }
