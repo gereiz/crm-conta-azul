@@ -187,8 +187,9 @@ class ContaAzulApiService
     public function syncOverdueInvoices(ContaAzulConnection $connection): int
     {
         $startDate = \Carbon\Carbon::now()->subYears(5)->format('Y-m-d');
-        // Buscamos faturas até 12 meses no futuro para garantir que automações de "vence hoje" e "pré-vencimento" funcionem
-        $endDate = \Carbon\Carbon::now()->addMonths(12)->format('Y-m-d');
+        // Buscamos faturas até 30 dias no futuro para garantir que automações de "vence hoje" e "pré-vencimento" funcionem
+        // Ajustado para 30 dias conforme solicitação do usuário
+        $endDate = \Carbon\Carbon::now()->addDays(30)->format('Y-m-d');
         $size = 1000;
         $allInvoices = [];
 
@@ -213,29 +214,60 @@ class ContaAzulApiService
             }
         }
 
-        \App\Models\Invoice::where('connection_id', $connection->id)->delete();
+        // --- OPTIMIZATION START ---
+        // 1. Preload Clients to avoid N+1
+        $clientMap = \App\Models\Cliente::where('connection_id', $connection->id)
+            ->pluck('id', 'ca_id')
+            ->toArray();
+
+        // 2. Preload Existing Invoices to avoid unnecessary details fetching
+        // Map: ca_id => ['link_boleto', 'status']
+        $existingInvoices = \App\Models\Invoice::where('connection_id', $connection->id)
+            ->get(['ca_id', 'link_boleto', 'status'])
+            ->keyBy('ca_id')
+            ->toArray();
+
+        // 3. Collect processed IDs for pruning
+        $processedCaIds = [];
 
         foreach ($allInvoices as $item) {
+            $caId = $item['id'] ?? null;
+            if (!$caId) continue;
+            
+            $processedCaIds[] = $caId;
             $clienteCaId = $item['cliente']['id'] ?? null;
-            $clienteLocal = null;
-            if ($clienteCaId) {
-                $clienteLocal = \App\Models\Cliente::where('connection_id', $connection->id)->where('ca_id', $clienteCaId)->first();
-            }
+            $clienteLocalId = $clienteCaId ? ($clientMap[$clienteCaId] ?? null) : null;
+            
+            // Optimization: Only fetch details if we don't have a link or if it's a new invoice
+            // Note: If status changes (e.g. pending -> overdue), the link usually remains valid, but let's be safe.
+            // If we have a link and it's not empty, we skip the detail request to save time.
+            
             $invoiceDetails = ['url' => null, 'payment_type' => null];
-            if (isset($item['id'])) {
-                $details = $this->getInvoiceDetails($connection, $item['id']);
+            $existing = $existingInvoices[$caId] ?? null;
+            
+            $shouldFetchDetails = true;
+            if ($existing && !empty($existing['link_boleto'])) {
+                $shouldFetchDetails = false;
+                $invoiceDetails['url'] = $existing['link_boleto'];
+                // We might miss payment_type update if we skip, but it rarely changes.
+            }
+
+            if ($shouldFetchDetails) {
+                $details = $this->getInvoiceDetails($connection, $caId);
                 if ($details) {
                     $invoiceDetails = $details;
                 }
                 // Ajustando delay para respeitar limite de 10 req/s (100ms), mas com margem de segurança (150ms)
                 usleep(150000);
             }
+
             $valorOriginal = isset($item['total']) ? (float) $item['total'] : 0.0;
             $valorPago = isset($item['pago']) ? (float) $item['pago'] : null;
             $naoPago = isset($item['nao_pago']) ? (float) $item['nao_pago'] : null;
             $saldoDevedor = $naoPago ?? ($valorPago !== null ? max(0.0, $valorOriginal - $valorPago) : $valorOriginal);
+            
             \App\Models\Invoice::updateOrCreate(
-                ['connection_id' => $connection->id, 'ca_id' => $item['id']],
+                ['connection_id' => $connection->id, 'ca_id' => $caId],
                 [
                     'connection_id' => $connection->id,
                     'status' => $item['status'],
@@ -246,13 +278,27 @@ class ContaAzulApiService
                     'data_vencimento' => $item['data_vencimento'] ?? null,
                     'data_emissao' => $item['data_emissao'] ?? null,
                     'link_boleto' => $invoiceDetails['url'],
-                    'cliente_id' => $clienteLocal ? $clienteLocal->id : null,
+                    'cliente_id' => $clienteLocalId,
                     'cliente_ca_id' => $clienteCaId,
                     'cliente_nome' => $item['cliente']['nome'] ?? null,
                 ]
             );
         }
 
+        // 4. Soft Pruning: Delete only invoices that are NOT in the current list
+        // This replaces the aggressive "delete all" at the beginning
+        if (!empty($processedCaIds)) {
+            \App\Models\Invoice::where('connection_id', $connection->id)
+                ->whereNotIn('ca_id', $processedCaIds)
+                ->delete();
+        } else {
+             // If list is empty, it means we really have no invoices (or API failed silently). 
+             // If we trust the empty list, we delete everything.
+             if (count($allInvoices) === 0) {
+                 \App\Models\Invoice::where('connection_id', $connection->id)->delete();
+             }
+        }
+        
         return count($allInvoices);
     }
 }

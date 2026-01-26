@@ -259,7 +259,7 @@ class SettingsController extends Controller
             }
 
             $page = 1;
-            $size = 50; // Aumentado para performance
+            $size = 100; // Aumentado para performance
             $hasMore = true;
             $syncedCount = 0;
 
