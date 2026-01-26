@@ -438,6 +438,11 @@ class MessageCronService
             return 'error';
         }
 
+        if (PhoneSanitizerService::isLandline($sanitizedPhone)) {
+             $this->logError($cron, $client, $originalPhone, "Telefone fixo (não suportado).");
+             return 'error';
+        }
+
         $ignoreSentToday = false;
         $connId = $cron->connection_id ?? ($client->connection_id ?? null);
         if ($connId) {
@@ -622,6 +627,11 @@ class MessageCronService
         if (!$sanitizedPhone) {
             $this->logError($cron, $cliente, $originalPhone, "Cliente sem telefone válido após sanitização.", is_countable($invoices) ? count($invoices) : null);
             return 'error';
+        }
+
+        if (PhoneSanitizerService::isLandline($sanitizedPhone)) {
+             $this->logError($cron, $cliente, $originalPhone, "Telefone fixo (não suportado).", is_countable($invoices) ? count($invoices) : null);
+             return 'error';
         }
 
         $connId = $cron->connection_id ?? ($cliente->connection_id ?? null);

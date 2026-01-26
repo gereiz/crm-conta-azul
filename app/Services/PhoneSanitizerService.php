@@ -71,4 +71,32 @@ class PhoneSanitizerService
         // Validação final de comprimento (apenas para logging ou rejeição, mas aqui retornamos o melhor esforço)
         return $digits;
     }
+
+    /**
+     * Verifica se o número sanitizado é um telefone fixo.
+     * Considera apenas números do Brasil (DDI 55).
+     * 
+     * @param string|null $sanitizedPhone
+     * @return bool
+     */
+    public static function isLandline(?string $sanitizedPhone): bool
+    {
+        if (empty($sanitizedPhone)) return false;
+
+        // Apenas para Brasil
+        if (!str_starts_with($sanitizedPhone, '55')) return false;
+
+        // Móvel com 9º dígito tem 13 dígitos (55 + DDD + 9 + XXXX-XXXX)
+        if (strlen($sanitizedPhone) === 13) return false;
+
+        // Se tem 12 dígitos (55 + DDD + XXXX-XXXX)
+        if (strlen($sanitizedPhone) === 12) {
+            // O primeiro dígito do número está no índice 4
+            // Fixos começam com 2, 3, 4 ou 5
+            $firstDigit = $sanitizedPhone[4];
+            return in_array($firstDigit, ['2', '3', '4', '5']);
+        }
+
+        return false;
+    }
 }
