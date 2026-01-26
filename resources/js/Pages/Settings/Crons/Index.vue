@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
+import TextInput from '@/Components/TextInput.vue';
 
 const props = defineProps({
     crons: {
@@ -89,6 +90,12 @@ const cronReport = computed(() => {
 
 const cronEnabled = ref(true);
 const loadingCron = ref(false);
+const searchQuery = ref('');
+const filteredCrons = computed(() => {
+    const q = searchQuery.value.trim().toLowerCase();
+    if (!q) return props.crons || [];
+    return (props.crons || []).filter(c => (c.name || '').toLowerCase().includes(q));
+});
 const updateCronStatus = async () => {
     loadingCron.value = true;
     try {
@@ -195,20 +202,23 @@ onMounted(async () => {
 
                         <div class="flex items-center justify-between mb-6">
                             <h3 class="text-lg font-medium">Suas Automações</h3>
+                            <div class="flex items-center gap-2">
+                                <TextInput v-model="searchQuery" placeholder="Filtrar por nome da automação" class="w-64" />
+                            </div>
                         </div>
 
                         <div v-if="crons.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
                             Nenhuma automação cadastrada.
                         </div>
 
-                        <div v-else class="overflow-x-auto">
+                        <div v-else class="overflow-x-auto overflow-y-auto max-h-[420px]">
                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                                     <tr>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tipo</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Template</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">connection_id</th>
+                                        <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[70px]">connection_id</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Horário</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Regra/Período</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Última Execução</th>
@@ -219,7 +229,7 @@ onMounted(async () => {
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                    <tr v-for="cron in crons" :key="cron.id">
+                                    <tr v-for="cron in filteredCrons" :key="cron.id">
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div class="text-sm font-medium text-gray-900 dark:text-white">{{ cron.name }}</div>
                                         </td>
@@ -231,7 +241,7 @@ onMounted(async () => {
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             {{ cron.message_template?.name || '-' }}
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 w-[70px] text-center">
                                             {{ cron.connection_id ?? '-' }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
