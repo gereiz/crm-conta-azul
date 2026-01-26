@@ -169,7 +169,7 @@ class ContaAzulApiService
             'tamanho_pagina' => 1,
             'data_vencimento_de' => $dataVencimentoDe,
             'data_vencimento_ate' => $dataVencimentoAte,
-            'status' => 'ABERTO',
+            'status' => 'OVERDUE',
         ];
         $response = $this->request($connection, 'get', 'financeiro/eventos-financeiros/contas-a-receber/buscar', $apiParams);
         if (! $response) {
@@ -189,21 +189,26 @@ class ContaAzulApiService
         $startDate = \Carbon\Carbon::now()->subYears(5)->format('Y-m-d');
         // Buscamos faturas até 12 meses no futuro para garantir que automações de "vence hoje" e "pré-vencimento" funcionem
         $endDate = \Carbon\Carbon::now()->addMonths(12)->format('Y-m-d');
-        $page = 1;
         $size = 1000;
-        $hasMore = true;
         $allInvoices = [];
 
-        while ($hasMore) {
-            $data = $this->getAllOverdueInvoices($connection, $page, $size, $startDate, $endDate);
-            if (empty($data['itens'])) {
-                $hasMore = false;
-            } else {
-                $allInvoices = array_merge($allInvoices, $data['itens']);
-                if (count($data['itens']) < $size) {
+        // Buscamos OVERDUE (vencidos) e PENDING (futuros/a vencer) separadamente para evitar erro de status inválido
+        $statuses = ['OVERDUE', 'PENDING'];
+
+        foreach ($statuses as $status) {
+            $hasMore = true;
+            $page = 1;
+            while ($hasMore) {
+                $data = $this->getAllOverdueInvoices($connection, $page, $size, $startDate, $endDate, $status);
+                if (empty($data['itens'])) {
                     $hasMore = false;
                 } else {
-                    $page++;
+                    $allInvoices = array_merge($allInvoices, $data['itens']);
+                    if (count($data['itens']) < $size) {
+                        $hasMore = false;
+                    } else {
+                        $page++;
+                    }
                 }
             }
         }
