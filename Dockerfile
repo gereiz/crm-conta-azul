@@ -68,8 +68,8 @@ if [ ! -f .env ]; then\n\
     # Gera chave APENAS se o .env acabou de ser criado E APP_KEY não foi informada via env var
     if [ -z "$APP_KEY" ]; then
         # Tenta ler do .env se existir (caso tenha sido copiado do example mas não populado)
-        EXISTING_KEY=$(grep "APP_KEY=" .env | cut -d '=' -f 2)
-        if [ -z "$EXISTING_KEY" ]; then
+        # Usamos grep silencioso para verificar se há valor após o igual
+        if ! grep -q "^APP_KEY=.\+" .env; then
              php artisan key:generate --force
         fi
     else
