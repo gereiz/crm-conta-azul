@@ -38,6 +38,13 @@ class MessageCronService
         ];
 
         try {
+            // Verifica se deve rodar HOJE com base nas regras do próprio CRON
+            if (!$this->shouldRunToday($cron)) {
+                Log::info("Cron {$cron->id} ignorado: Regras de agendamento não satisfeitas para hoje.");
+                $stats['skipped'] = 0;
+                return $stats;
+            }
+
             if (!empty($cron->connection_id)) {
                 $typeEnabled = CompanyMessageSetting::where('conta_azul_connection_id', $cron->connection_id)
                     ->where('message_type', $cron->type)
@@ -47,25 +54,8 @@ class MessageCronService
                     $stats['skipped'] = 0;
                     return $stats;
                 }
-                $rule = CompanyCronRule::where('conta_azul_connection_id', $cron->connection_id)
-                    ->where('message_type', $cron->type)
-                    ->where('is_active', true)
-                    ->first();
-                
-                // Se não houver regra específica, busca regra global (connection_id = null)
-                if (!$rule) {
-                    $rule = CompanyCronRule::whereNull('conta_azul_connection_id')
-                        ->where('message_type', $cron->type)
-                        ->where('is_active', true)
-                        ->first();
-                }
-
-                if ($rule && !$this->passesCompanyRule($rule)) {
-                    Log::info("Cron {$cron->id} ignorado: regra da empresa não permite execução hoje.");
-                    $stats['skipped'] = 0;
-                    return $stats;
-                }
             }
+            
             switch ($cron->type) {
                 case 'billing':
                     $stats = $this->processBilling($cron, $batchId);
@@ -91,25 +81,39 @@ class MessageCronService
         }
     }
 
-    protected function passesCompanyRule(CompanyCronRule $rule): bool
+    protected function shouldRunToday(MessageCron $cron): bool
     {
         $now = Carbon::now();
-        if ($rule->exclude_weekends && ($now->isSaturday() || $now->isSunday())) {
+
+        // 1. Verificar Fim de Semana
+        if ($cron->exclude_weekends && ($now->isSaturday() || $now->isSunday())) {
             return false;
         }
-        if ($rule->rule_type === 'monthly_day') {
-            if (!$rule->day_of_month) return false;
-            return $now->day === (int) $rule->day_of_month;
+
+        // 2. Verificar Tipo de Regra
+        switch ($cron->rule_type) {
+            case 'daily':
+                return true;
+
+            case 'monthly_day':
+                if (empty($cron->day_of_month)) return false;
+                // Suporte a array JSON ou valor único antigo (fallback)
+                $days = is_array($cron->day_of_month) ? $cron->day_of_month : [(int)$cron->day_of_month];
+                return in_array($now->day, $days);
+
+            case 'weekly_day':
+                if ($cron->day_of_week === null) return false;
+                $days = is_array($cron->day_of_week) ? $cron->day_of_week : [(int)$cron->day_of_week];
+                return in_array($now->dayOfWeek, $days);
+
+            case 'interval_days':
+                if (!$cron->last_run_at) return true; // Nunca rodou, roda hoje
+                $daysSinceLastRun = $now->diffInDays($cron->last_run_at->startOfDay());
+                return $daysSinceLastRun >= $cron->interval_days;
+
+            default:
+                return true; // Se não tiver regra definida, assume diário (comportamento padrão antigo)
         }
-        if ($rule->rule_type === 'weekly_day') {
-            if ($rule->day_of_week === null) return false;
-            return $now->dayOfWeek === (int) $rule->day_of_week;
-        }
-        if ($rule->rule_type === 'interval_days') {
-            // Sem estado de última execução a nível de empresa, não bloqueamos
-            return true;
-        }
-        return true;
     }
 
     protected function checkCronNumberStatus(MessageCron $cron)
