@@ -105,25 +105,26 @@ class ContaAzulApiService
         return $this->request($connection, 'get', 'pessoas', $apiParams);
     }
 
-    public function getAllOverdueInvoices(ContaAzulConnection $connection, int $page = 1, int $size = 1000, ?string $startDate = null, ?string $endDate = null)
+    public function getAllOverdueInvoices(ContaAzulConnection $connection, int $page = 1, int $size = 1000, ?string $startDate = null, ?string $endDate = null, ?string $status = 'OVERDUE')
     {
         // Se as datas não forem passadas, assumimos um intervalo padrão para faturas em aberto
         $dataVencimentoDe = $startDate ?? \Carbon\Carbon::now()->subYears(5)->format('Y-m-d');
         // Para permitir automações de vencimento futuro, não devemos limitar a data final a "ontem".
         // Devemos buscar até o futuro (ex: +30 dias ou +1 ano) para capturar faturas que AINDA vão vencer.
         // O endpoint 'contas-a-receber/buscar' suporta filtro por status 'ABERTO' (que inclui atrasado e a vencer).
-        $dataVencimentoAte = $endDate ?? \Carbon\Carbon::now()->addMonths(3)->format('Y-m-d');
+        $dataVencimentoAte = $endDate ?? \Carbon\Carbon::now()->addMonths(12)->format('Y-m-d');
         
         $apiParams = [
             'pagina' => $page,
             'tamanho_pagina' => $size,
             'data_vencimento_de' => $dataVencimentoDe,
             'data_vencimento_ate' => $dataVencimentoAte,
-            // ATENÇÃO: Se filtrarmos apenas por 'ATRASADO', nunca teremos faturas para aviso de vencimento ou emissão.
-            // Precisamos buscar 'ABERTO' para ter tudo que está pendente (vencido ou a vencer).
-            // A API da Conta Azul V1 usa 'status' => 'ABERTO' para listar pendentes.
-            'status' => 'ABERTO', 
         ];
+
+        // Adiciona status apenas se fornecido
+        if ($status) {
+            $apiParams['status'] = $status;
+        }
 
         return $this->request($connection, 'get', 'financeiro/eventos-financeiros/contas-a-receber/buscar', $apiParams);
     }
