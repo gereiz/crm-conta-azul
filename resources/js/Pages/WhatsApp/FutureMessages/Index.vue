@@ -120,9 +120,6 @@ const statusClass = (status) => {
                                 <option value="due_date">Vencimento</option>
                                 <option value="birthday">Aniversário</option>
                             </select>
-                            <p class="text-xs text-gray-500 mt-1">
-                                Nota: Emissão (com boleto) / Vencimento (sem boleto)
-                            </p>
                         </div>
                         <div class="md:col-span-3">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data Prevista</label>

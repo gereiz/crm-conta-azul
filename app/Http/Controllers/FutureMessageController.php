@@ -25,7 +25,35 @@ class FutureMessageController extends Controller
         }
 
         if ($type) {
-            $query->where('message_type', $type);
+            if ($type === 'boleto') {
+                // Emissão (com link)
+                // Pode ser message_type 'boleto' OU ('billing'/'due_date' com invoice.link_boleto != null)
+                $query->where(function($q) {
+                    $q->where('message_type', 'boleto')
+                      ->orWhere(function($sub) {
+                          $sub->whereIn('message_type', ['billing', 'due_date'])
+                              ->whereHas('invoice', function($inv) {
+                                  $inv->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
+                              });
+                      });
+                });
+            } elseif ($type === 'due_date') {
+                // Vencimento (sem link)
+                // Pode ser message_type 'due_date' OU ('billing'/'boleto' com invoice.link_boleto null)
+                $query->where(function($q) {
+                    $q->where('message_type', 'due_date')
+                      ->orWhere(function($sub) {
+                          $sub->whereIn('message_type', ['billing', 'boleto'])
+                              ->whereHas('invoice', function($inv) {
+                                  $inv->where(function($link) {
+                                      $link->whereNull('link_boleto')->orWhere('link_boleto', '');
+                                  });
+                              });
+                      });
+                });
+            } else {
+                $query->where('message_type', $type);
+            }
         }
 
         if ($date) {
