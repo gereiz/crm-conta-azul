@@ -29,14 +29,38 @@ class FutureMessageService
         // Vamos limpar tudo que é >= Hoje e que ainda não foi enviado.
         FutureMessageSchedule::where('connection_id', $connection->id)
             ->whereDate('scheduled_send_date', '>=', Carbon::today())
+            ->whereNotIn('status', ['sent', 'error']) // Preserva histórico de execução de hoje
             ->delete();
 
-        $crons = MessageCron::where('connection_id', $connection->id)
+        // Busca crons específicos da conexão OU globais
+        $crons = MessageCron::where(function($q) use ($connection) {
+                $q->where('connection_id', $connection->id)
+                  ->orWhereNull('connection_id');
+            })
             ->where('is_active', true)
             ->get();
 
         foreach ($crons as $cron) {
-            $this->calculateForCron($cron);
+            // Se for cron global, precisamos garantir que ele se aplica a esta conexão?
+            // Crons globais se aplicam a todas as conexões ativas.
+            // Passamos um objeto cron "temporário" com o ID da conexão injetado para o contexto?
+            // Não, o método calculateForCron usa $cron->connection_id para queries.
+            // Se $cron->connection_id for null, as queries dentro de calculateForCron vão falhar 
+            // ou buscar invoices sem connection_id (o que não existe).
+            
+            // Solução: Clonar o cron e injetar o connection_id atual para o contexto da busca
+            $cronContext = $cron->replicate();
+            $cronContext->id = $cron->id; // Mantém ID original para logs/referência
+            $cronContext->type = $cron->type;
+            $cronContext->connection_id = $connection->id; // Força o ID da conexão atual
+            // Copia outras configs relevantes
+            $cronContext->days_before_due = $cron->days_before_due;
+            $cronContext->days_after_due = $cron->days_after_due;
+            $cronContext->period_value = $cron->period_value;
+            $cronContext->period_unit = $cron->period_unit;
+            $cronContext->message_template_id = $cron->message_template_id;
+            
+            $this->calculateForCron($cronContext);
         }
     }
 
