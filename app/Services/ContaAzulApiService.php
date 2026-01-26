@@ -186,7 +186,8 @@ class ContaAzulApiService
     public function syncOverdueInvoices(ContaAzulConnection $connection): int
     {
         $startDate = \Carbon\Carbon::now()->subYears(5)->format('Y-m-d');
-        $endDate = \Carbon\Carbon::now()->subDay()->format('Y-m-d');
+        // Buscamos faturas até 12 meses no futuro para garantir que automações de "vence hoje" e "pré-vencimento" funcionem
+        $endDate = \Carbon\Carbon::now()->addMonths(12)->format('Y-m-d');
         $page = 1;
         $size = 1000;
         $hasMore = true;
@@ -220,9 +221,8 @@ class ContaAzulApiService
                 if ($details) {
                     $invoiceDetails = $details;
                 }
-                // Aumentando delay para evitar Rate Limit (429)
-                // Antes era 0.2s, agora 0.5s
-                usleep(500000);
+                // Ajustando delay para respeitar limite de 10 req/s (100ms), mas com margem de segurança (150ms)
+                usleep(150000);
             }
             $valorOriginal = isset($item['total']) ? (float) $item['total'] : 0.0;
             $valorPago = isset($item['pago']) ? (float) $item['pago'] : null;
