@@ -31,8 +31,9 @@ class FutureMessageController extends Controller
         if ($date) {
             $query->whereDate('scheduled_send_date', $date);
         } else {
-            // Default: Mostra de hoje em diante
-            $query->whereDate('scheduled_send_date', '>=', Carbon::today());
+            // Default: Mostra apenas futuros (> hoje), pois envios de hoje são processados pela cron
+            // Ajustado para > hoje (amanhã em diante)
+            $query->whereDate('scheduled_send_date', '>', Carbon::today());
         }
 
         $schedules = $query->paginate(20)->withQueryString();
