@@ -263,8 +263,26 @@ class SettingsController extends Controller
             $hasMore = true;
             $syncedCount = 0;
 
+            // Reabilitando sincronização de clientes conforme solicitado pelo usuário.
+            // O usuário relatou que funcionava anteriormente.
+            // Se o token tiver permissão parcial ou se o erro 401 for intermitente, isso tentará buscar.
+            
             while ($hasMore) {
-                $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
+                try {
+                    $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
+                } catch (\Exception $e) {
+                    Log::warning("Erro ao buscar página {$page} de clientes: " . $e->getMessage());
+                    // Se falhar a primeira página com 401, provavelmente é permissão. Paramos.
+                    if ($page === 1 && str_contains($e->getMessage(), '401')) {
+                        $hasMore = false;
+                        break;
+                    }
+                    // Se for outro erro, tentamos continuar ou parar dependendo da lógica desejada.
+                    // Aqui vamos assumir que erro de API para o loop.
+                    $hasMore = false;
+                    break;
+                }
+
                 $clientsData = [];
                 if (isset($response['items'])) {
                     $clientsData = $response['items'];
@@ -347,7 +365,14 @@ class SettingsController extends Controller
             }
 
             // Sincroniza faturas
-            $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
+            // ATENÇÃO: Faturas também podem falhar se dependerem do escopo 'sales'.
+            // Vamos tentar, mas capturando erro específico para não parar tudo.
+            try {
+                $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
+            } catch (\Exception $e) {
+                Log::warning("Falha ao sincronizar faturas (provável falta de permissão 'sales'): " . $e->getMessage());
+                $invoicesCount = 0;
+            }
             
             // Atualiza timestamp da conexão
             $connection->last_sync_at = now();

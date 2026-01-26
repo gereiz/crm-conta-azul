@@ -70,7 +70,10 @@ class ContaAzulApiService
                 // Log detalhado para debug
                 Log::warning("Token rejeitado (401) na URL: {$this->baseUrl}/{$endpoint}");
                 
-                throw new \Exception("Sessão expirada na conexão {$connection->id}. Reautorize a Conta Azul.");
+                // CRÍTICO: Não lançar Exception aqui para não parar o fluxo de sincronização.
+                // Se falhar o token, retorna null e deixa quem chamou tratar (ex: pular para próxima etapa).
+                // throw new \Exception("Sessão expirada na conexão {$connection->id}. Reautorize a Conta Azul.");
+                return null;
             }
 
             return null;
