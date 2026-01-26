@@ -8,12 +8,11 @@ use Illuminate\Support\Facades\Log;
 
 class ContaAzulApiService
 {
-<<<<<<< HEAD
+
     // URL Base da Nova API V2
     // A documentação diz 'api-v2', mas o DNS público não resolve.
     // Solução: Continuar usando 'api.contaazul.com/v1', que responde corretamente às requisições autenticadas V2.
-=======
->>>>>>> parent of db0e795 (Correção dos escopos da nova api13)
+
     protected string $baseUrl = 'https://api.contaazul.com/v1';
 
     protected ContaAzulAuthService $auth;
@@ -67,7 +66,7 @@ class ContaAzulApiService
         if ($response->failed()) {
             Log::error("Erro na requisição Conta Azul [{$endpoint}] conex {$connection->id}: ".$response->body());
             if ($response->status() === 401) {
-<<<<<<< HEAD
+
                 // Se for erro de token inválido, pode ser que o token da V2 precise de uma URL base diferente
                 // ou que o escopo 'sales' esteja faltando mesmo.
                 // Log detalhado para debug
@@ -77,9 +76,7 @@ class ContaAzulApiService
                 // Se falhar o token, retorna null e deixa quem chamou tratar (ex: pular para próxima etapa).
                 // throw new \Exception("Sessão expirada na conexão {$connection->id}. Reautorize a Conta Azul.");
                 return null;
-=======
-                throw new \Exception("Sessão expirada na conexão {$connection->id}. Reautorize a Conta Azul.");
->>>>>>> parent of db0e795 (Correção dos escopos da nova api13)
+
             }
 
             return null;
