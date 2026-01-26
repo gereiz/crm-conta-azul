@@ -65,11 +65,15 @@ if [ ! -f .env ]; then\n\
     # Força driver de sessão para file para evitar erro de banco na instalação\n\
     sed -i "s/SESSION_DRIVER=database/SESSION_DRIVER=file/g" .env\n\
     \n\
-    # Gera chave APENAS se o .env acabou de ser criado E APP_KEY não foi informada via env var\n\
-    if [ -z "$APP_KEY" ]; then\n\
-        php artisan key:generate --force\n\
-    else\n\
-        echo "APP_KEY definida no ambiente. Ignorando geracao de nova chave."\n\
+    # Gera chave APENAS se o .env acabou de ser criado E APP_KEY não foi informada via env var
+    if [ -z "$APP_KEY" ]; then
+        # Tenta ler do .env se existir (caso tenha sido copiado do example mas não populado)
+        EXISTING_KEY=$(grep "APP_KEY=" .env | cut -d '=' -f 2)
+        if [ -z "$EXISTING_KEY" ]; then
+             php artisan key:generate --force
+        fi
+    else
+        echo "APP_KEY definida no ambiente. Ignorando geracao de nova chave."
     fi\n\
 fi\n\
 \n\
@@ -84,6 +88,10 @@ php artisan storage:link\n\
 php artisan config:cache\n\
 php artisan route:cache\n\
 php artisan view:cache\n\
+\n\
+# IMPORTANTE: A limpeza de cache deve ser feita ANTES de tentar rodar qualquer coisa que dependa da APP_KEY criptografada\n\
+# Se o cache de config foi gerado com uma chave antiga, a aplicação não consegue descriptografar os dados do banco.\n\
+php artisan config:clear\n\
 \n\
 # Ajusta permissões recursivamente para garantir escrita\n\
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database\n\

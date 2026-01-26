@@ -22,11 +22,12 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]); 
 
-        // Diagnóstico Final Confirmado: A conta NÃO tem permissão para 'sales' ou 'customer' com Auth V2.
-        // Ação: Reverter para escopo puramente de identidade V2 para permitir o login.
-        // Consequência: O login funcionará, mas a sincronização de dados falhará (401).
-        // Solução Definitiva: O usuário DEVE contatar o suporte da Conta Azul para liberar escopos de ERP.
-        $scope = 'openid profile aws.cognito.signin.user.admin';
+        // Diagnóstico Final: O usuário relatou que a sincronização funcionava com escopos antigos.
+        // O erro 401 persiste mesmo com escopos V2 limitados.
+        // Hipótese: O "jeito antigo" que funcionava provavelmente usava escopos V1 implícitos ou uma combinação específica.
+        // Tentativa de restauração baseada no .env fornecido pelo usuário (openid profile email) + sales para tentar forçar acesso.
+        // Nota: Se 'email' for o segredo, vamos testar. Se não, voltaremos para o padrão V2 puro.
+        $scope = 'openid profile email sales';
 
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
