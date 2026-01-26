@@ -68,8 +68,8 @@ if [ ! -f .env ]; then\n\
     # Gera chave APENAS se o .env acabou de ser criado E APP_KEY não foi informada via env var\n\
     if [ -z "$APP_KEY" ]; then\n\
         # Tenta ler do .env se existir (caso tenha sido copiado do example mas não populado)\n\
-        # Usamos grep silencioso para verificar se há valor após o igual\n\
-        if ! grep -q "^APP_KEY=.\\+" .env; then\n\
+        # Se NÃO encontrar a linha APP_KEY= (ou ela estiver vazia), gera a chave\n\
+        if ! grep -q "^APP_KEY=.\+" .env; then\n\
              php artisan key:generate --force\n\
         fi\n\
     else\n\
@@ -78,10 +78,11 @@ if [ ! -f .env ]; then\n\
 fi\n\
 \n\
 # IMPORTANTE: Em produção, o .env deve ser persistido via volume ou injetado.\n\
-# NÃO geramos nova chave se o arquivo já existir para evitar invalidar dados criptografados.\n\
+# Se o .env existir mas não tiver os dados do banco configurados, rodamos o artisan migrate se necessário\n\
+# Mas cuidado: migrate em produção automática pode ser perigoso.\n\
 \n\
-# Remove arquivo de instalação antigo se existir (para garantir o setup)\n\
-rm -f storage/installed\n\
+# Garante que o arquivo storage/installed não bloqueie se quisermos reconfigurar\n\
+# rm -f storage/installed\n\
 \n\
 php artisan package:discover --ansi\n\
 php artisan storage:link\n\
