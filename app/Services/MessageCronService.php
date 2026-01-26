@@ -175,10 +175,21 @@ class MessageCronService
     {
         $daysBefore = $cron->days_before_due ?? 0;
         $targetDate = Carbon::now()->addDays($daysBefore)->format('Y-m-d');
+        $today = Carbon::today()->format('Y-m-d');
 
+        // NOVA REGRA: Vencimento = Faturas com vencimento futuro (> hoje) E SEM link_boleto.
+        // O cron 'due_date' deve respeitar essa lógica.
+        
         $query = Invoice::where('status', 'OPEN')
             ->whereDate('data_vencimento', $targetDate)
-            ;
+            // Se o alvo for hoje, data_vencimento > today é falso.
+            // O usuário disse: "Faturas com vencimento futuro, e com link de boleto... emissão. Faturas com vencimento futuro e sem link... vencimento."
+            // Se o cron for para enviar no dia do vencimento (daysBefore=0), não é "futuro" estrito (> hoje), mas é o vencimento.
+            // Vamos aplicar a regra do link:
+            // Due Date: DEVE ter link nulo ou vazio.
+            ->where(function($q) {
+                $q->whereNull('link_boleto')->orWhere('link_boleto', '');
+            });
         
         if (!empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
@@ -209,12 +220,37 @@ class MessageCronService
 
     protected function processBoleto(MessageCron $cron, string $batchId)
     {
-        // Regra ajustada: Enviar até X dias após emissão
-        // Usamos period_value como "Dias após emissão"
-        $days = (int) ($cron->period_value ?? 0);
-        $targetDate = Carbon::now()->subDays($days)->format('Y-m-d');
+        // NOVA REGRA: Emissão = Faturas com vencimento futuro (> hoje) E com link_boleto.
+        // O cron original 'boleto' usava 'data_emissao'. 
+        // Agora, o gatilho é: Vencimento futuro e existência do link.
+        // Se este cron roda diariamente, ele deve pegar as faturas que entraram nessa condição "hoje"?
+        // Ou deve pegar as que "vencem daqui a X dias" e têm link?
+        // Se usarmos a lógica de "Vencimento", conflita com o cron de Vencimento? Não, pois um tem link, o outro não.
         
-        $query = Invoice::whereDate('data_emissao', $targetDate);
+        // Se a lógica antiga era "X dias após emissão", isso não garante "Vencimento futuro".
+        // Vamos adaptar para usar a regra nova estrita:
+        // Buscamos faturas que atendam aos critérios e que "encaixem" na janela de execução deste cron.
+        
+        // Se usarmos period_value como "Dias de antecedência" (igual ao due_date), podemos ter:
+        // Cron Emissão (boleto): Enviar 5 dias antes do vencimento SE tiver boleto.
+        // Cron Vencimento (due_date): Enviar 5 dias antes do vencimento SE NÃO tiver boleto.
+        
+        // Mas o cron 'boleto' (Emissão) tem o campo 'period_value' (dias após emissão) e não 'days_before_due'.
+        // O usuário disse: "Faturas com vencimento futuro e com link de boleto, devem ser enviadas como emissáo".
+        // Não especificou *quando*. Vamos assumir que o cron 'boleto' agora deve se comportar como um
+        // "Aviso de Boleto Disponível".
+        // Podemos usar a data de emissão como gatilho? "Se emitido há X dias".
+        // Se data_emissao = hoje - X. E data_vencimento > hoje. E tem link. -> Envia.
+        
+        $days = (int) ($cron->period_value ?? 0);
+        $targetEmissionDate = Carbon::now()->subDays($days)->format('Y-m-d');
+        $today = Carbon::today()->format('Y-m-d');
+        
+        $query = Invoice::whereDate('data_emissao', $targetEmissionDate)
+            ->where('data_vencimento', '>', $today) // Regra: Vencimento futuro
+            ->whereNotNull('link_boleto')           // Regra: Com link
+            ->where('link_boleto', '!=', '');
+
         if (!empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
         }

@@ -164,86 +164,92 @@ class FutureMessageService
 
     protected function scheduleEmission(MessageCron $cron, Carbon $targetDate)
     {
-        // Regra: Enviar boletos emitidos nos últimos X dias
-        // Usaremos 'period_value' como X. Se null, assume 0 (apenas hoje).
-        $days = (int) ($cron->period_value ?? 0);
+        // NOVA REGRA: Emissão = Faturas com vencimento futuro (> hoje) E com link_boleto existente.
+        // Independentemente da data de emissão real, o gatilho é a disponibilidade do boleto para faturas futuras.
         
-        // Intervalo de emissão: [targetDate - days, targetDate]
-        $startDate = $targetDate->copy()->subDays($days)->format('Y-m-d');
-        $endDate = $targetDate->format('Y-m-d');
+        // Intervalo: De amanhã até X dias no futuro (baseado na config do cron ou fixo?)
+        // O usuário disse: "Faturas com vencimento futuro e com link de boleto".
+        // Vamos considerar "Futuro" como > Hoje.
+        
+        $today = Carbon::today()->format('Y-m-d');
+        
+        // Busca faturas com vencimento > hoje e com link_boleto preenchido
+        $query = Invoice::where('connection_id', $cron->connection_id)
+            ->where('data_vencimento', '>', $today)
+            ->whereNotNull('link_boleto')
+            ->where('link_boleto', '!=', '')
+            ->where('status', '!=', 'PAID') // Garantir que não está paga
+            ->where('status', '!=', 'BAIXADO');
 
-        $invoices = Invoice::where('connection_id', $cron->connection_id)
-            ->whereBetween('data_emissao', [$startDate, $endDate])
-            ->get();
+        // Se o cron tiver configuração de dias (period_value), usamos como filtro de vencimento?
+        // Ex: Vencimento nos próximos 30 dias.
+        // Se period_value for definido, usamos. Se não, pegamos todas futuras (cuidado com volume).
+        // Vamos limitar a 30 dias por segurança/padrão se não houver config.
+        $days = (int) ($cron->period_value ?? 30);
+        $limitDate = Carbon::today()->addDays($days)->format('Y-m-d');
+        
+        $query->where('data_vencimento', '<=', $limitDate);
+
+        $invoices = $query->get();
 
         foreach ($invoices as $invoice) {
             if (!$invoice->cliente) continue;
             
-            // Verifica se já enviou para este boleto especificamente (evitar spam se days > 0)
-            // Para emissão, geralmente envia-se uma vez.
-            // Se days=7, ele vai aparecer na lista por 7 dias? Não deveria enviar 7 vezes.
-            // Precisamos checar se já foi enviado "alguma vez" para este boleto e este cron type.
-            $alreadySentEver = WhatsappMessageLog::where('message_cron_id', $cron->id)
-                ->where('invoice_id', $invoice->id) // Assumindo que log tem invoice_id, se não tiver, complica.
+            // Verifica se já enviou mensagem de EMISSÃO para esta fatura
+            $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
+                ->where('invoice_id', $invoice->id)
                 ->exists();
+
+            if ($alreadySent) continue;
             
-            // O log atual não tem invoice_id explícito na migration original, mas tem boleto_ids json?
-            // Vamos verificar WhatsappMessageLog.
+            // Agenda para o targetDate (que é hoje na iteração 0, amanhã na 1...)
+            // Mas a lógica de loop do Service calcula para [Hoje, Hoje+1, Hoje+2].
+            // Se a fatura já está pronta HOJE, ela deve aparecer no schedule de HOJE.
+            // Se estamos calculando schedule futuro (amanhã), ela também estaria pronta amanhã.
+            // Para evitar duplicidade visual no grid (aparecer em 25/01, 26/01...),
+            // devemos agendar para a "data de execução" mais próxima, que é o targetDate atual.
+            // Se o usuário filtrar "Amanhã", ele verá que ela será enviada amanhã (se não for enviada hoje).
             
-            // Por enquanto, vamos agendar. O envio real faz a verificação final.
-            // Mas para "Future", se já enviou, não deve aparecer como "Pending".
-            
-            $this->createSchedule($cron, $invoice->cliente, $invoice, $invoice->data_emissao, $targetDate);
+            $this->createSchedule($cron, $invoice->cliente, $invoice, $invoice->data_vencimento, $targetDate);
         }
     }
 
     protected function scheduleDueDate(MessageCron $cron, Carbon $targetDate)
     {
-        // Regra: Vencem no intervalo configurado (days_before_due)
-        // Se days_before_due = 3, enviamos mensagens para boletos que vencem em [targetDate, targetDate + 3]?
-        // OU a regra é "Enviar 3 dias antes"? 
-        // Prompt: "Considerar boletos que vão vencer dentro do intervalo... Ex: Hoje, Próximos 3 dias".
-        // Se a config é 3 dias. Significa que todo dia enviamos lembretes para quem vence daqui a 3 dias? 
-        // OU enviamos para quem vence HOJE, AMANHÃ, DEPOIS?
+        // NOVA REGRA: Vencimento = Faturas com vencimento futuro (> hoje) E SEM link_boleto.
+        // Isso serve como aviso de vencimento / lembrete de pagamento, mesmo sem o boleto gerado ainda na API
+        // (ou boleto que não é gerado via ContaAzul, apenas registrado).
         
-        // Interpretação mais comum: "Enviar X dias antes". 
-        // Mas o prompt diz "vão vencer dentro do intervalo".
-        // Vamos assumir que `days_before_due` define o "Lookahead".
-        // Se `days_before_due` = 3. 
-        // Pegamos faturas com vencimento = targetDate (vence hoje)
-        // Pegamos faturas com vencimento = targetDate + 1
-        // ...
-        // Pegamos faturas com vencimento = targetDate + 3
+        $today = Carbon::today()->format('Y-m-d');
         
-        // Isso geraria 4 mensagens para o mesmo boleto ao longo de 4 dias? Provavelmente sim, é um "Reminder".
-        // Ou envia só uma vez? "Enviar mensagens para boletos que vencem..."
+        $query = Invoice::where('connection_id', $cron->connection_id)
+            ->where('data_vencimento', '>', $today)
+            ->where(function($q) {
+                $q->whereNull('link_boleto')->orWhere('link_boleto', '');
+            })
+            ->where('status', '!=', 'PAID')
+            ->where('status', '!=', 'BAIXADO');
+
+        // Limite de dias (ex: vence nos próximos 5 dias)
+        // Usamos days_before_due para definir "quão perto" do vencimento enviamos.
+        // Se days_before_due = 3, enviamos quando faltam 3 dias.
+        // Então Data Vencimento = targetDate + 3.
         
-        // Vamos simplificar: Se a configuração é "3 dias antes", o cron busca vencimento = hoje + 3.
-        // O prompt dá exemplos: "Hoje", "Nos próximos 3 dias".
-        // Parece que o usuário quer configurar uma janela.
-        // Vamos usar `days_before_due` como o alvo exato se for um número único, ou intervalo?
-        // Dado "Exemplos: Enviar mensagens para boletos que vencem: Hoje, Nos próximos 3 dias",
-        // Parece que ele quer selecionar múltiplos.
+        $days = $cron->days_before_due ?? 3;
+        $targetDueDate = $targetDate->copy()->addDays($days)->format('Y-m-d');
         
-        // Implementação atual do MessageCronService usa `addDays($daysBefore)`. É um dia exato.
-        // Vou manter dia exato para ser consistente com o código existente, 
-        // mas o prompt pede "Ajuste das Regras".
-        // "Considerar boletos que vão vencer dentro do intervalo".
-        // Se eu mudar para intervalo, mudo a lógica de envio massivamente.
-        // Vou assumir que o usuário vai configurar MÚLTIPLOS crons ou a regra é "Vence em até X dias".
-        
-        // Vamos manter a lógica de "Alvo": Vencimento = targetDate + days_before_due.
-        
-        $days = $cron->days_before_due ?? 0;
-        $dueDate = $targetDate->copy()->addDays($days)->format('Y-m-d');
-        
-        $invoices = Invoice::where('connection_id', $cron->connection_id)
-            ->where('status', 'OPEN') // Apenas boletos abertos
-            ->whereDate('data_vencimento', $dueDate)
-            ->get();
+        // Aqui a lógica é pontual: Enviamos no dia X antes do vencimento.
+        $query->whereDate('data_vencimento', $targetDueDate);
+
+        $invoices = $query->get();
 
         foreach ($invoices as $invoice) {
             if (!$invoice->cliente) continue;
+            
+            // Verifica se já enviou HOJE (ou neste ciclo)
+            // Para due_date, podemos enviar lembretes em dias diferentes (ex: 5 dias antes, 1 dia antes).
+            // Mas para o MESMO cron id, enviamos uma vez para aquela data alvo.
+            
             $this->createSchedule($cron, $invoice->cliente, $invoice, $invoice->data_vencimento, $targetDate);
         }
     }
