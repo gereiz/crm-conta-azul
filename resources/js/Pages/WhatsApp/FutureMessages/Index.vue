@@ -38,14 +38,27 @@ const formatDate = (date) => {
     return new Date(date).toLocaleDateString('pt-BR');
 };
 
-const typeLabel = (type) => {
+const typeLabel = (item) => {
+    // Se for tipo boleto ou due_date ou billing (cobranca), aplicamos a lógica visual baseada no link
+    // "Billing" também pode ser uma fatura individual na visualização, se tiver invoice associado.
+    if (['boleto', 'due_date', 'billing'].includes(item.message_type)) {
+        // Se tem invoice e tem link -> Emissão
+        if (item.invoice && item.invoice.link_boleto) {
+            return 'Emissão';
+        }
+        // Se tem invoice e NÃO tem link -> Vencimento
+        if (item.invoice && !item.invoice.link_boleto) {
+            return 'Vencimento';
+        }
+    }
+
     const map = {
         'billing': 'Cobrança',
         'boleto': 'Emissão',
         'due_date': 'Vencimento',
         'birthday': 'Aniversário',
     };
-    return map[type] || type;
+    return map[item.message_type] || item.message_type;
 };
 
 const formatCurrency = (value) => {
@@ -107,6 +120,9 @@ const statusClass = (status) => {
                                 <option value="due_date">Vencimento</option>
                                 <option value="birthday">Aniversário</option>
                             </select>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Nota: Emissão (com boleto) / Vencimento (sem boleto)
+                            </p>
                         </div>
                         <div class="md:col-span-3">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data Prevista</label>
