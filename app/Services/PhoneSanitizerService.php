@@ -47,20 +47,24 @@ class PhoneSanitizerService
             $digits = '55' . $digits;
         }
 
-        // 4. Lógica do 9º dígito (Solicitação: remover)
-        // Formato esperado BR com 9º dígito: 55 + DDD (2) + 9 + 8 dígitos = 13 dígitos
-        // Formato esperado BR sem 9º dígito: 55 + DDD (2) + 8 dígitos = 12 dígitos
-        
-        // Se tiver 13 dígitos e o terceiro dígito do número local (após 55+DDD) for 9?
-        // Estrutura: 55 (0,1) DD (2,3) N (4) XXXX (5-8) XXXX (9-12) -> total 13 chars (indices 0-12)
-        // O 9º dígito é o índice 4 (5º caractere da string).
+        // 4. Lógica do 9º dígito
+        // Regra Geral: MANTER o 9º dígito (padrão nacional/internacional atual).
+        // Exceção (Solicitação Usuário): Remover 9º dígito APENAS para DDDs de MG (30-39).
+        // Motivo: Relato de falha de envio para MG com 9 dígitos via Whapi.
         
         if (strlen($digits) === 13) {
-            // Verifica se é um celular (começa com 9 após o DDD)
             // Indices: 01 (55), 23 (DDD), 4 (9)
-            if ($digits[4] === '9') {
-                // Remove o caractere no índice 4
-                $digits = substr($digits, 0, 4) . substr($digits, 5);
+            $ddd = substr($digits, 2, 2);
+            $firstDigit = $digits[4];
+
+            // Verifica se é um celular (começa com 9 após o DDD)
+            if ($firstDigit === '9') {
+                // Verifica se o DDD começa com '3' (Região MG: 31, 32, 33, 34, 35, 37, 38)
+                // Usando str_starts_with ou range
+                if (str_starts_with($ddd, '3')) {
+                    // Remove o 9º dígito (índice 4)
+                    $digits = substr($digits, 0, 4) . substr($digits, 5);
+                }
             }
         }
 
