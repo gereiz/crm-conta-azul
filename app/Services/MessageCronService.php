@@ -12,12 +12,15 @@ use App\Models\WhatsappNumber;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class MessageCronService
 {
     protected $whapiService;
     protected $restrictionService;
+    protected int $batchSize = 30;
+    protected int $batchDelaySeconds = 300;
 
     public function __construct(WhapiService $whapiService, BillingRestrictionService $restrictionService)
     {
@@ -123,6 +126,29 @@ class MessageCronService
         return $this->whapiService->isConnected($whatsapp);
     }
 
+    protected function applyPerNumberBatchGate(MessageCron $cron, int $total)
+    {
+        if (!$cron->whatsapp_number_id) return;
+        $batches = (int) ceil(max(0, $total) / $this->batchSize);
+        $busyKey = 'whatsapp_busy_until_' . $cron->whatsapp_number_id;
+        $now = Carbon::now();
+        $busyUntil = Cache::get($busyKey);
+        if ($busyUntil) {
+            try {
+                $ts = Carbon::parse($busyUntil);
+                if ($ts->gt($now)) {
+                    $wait = $ts->diffInSeconds($now);
+                    if ($wait > 0) sleep($wait);
+                }
+            } catch (\Exception $e) {}
+        }
+        $extra = max(0, $batches - 1) * $this->batchDelaySeconds;
+        if ($extra > 0) {
+            $newUntil = $now->copy()->addSeconds($extra);
+            Cache::put($busyKey, $newUntil->toIso8601String(), $extra + 600);
+        }
+    }
+
     protected function processBilling(MessageCron $cron, string $batchId)
     {
         $daysLate = $cron->days_after_due ?? 0;
@@ -167,23 +193,26 @@ class MessageCronService
 
         $stats = ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => $groups->count()];
 
+        $this->applyPerNumberBatchGate($cron, $groups->count());
         // Valida conexão uma vez antes do loop
         $isNumberActive = $this->checkCronNumberStatus($cron);
 
-        foreach ($groups as $clienteId => $clientInvoices) {
-            $cliente = $clientInvoices->first()->cliente;
-
-            if (!$isNumberActive) {
-                $phone = $cliente->mobile_phone ?? $cliente->phone;
-                $this->logError($cron, $cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", count($clientInvoices));
-                $stats['errors']++;
-                continue;
+        $chunks = $groups->chunk($this->batchSize);
+        foreach ($chunks as $chunkIndex => $chunk) {
+            foreach ($chunk as $clienteId => $clientInvoices) {
+                $cliente = $clientInvoices->first()->cliente;
+                if (!$isNumberActive) {
+                    $phone = $cliente->mobile_phone ?? $cliente->phone;
+                    $this->logError($cron, $cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", count($clientInvoices));
+                    $stats['errors']++;
+                    continue;
+                }
+                $result = $this->sendGroupedMessageForClient($cron, $cliente, $clientInvoices, $batchId);
+                if ($result === 'sent') $stats['sent']++;
+                elseif ($result === 'error') $stats['errors']++;
+                else $stats['skipped']++;
             }
-
-            $result = $this->sendGroupedMessageForClient($cron, $cliente, $clientInvoices, $batchId);
-            if ($result === 'sent') $stats['sent']++;
-            elseif ($result === 'error') $stats['errors']++;
-            else $stats['skipped']++;
+            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
         }
 
         return $stats;
@@ -220,20 +249,24 @@ class MessageCronService
 
         $stats = ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => $invoices->count()];
 
+        $this->applyPerNumberBatchGate($cron, $invoices->count());
         $isNumberActive = $this->checkCronNumberStatus($cron);
 
-        foreach ($invoices as $invoice) {
-            if (!$isNumberActive) {
-                $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
-                $this->logError($cron, $invoice->cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", 1);
-                $stats['errors']++;
-                continue;
+        $chunks = $invoices->chunk($this->batchSize);
+        foreach ($chunks as $chunkIndex => $chunk) {
+            foreach ($chunk as $invoice) {
+                if (!$isNumberActive) {
+                    $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
+                    $this->logError($cron, $invoice->cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", 1);
+                    $stats['errors']++;
+                    continue;
+                }
+                $result = $this->sendMessageForInvoice($cron, $invoice, $batchId);
+                if ($result === 'sent') $stats['sent']++;
+                elseif ($result === 'error') $stats['errors']++;
+                else $stats['skipped']++;
             }
-
-            $result = $this->sendMessageForInvoice($cron, $invoice, $batchId);
-            if ($result === 'sent') $stats['sent']++;
-            elseif ($result === 'error') $stats['errors']++;
-            else $stats['skipped']++;
+            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
         }
 
         return $stats;
@@ -267,44 +300,47 @@ class MessageCronService
 
         $stats = ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => $invoices->count()];
 
+        $this->applyPerNumberBatchGate($cron, $invoices->count());
         $isNumberActive = $this->checkCronNumberStatus($cron);
 
-        foreach ($invoices as $invoice) {
-            if (!$isNumberActive) {
-                $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
-                $this->logError($cron, $invoice->cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", 1);
-                $stats['errors']++;
-                continue;
+        $chunks = $invoices->chunk($this->batchSize);
+        foreach ($chunks as $chunkIndex => $chunk) {
+            foreach ($chunk as $invoice) {
+                if (!$isNumberActive) {
+                    $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
+                    $this->logError($cron, $invoice->cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", 1);
+                    $stats['errors']++;
+                    continue;
+                }
+                $alreadyEverSent = \App\Models\WhatsappMessageLog::where('message_type', 'boleto')
+                    ->whereJsonContains('boleto_ids', $invoice->id)
+                    ->exists();
+                if ($alreadyEverSent) {
+                    \App\Models\WhatsappMessageLog::create([
+                        'connection_id' => $invoice->connection_id ?? $cron->connection_id,
+                        'message_cron_id' => $cron->id,
+                        'cliente_id' => $invoice->cliente_id,
+                        'client_name' => $invoice->cliente->name ?? $invoice->cliente_nome,
+                        'phone_original' => $invoice->cliente->mobile_phone ?? $invoice->cliente->phone,
+                        'phone_sanitized' => \App\Services\PhoneSanitizerService::sanitize($invoice->cliente->mobile_phone ?? $invoice->cliente->phone),
+                        'message_type' => $cron->type,
+                        'message_template_id' => $cron->message_template_id,
+                        'total_boletos' => 1,
+                        'boleto_ids' => [$invoice->id],
+                        'status' => 'skipped',
+                        'error_message' => 'Já enviado anteriormente',
+                        'batch_id' => $batchId,
+                        'sent_at' => now(),
+                    ]);
+                    $stats['skipped']++;
+                    continue;
+                }
+                $result = $this->sendMessageForInvoice($cron, $invoice, $batchId);
+                if ($result === 'sent') $stats['sent']++;
+                elseif ($result === 'error') $stats['errors']++;
+                else $stats['skipped']++;
             }
-
-            $alreadyEverSent = \App\Models\WhatsappMessageLog::where('message_type', 'boleto')
-                ->whereJsonContains('boleto_ids', $invoice->id)
-                ->exists();
-            if ($alreadyEverSent) {
-                \App\Models\WhatsappMessageLog::create([
-                    'connection_id' => $invoice->connection_id ?? $cron->connection_id,
-                    'message_cron_id' => $cron->id,
-                    'cliente_id' => $invoice->cliente_id,
-                    'client_name' => $invoice->cliente->name ?? $invoice->cliente_nome,
-                    'phone_original' => $invoice->cliente->mobile_phone ?? $invoice->cliente->phone,
-                    'phone_sanitized' => \App\Services\PhoneSanitizerService::sanitize($invoice->cliente->mobile_phone ?? $invoice->cliente->phone),
-                    'message_type' => $cron->type,
-                    'message_template_id' => $cron->message_template_id,
-                    'total_boletos' => 1,
-                    'boleto_ids' => [$invoice->id],
-                    'status' => 'skipped',
-                    'error_message' => 'Já enviado anteriormente',
-                    'batch_id' => $batchId,
-                    'sent_at' => now(),
-                ]);
-                $stats['skipped']++;
-                continue;
-            }
-
-            $result = $this->sendMessageForInvoice($cron, $invoice, $batchId);
-            if ($result === 'sent') $stats['sent']++;
-            elseif ($result === 'error') $stats['errors']++;
-            else $stats['skipped']++;
+            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
         }
 
         return $stats;
@@ -322,20 +358,24 @@ class MessageCronService
 
         $stats = ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => $clients->count()];
 
+        $this->applyPerNumberBatchGate($cron, $clients->count());
         $isNumberActive = $this->checkCronNumberStatus($cron);
 
-        foreach ($clients as $client) {
-            if (!$isNumberActive) {
-                $phone = $client->mobile_phone ?? $client->phone;
-                $this->logError($cron, $client, $phone, "Número de envio desconectado/inativo (Cron abortado).");
-                $stats['errors']++;
-                continue;
+        $chunks = $clients->chunk($this->batchSize);
+        foreach ($chunks as $chunkIndex => $chunk) {
+            foreach ($chunk as $client) {
+                if (!$isNumberActive) {
+                    $phone = $client->mobile_phone ?? $client->phone;
+                    $this->logError($cron, $client, $phone, "Número de envio desconectado/inativo (Cron abortado).");
+                    $stats['errors']++;
+                    continue;
+                }
+                $result = $this->sendMessageForBirthday($cron, $client, $batchId);
+                if ($result === 'sent') $stats['sent']++;
+                elseif ($result === 'error') $stats['errors']++;
+                else $stats['skipped']++;
             }
-
-            $result = $this->sendMessageForBirthday($cron, $client, $batchId);
-            if ($result === 'sent') $stats['sent']++;
-            elseif ($result === 'error') $stats['errors']++;
-            else $stats['skipped']++;
+            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
         }
 
         return $stats;
