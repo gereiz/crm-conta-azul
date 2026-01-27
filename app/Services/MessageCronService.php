@@ -190,10 +190,7 @@ class MessageCronService
         $today = Carbon::today()->format('Y-m-d');
 
         $query = Invoice::where('status', 'PENDING')
-            ->whereDate('data_vencimento', $targetDate)
-            ->where(function($q) {
-                $q->whereNull('link_boleto')->orWhere('link_boleto', '');
-            });
+            ->whereDate('data_vencimento', $targetDate);
         
         if (!empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
@@ -232,14 +229,14 @@ class MessageCronService
 
     protected function processBoleto(MessageCron $cron, string $batchId)
     {
-        $days = (int) ($cron->period_value ?? 0);
-        $targetEmissionDate = Carbon::now()->subDays($days)->format('Y-m-d');
-        $today = Carbon::today()->format('Y-m-d');
+        $days = (int) ($cron->days_before_due ?? $cron->period_value ?? 0);
+        $startDate = Carbon::today()->format('Y-m-d');
+        $endDate = Carbon::now()->addDays($days)->format('Y-m-d');
         
-        $query = Invoice::whereDate('data_emissao', '>=', $targetEmissionDate)
-            ->whereDate('data_emissao', '<=', $today)
-            ->where('data_vencimento', '>', $today) // Regra: Vencimento futuro
-            ->whereNotNull('link_boleto')           // Regra: Com link
+        $query = Invoice::where('status', 'PENDING')
+            ->whereDate('data_vencimento', '>=', $startDate)
+            ->whereDate('data_vencimento', '<=', $endDate)
+            ->whereNotNull('link_boleto')
             ->where('link_boleto', '!=', '');
 
         if (!empty($cron->connection_id)) {
@@ -250,9 +247,9 @@ class MessageCronService
         Log::info('Cron boleto - seleção de faturas', [
             'cron_id' => $cron->id,
             'connection_id' => $cron->connection_id,
-            'days_since_emission' => $days,
-            'emission_from' => $targetEmissionDate,
-            'emission_to' => $today,
+            'days_before_due' => $days,
+            'due_from' => $startDate,
+            'due_to' => $endDate,
             'count' => $invoices->count(),
         ]);
 
@@ -265,6 +262,30 @@ class MessageCronService
                 $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
                 $this->logError($cron, $invoice->cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", 1);
                 $stats['errors']++;
+                continue;
+            }
+
+            $alreadyEverSent = \App\Models\WhatsappMessageLog::where('message_type', 'boleto')
+                ->whereJsonContains('boleto_ids', $invoice->id)
+                ->exists();
+            if ($alreadyEverSent) {
+                \App\Models\WhatsappMessageLog::create([
+                    'connection_id' => $invoice->connection_id ?? $cron->connection_id,
+                    'message_cron_id' => $cron->id,
+                    'cliente_id' => $invoice->cliente_id,
+                    'client_name' => $invoice->cliente->name ?? $invoice->cliente_nome,
+                    'phone_original' => $invoice->cliente->mobile_phone ?? $invoice->cliente->phone,
+                    'phone_sanitized' => \App\Services\PhoneSanitizerService::sanitize($invoice->cliente->mobile_phone ?? $invoice->cliente->phone),
+                    'message_type' => $cron->type,
+                    'message_template_id' => $cron->message_template_id,
+                    'total_boletos' => 1,
+                    'boleto_ids' => [$invoice->id],
+                    'status' => 'skipped',
+                    'error_message' => 'Já enviado anteriormente',
+                    'batch_id' => $batchId,
+                    'sent_at' => now(),
+                ]);
+                $stats['skipped']++;
                 continue;
             }
 
@@ -324,13 +345,11 @@ class MessageCronService
         $originalPhone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
 
-        if (!$ignoreSentToday) {
-            // Check duplication using WhatsappMessageLog
+        if ($cron->type === 'billing' && !$ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $invoice->cliente_id)
                 ->whereDate('sent_at', Carbon::today())
                 ->exists();
-
             if ($alreadySent) {
                 WhatsappMessageLog::create([
                     'connection_id' => $connId,
@@ -450,13 +469,7 @@ class MessageCronService
                 ->where('message_type', 'ignore_sent_today')
                 ->value('is_enabled');
         }
-        if (!$ignoreSentToday) {
-            $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
-                ->where('cliente_id', $client->id)
-                ->whereDate('sent_at', Carbon::today())
-                ->exists();
-            if ($alreadySent) return 'skipped';
-        }
+        // Regra de "Já enviado hoje" não se aplica para aniversários
 
         if (!$cron->whatsapp_number_id) {
              $this->logError($cron, $client, $originalPhone, "Cron sem número de WhatsApp vinculado.");
@@ -641,7 +654,7 @@ class MessageCronService
                 ->where('message_type', 'ignore_sent_today')
                 ->value('is_enabled');
         }
-        if (!$ignoreSentToday) {
+        if ($cron->type === 'billing' && !$ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $cliente->id)
                 ->whereDate('sent_at', Carbon::today())

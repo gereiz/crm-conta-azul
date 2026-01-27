@@ -29,6 +29,23 @@ const getTypeLabel = (type) => {
     return types[type] || type;
 };
 
+const weekdaysShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const weekdaysFull = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const scheduleBadges = (cron) => {
+    if (!cron?.rule_type) return [{ text: '-', title: 'Sem regra' }];
+    if (cron.rule_type === 'daily') return [{ text: 'Diário', title: 'Executa todos os dias' }];
+    if (cron.rule_type === 'interval_days' && cron.interval_days) return [{ text: `A cada ${cron.interval_days}d`, title: `Executa a cada ${cron.interval_days} dias` }];
+    if (cron.rule_type === 'weekly_day' && Array.isArray(cron.day_of_week)) {
+        const arr = cron.day_of_week.map(i => ({ text: weekdaysShort[i] ?? `${i}`, title: weekdaysFull[i] ?? `${i}` }));
+        return arr.length ? arr : [{ text: '-', title: 'Sem dias da semana selecionados' }];
+    }
+    if (cron.rule_type === 'monthly_day' && Array.isArray(cron.day_of_month)) {
+        const arr = cron.day_of_month.map(d => ({ text: `${d}`, title: `Dia ${d} do mês` }));
+        return arr.length ? arr : [{ text: '-', title: 'Sem dias do mês selecionados' }];
+    }
+    return [{ text: '-', title: 'Regra inválida ou incompleta' }];
+};
+
 const getPeriodLabel = (cron) => {
     if (cron.type === 'birthday') return '-';
     
@@ -79,6 +96,14 @@ const runCron = (cron) => {
 const formatDate = (dateString) => {
     if (!dateString) return '-';
     return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+};
+
+const getWhatsappLabel = (cron) => {
+    const w = cron.whatsapp_number || cron.whatsappNumber;
+    if (!w) return '-';
+    const main = w.description || `+${w.ddi || ''} ${w.ddd || ''} ${w.phone || ''}`.trim();
+    const tip = `Canal: ${w.description ?? 'WhatsApp'} | +${w.ddi || ''} ${w.ddd || ''} ${w.phone || ''}`.replace(/\s+/g, ' ').trim();
+    return { main, tip };
 };
 
 const page = usePage();
@@ -246,11 +271,12 @@ onMounted(async () => {
                                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                                     <tr>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tipo</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Template</th>
-                                        <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[70px]">connection_id</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[140px]">Tipo</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[160px]">Template</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[180px]">Whatsapp</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Horário</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Regra/Período</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Data Envio</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Última Execução</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                                         <th scope="col" class="relative px-6 py-3">
@@ -263,22 +289,39 @@ onMounted(async () => {
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div class="text-sm font-medium text-gray-900 dark:text-white">{{ cron.name }}</div>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                        <td class="px-4 py-4 whitespace-nowrap w-[140px]">
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 truncate" :title="getTypeLabel(cron.type)">
                                                 {{ getTypeLabel(cron.type) }}
                                             </span>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                            {{ cron.message_template?.name || '-' }}
+                                        <td class="px-4 py-4 whitespace-nowrap w-[160px]">
+                                            <span
+                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 truncate max-w-[150px]"
+                                                :title="cron.message_template?.name || '-'"
+                                            >
+                                                {{ cron.message_template?.name || '-' }}
+                                            </span>
                                         </td>
-                                        <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 w-[70px] text-center">
-                                            {{ cron.connection_id ?? '-' }}
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 w-[180px]">
+                                            <span v-if="getWhatsappLabel(cron).main" class="inline-block max-w-[170px] truncate" :title="getWhatsappLabel(cron).tip">
+                                                {{ getWhatsappLabel(cron).main }}
+                                            </span>
+                                            <span v-else>-</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             {{ cron.send_time }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             {{ getPeriodLabel(cron) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="flex flex-wrap gap-1">
+                                                <span v-for="(b, idx) in scheduleBadges(cron)" :key="idx"
+                                                    class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+                                                    :title="b.title">
+                                                    {{ b.text }}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             {{ formatDate(cron.last_run_at) }}

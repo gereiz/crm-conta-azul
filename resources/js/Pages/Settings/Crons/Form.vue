@@ -74,8 +74,7 @@ watch(() => form.type, (newType) => {
         } else if (newType === 'due_date') {
             form.days_before_due = 3;
         } else if (newType === 'boleto') {
-            form.period_value = 30;
-            form.period_unit = 'days';
+            form.days_before_due = 10;
         }
     }
 });
@@ -279,29 +278,21 @@ watch(() => form.type, (newType) => {
                                 <h3 class="font-medium text-gray-900 dark:text-gray-100">Regras de Vencimento</h3>
                                 <div>
                                     <InputLabel for="days_before_due" value="Dias antes do vencimento" />
-                                    <TextInput id="days_before_due" type="number" class="mt-1 block w-full" v-model="form.days_before_due" min="1" required />
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ex: Enviar 3 dias antes de vencer</p>
+                                    <TextInput id="days_before_due" type="number" class="mt-1 block w-full" v-model="form.days_before_due" min="0" required />
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ex: Enviar 3 dias antes de vencer (0 = no dia do vencimento)</p>
                                     <InputError class="mt-2" :message="form.errors.days_before_due" />
                                 </div>
                             </div>
 
                             <div v-if="form.type === 'boleto'" class="space-y-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                 <h3 class="font-medium text-gray-900 dark:text-gray-100">Regras de Emissão</h3>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <InputLabel for="period_value" value="Período Analisado (Valor)" />
-                                        <TextInput id="period_value" type="number" class="mt-1 block w-full" v-model="form.period_value" min="1" />
-                                    </div>
-                                    <div>
-                                        <InputLabel for="period_unit" value="Unidade" />
-                                        <select id="period_unit" v-model="form.period_unit" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-primary-500 dark:focus:border-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 rounded-md shadow-sm">
-                                            <option value="days">Dias</option>
-                                            <option value="months">Meses</option>
-                                            <option value="years">Anos</option>
-                                        </select>
-                                    </div>
+                                <div>
+                                    <InputLabel for="boleto_days_before_due" value="Dias antes do vencimento" />
+                                    <TextInput id="boleto_days_before_due" type="number" class="mt-1 block w-full" v-model="form.days_before_due" min="0" required />
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ex: Enviar boletos que vencem nos próximos N dias (0 = hoje).</p>
+                                    <p class="text-xs text-gray-400">Obs.: period_value permanece como fallback técnico no backend.</p>
+                                    <InputError class="mt-2" :message="form.errors.days_before_due" />
                                 </div>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">Ex: Boletos emitidos nos últimos 30 dias</p>
                             </div>
 
                             <div class="flex items-center justify-end mt-4">
