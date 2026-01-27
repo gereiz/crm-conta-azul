@@ -58,6 +58,9 @@ Route::get('/dashboard/stats', [DashboardController::class, 'stats'])
 Route::get('/dashboard/chart-data', [DashboardController::class, 'chartData'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard.chart-data');
+Route::get('/dashboard/chart-data-whatsapp', [DashboardController::class, 'chartDataWhatsapp'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.chart-data-whatsapp');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

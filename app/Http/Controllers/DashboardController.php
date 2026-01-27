@@ -149,6 +149,60 @@ class DashboardController extends Controller
             'chartData' => $chartData
         ]);
     }
+ 
+    public function chartDataWhatsapp(Request $request)
+    {
+        $periodDays = (int) $request->input('period', 7);
+        $allowedPeriods = [7, 15, 30];
+        if (!in_array($periodDays, $allowedPeriods)) {
+            $periodDays = 7;
+        }
+        $endDate = Carbon::today();
+        $startDate = Carbon::today()->subDays($periodDays - 1);
+        $logs = \App\Models\WhatsappMessageLog::with(['messageCron', 'messageCron.whatsappNumber'])
+            ->whereBetween('sent_at', [$startDate->startOfDay(), $endDate->endOfDay()])
+            ->where('status', 'success')
+            ->get();
+        $labels = [];
+        $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
+        foreach ($period as $date) {
+            $labels[] = $date->format('d/m');
+        }
+        $palette = [
+            'billing' => '#3B82F6',
+            'due_date' => '#F59E0B',
+            'boleto' => '#10B981',
+            'birthday' => '#8B5CF6',
+            'default' => '#6366F1',
+        ];
+        $datasets = [];
+        foreach ($logs as $log) {
+            $dateKey = $log->sent_at ? Carbon::parse($log->sent_at)->format('d/m') : null;
+            if (!$dateKey) continue;
+            $numberDesc = $log->messageCron && $log->messageCron->whatsappNumber ? ($log->messageCron->whatsappNumber->description ?? 'Número') : 'Número';
+            $type = $log->message_type ?? ($log->messageCron ? $log->messageCron->type : 'default');
+            $key = $numberDesc . ' | ' . $type;
+            if (!isset($datasets[$key])) {
+                $datasets[$key] = [
+                    'label' => $key,
+                    'data' => array_fill_keys($labels, 0),
+                    'backgroundColor' => $palette[$type] ?? $palette['default'],
+                ];
+            }
+            $datasets[$key]['data'][$dateKey] = ($datasets[$key]['data'][$dateKey] ?? 0) + 1;
+        }
+        $chartData = [
+            'labels' => $labels,
+            'datasets' => array_values(array_map(function ($ds) {
+                $ds['data'] = array_values($ds['data']);
+                return $ds;
+            }, $datasets)),
+        ];
+        return response()->json([
+            'success' => true,
+            'chartData' => $chartData,
+        ]);
+    }
 
     public function index(Request $request)
     {

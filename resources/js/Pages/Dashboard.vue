@@ -126,6 +126,8 @@ const chartPeriod = ref(7);
 const loadingChart = ref(false);
 const localChartData = ref(props.chartData || { labels: [], datasets: [] });
 const chartViewMode = ref('stacked');
+const loadingNumberTypeChart = ref(false);
+const numberTypeChartData = ref({ labels: [], datasets: [] });
 
 // Se os dados vierem do backend via props, inicializa localChartData
 watch(() => props.chartData, (newVal) => {
@@ -185,8 +187,23 @@ const fetchChartData = async () => {
     }
 };
 
+const fetchNumberTypeChart = async () => {
+    loadingNumberTypeChart.value = true;
+    try {
+        const response = await axios.get(route('dashboard.chart-data-whatsapp', { period: chartPeriod.value }));
+        if (response.data.success) {
+            numberTypeChartData.value = response.data.chartData;
+        }
+    } catch (error) {
+        console.error('Erro ao buscar dados do gráfico por número/tipo:', error);
+    } finally {
+        loadingNumberTypeChart.value = false;
+    }
+};
+
 watch(chartPeriod, () => {
     fetchChartData();
+    fetchNumberTypeChart();
 });
 
 const fetchStats = async () => {
@@ -208,6 +225,7 @@ onMounted(() => {
     checkWhapiStatus();
     // Não sincronizar automaticamente; dados serão atualizados via cron e leitura do banco
     fetchStats();
+    fetchNumberTypeChart();
 });
 
 watch(selectedConnectionId, async (newVal) => {
@@ -442,6 +460,56 @@ watch(selectedConnectionId, async (newVal) => {
                                         {{ checkingWhapi ? '...' : 'Testar' }}
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm lg:col-span-3">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Envios por Número e Tipo</h3>
+                            <div class="flex items-center gap-2">
+                                <select v-model="chartPeriod" :disabled="loadingNumberTypeChart" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                                    <option :value="7">Últimos 7 dias</option>
+                                    <option :value="15">Últimos 15 dias</option>
+                                    <option :value="30">Últimos 30 dias</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="h-64 flex items-end justify-between gap-2 px-2 relative overflow-visible" :class="{ 'opacity-50': loadingNumberTypeChart }">
+                            <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                                <div class="border-t border-gray-900 w-full"></div>
+                            </div>
+                            <div v-for="(label, index) in numberTypeChartData.labels" :key="index" class="flex flex-col items-center flex-1 group h-full justify-end">
+                                <div class="w-full rounded-t-lg relative flex flex-col justify-end overflow-hidden transition-all duration-300 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50" style="height: 100%;">
+                                    <template v-for="(dataset, dIndex) in numberTypeChartData.datasets" :key="dIndex">
+                                        <div 
+                                            v-if="dataset.data[index] > 0"
+                                            :style="{ height: ((dataset.data[index] / Math.max(1, numberTypeChartData.datasets.reduce((m, ds) => Math.max(m, ds.data[index] || 0), 0))) * 100) + '%', backgroundColor: dataset.backgroundColor }"
+                                            class="w-full transition-all duration-500 relative group/segment outline outline-1 outline-white/70 dark:outline-gray-900/40"
+                                            :title="dataset.label + ': ' + dataset.data[index]"
+                                        >
+                                            <div class="opacity-0 group-hover/segment:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[11px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20 shadow">
+                                                {{ dataset.label }}: {{ dataset.data[index] }}
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                <span class="text-[10px] text-gray-400 mt-2 font-medium rotate-45 sm:rotate-0 origin-left">{{ label }}</span>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex flex-wrap gap-3 justify-center">
+                            <div v-for="(dataset, i) in numberTypeChartData.datasets" :key="i" class="flex items-center">
+                                <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: dataset.backgroundColor }"></span>
+                                <span class="text-xs text-gray-600 dark:text-gray-400">{{ dataset.label }}</span>
+                            </div>
+                            <div v-if="numberTypeChartData.datasets.length === 0" class="text-xs text-gray-400 italic">
+                                Nenhum envio registrado no período.
                             </div>
                         </div>
                     </div>
