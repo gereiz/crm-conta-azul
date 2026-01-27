@@ -236,6 +236,72 @@ watch(selectedConnectionId, async (newVal) => {
         await fetchStats();
     }
 });
+const donutNumbers = computed(() => {
+    const datasets = numberTypeChartData.value?.datasets || [];
+    const map = new Map();
+    for (const ds of datasets) {
+        const label = ds.label || '';
+        const parts = label.split(' | ');
+        const numberLabel = parts[0] || 'Número';
+        const typeLabel = parts[1] || 'default';
+        const total = (ds.data || []).reduce((sum, v) => sum + Number(v || 0), 0);
+        const color = ds.backgroundColor || '#6366F1';
+        if (!map.has(numberLabel)) {
+            map.set(numberLabel, { label: numberLabel, total: 0, segments: [] });
+        }
+        const obj = map.get(numberLabel);
+        obj.total += total;
+        const existing = obj.segments.find(s => s.label === typeLabel);
+        if (existing) {
+            existing.value += total;
+        } else {
+            obj.segments.push({ label: typeLabel, value: total, color });
+        }
+    }
+    const result = Array.from(map.values()).map(n => {
+        const total = n.total || 0;
+        let acc = 0;
+        const parts = n.segments
+            .filter(s => s.value > 0)
+            .map(s => {
+                const pct = total > 0 ? (s.value / total) * 100 : 0;
+                const start = acc;
+                const end = acc + pct;
+                acc = end;
+                return `${s.color} ${start}% ${end}%`;
+            });
+        const gradient = parts.length > 0 ? `conic-gradient(${parts.join(', ')})` : 'conic-gradient(#e5e7eb 0% 100%)';
+        return { ...n, gradient };
+    });
+    return result;
+});
+const donutTotal = computed(() => {
+    const datasets = numberTypeChartData.value?.datasets || [];
+    const typeMap = new Map();
+    for (const ds of datasets) {
+        const label = ds.label || '';
+        const parts = label.split(' | ');
+        const typeLabel = parts[1] || 'default';
+        const total = (ds.data || []).reduce((sum, v) => sum + Number(v || 0), 0);
+        const color = ds.backgroundColor || '#6366F1';
+        if (!typeMap.has(typeLabel)) {
+            typeMap.set(typeLabel, { label: typeLabel, value: 0, color });
+        }
+        typeMap.get(typeLabel).value += total;
+    }
+    const segments = Array.from(typeMap.values()).filter(s => s.value > 0);
+    const totalValue = segments.reduce((s, seg) => s + seg.value, 0);
+    let acc = 0;
+    const parts = segments.map(seg => {
+        const pct = totalValue > 0 ? (seg.value / totalValue) * 100 : 0;
+        const start = acc;
+        const end = acc + pct;
+        acc = end;
+        return `${seg.color} ${start}% ${end}%`;
+    });
+    const gradient = parts.length > 0 ? `conic-gradient(${parts.join(', ')})` : 'conic-gradient(#e5e7eb 0% 100%)';
+    return { label: 'Total por Tipo', total: totalValue, segments, gradient };
+});
 </script>
 
 <template>
@@ -477,39 +543,43 @@ watch(selectedConnectionId, async (newVal) => {
                                 </select>
                             </div>
                         </div>
-                        <div class="h-64 flex items-end justify-between gap-2 px-2 relative overflow-visible" :class="{ 'opacity-50': loadingNumberTypeChart }">
-                            <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
-                                <div class="border-t border-gray-900 w-full"></div>
-                                <div class="border-t border-gray-900 w-full"></div>
-                                <div class="border-t border-gray-900 w-full"></div>
-                                <div class="border-t border-gray-900 w-full"></div>
-                                <div class="border-t border-gray-900 w-full"></div>
+                        <div :class="{ 'opacity-50': loadingNumberTypeChart }">
+                            <div v-if="donutNumbers.length === 0" class="text-xs text-gray-400 italic px-2">
+                                Nenhum envio registrado no período.
                             </div>
-                            <div v-for="(label, index) in numberTypeChartData.labels" :key="index" class="flex flex-col items-center flex-1 group h-full justify-end">
-                                <div class="w-full rounded-t-lg relative flex flex-col justify-end overflow-hidden transition-all duration-300 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50" style="height: 100%;">
-                                    <template v-for="(dataset, dIndex) in numberTypeChartData.datasets" :key="dIndex">
-                                        <div 
-                                            v-if="dataset.data[index] > 0"
-                                            :style="{ height: ((dataset.data[index] / Math.max(1, numberTypeChartData.datasets.reduce((m, ds) => Math.max(m, ds.data[index] || 0), 0))) * 100) + '%', backgroundColor: dataset.backgroundColor }"
-                                            class="w-full transition-all duration-500 relative group/segment outline outline-1 outline-white/70 dark:outline-gray-900/40"
-                                            :title="dataset.label + ': ' + dataset.data[index]"
-                                        >
-                                            <div class="opacity-0 group-hover/segment:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[11px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20 shadow">
-                                                {{ dataset.label }}: {{ dataset.data[index] }}
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div v-for="n in donutNumbers" :key="n.label" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+                                    <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-4">{{ n.label }}</h4>
+                                    <div class="flex justify-center">
+                                        <div class="relative w-48 h-48 rounded-full" :style="{ background: n.gradient }">
+                                            <div class="absolute inset-6 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700">
+                                                <span class="text-2xl font-bold text-gray-900 dark:text-white">{{ n.total }}</span>
                                             </div>
                                         </div>
-                                    </template>
+                                    </div>
+                                    <div class="mt-6 flex flex-wrap gap-3 justify-center">
+                                        <div v-for="(s, idx) in n.segments" :key="idx" class="flex items-center">
+                                            <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: s.color }"></span>
+                                            <span class="text-xs text-gray-600 dark:text-gray-400">{{ s.label }}: {{ s.value }}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <span class="text-[10px] text-gray-400 mt-2 font-medium rotate-45 sm:rotate-0 origin-left">{{ label }}</span>
                             </div>
-                        </div>
-                        <div class="mt-6 flex flex-wrap gap-3 justify-center">
-                            <div v-for="(dataset, i) in numberTypeChartData.datasets" :key="i" class="flex items-center">
-                                <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: dataset.backgroundColor }"></span>
-                                <span class="text-xs text-gray-600 dark:text-gray-400">{{ dataset.label }}</span>
-                            </div>
-                            <div v-if="numberTypeChartData.datasets.length === 0" class="text-xs text-gray-400 italic">
-                                Nenhum envio registrado no período.
+                            <div class="mt-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+                                <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-4">{{ donutTotal.label }}</h4>
+                                <div class="flex justify-center">
+                                    <div class="relative w-56 h-56 rounded-full" :style="{ background: donutTotal.gradient }">
+                                        <div class="absolute inset-7 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700">
+                                            <span class="text-3xl font-bold text-gray-900 dark:text-white">{{ donutTotal.total }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-6 flex flex-wrap gap-3 justify-center">
+                                    <div v-for="(s, idx) in donutTotal.segments" :key="'t'+idx" class="flex items-center">
+                                        <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: s.color }"></span>
+                                        <span class="text-xs text-gray-600 dark:text-gray-400">{{ s.label }}: {{ s.value }}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
