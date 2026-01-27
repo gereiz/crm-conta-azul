@@ -25,7 +25,7 @@ class MessageCronService
         $this->restrictionService = $restrictionService;
     }
 
-    public function processCron(MessageCron $cron)
+    public function processCron(MessageCron $cron, bool $forceRun = false)
     {
         Log::info("Processando cron: {$cron->name} (ID: {$cron->id}, Tipo: {$cron->type})");
 
@@ -39,7 +39,7 @@ class MessageCronService
 
         try {
             // Verifica se deve rodar HOJE com base nas regras do próprio CRON
-            if (!$this->shouldRunToday($cron)) {
+            if (!$forceRun && !$this->shouldRunToday($cron)) {
                 Log::info("Cron {$cron->id} ignorado: Regras de agendamento não satisfeitas para hoje.");
                 $stats['skipped'] = 0;
                 return $stats;
@@ -141,9 +141,15 @@ class MessageCronService
         $query->where(function ($q) {
             $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
         });
-        // Garantir apenas faturas de BOLETO
-        $query->whereNotNull('payment_type')
-              ->where('payment_type', 'LIKE', '%BOLETO%');
+        // Preferir boletos: aceita quando payment_type contém 'BOLETO' OU quando há link_boleto presente
+        $query->where(function ($q) {
+            $q->where(function ($qq) {
+                $qq->whereNotNull('payment_type')
+                   ->where('payment_type', 'LIKE', '%BOLETO%');
+            })->orWhere(function ($qq) {
+                $qq->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
+            });
+        });
 
         $invoices = $query->with('cliente')->get();
 

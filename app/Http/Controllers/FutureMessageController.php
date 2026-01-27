@@ -57,7 +57,14 @@ class FutureMessageController extends Controller
         }
 
         if ($date) {
-            $query->whereDate('scheduled_send_date', $date);
+            try {
+                $start = \Carbon\Carbon::parse($date)->startOfDay();
+                $end = \Carbon\Carbon::parse($date)->endOfDay();
+                $query->whereBetween('scheduled_send_date', [$start, $end]);
+            } catch (\Exception $e) {
+                // Fallback seguro caso o parse falhe
+                $query->whereDate('scheduled_send_date', $date);
+            }
         } else {
             // Default: Mostra apenas futuros (> hoje), pois envios de hoje são processados pela cron
             // Ajustado para > hoje (amanhã em diante)

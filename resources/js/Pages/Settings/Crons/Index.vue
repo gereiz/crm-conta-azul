@@ -272,7 +272,6 @@ onMounted(async () => {
                                     <tr>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
                                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[140px]">Tipo</th>
-                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[160px]">Template</th>
                                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[180px]">Whatsapp</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Horário</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Regra/Período</th>
@@ -292,14 +291,6 @@ onMounted(async () => {
                                         <td class="px-4 py-4 whitespace-nowrap w-[140px]">
                                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 truncate" :title="getTypeLabel(cron.type)">
                                                 {{ getTypeLabel(cron.type) }}
-                                            </span>
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap w-[160px]">
-                                            <span
-                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 truncate max-w-[150px]"
-                                                :title="cron.message_template?.name || '-'"
-                                            >
-                                                {{ cron.message_template?.name || '-' }}
                                             </span>
                                         </td>
                                         <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 w-[180px]">

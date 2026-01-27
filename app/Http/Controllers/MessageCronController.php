@@ -134,7 +134,8 @@ class MessageCronController extends Controller
         $this->authorize('update', $cron);
 
         $start = now();
-        $stats = $service->processCron($cron);
+        // Força execução manual ignorando regra de agendamento do dia
+        $stats = $service->processCron($cron, true);
         $logs = \App\Models\WhatsappMessageLog::where('message_cron_id', $cron->id)
             ->where('sent_at', '>=', $start)
             ->orderBy('sent_at', 'desc')
