@@ -56,6 +56,10 @@ const getPeriodLabel = (cron) => {
     if (cron.type === 'due_date') {
         return `${cron.days_before_due || 0} dias antes`;
     }
+    if (cron.type === 'boleto') {
+        const days = cron.days_before_due ?? cron.period_value ?? 0;
+        return `${days} dias antes`;
+    }
 
     if (!cron.period_value) return '-';
     
