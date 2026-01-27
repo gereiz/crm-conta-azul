@@ -125,6 +125,7 @@ const syncFinancials = async () => {
 const chartPeriod = ref(7);
 const loadingChart = ref(false);
 const localChartData = ref(props.chartData || { labels: [], datasets: [] });
+const chartViewMode = ref('stacked');
 
 // Se os dados vierem do backend via props, inicializa localChartData
 watch(() => props.chartData, (newVal) => {
@@ -159,6 +160,16 @@ const getSegmentHeight = (index, dataset) => {
     return `${Math.max(pct, minPct)}%`;
 };
 const getTotal = (index) => totalsByDay.value?.[index] || 0;
+const usedDatasets = computed(() => {
+    if (chartViewMode.value === 'total') {
+        return [{
+            label: 'Total',
+            data: totalsByDay.value,
+            backgroundColor: '#3B82F6',
+        }];
+    }
+    return localChartData.value?.datasets || [];
+});
 
 const fetchChartData = async () => {
     loadingChart.value = true;
@@ -341,15 +352,21 @@ watch(selectedConnectionId, async (newVal) => {
                 </div>
 
                 <!-- Recent Activity / Charts Placeholder -->
-                <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+                <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm lg:col-span-2">
                         <div class="flex items-center justify-between mb-6">
                             <h3 class="text-lg font-bold text-gray-900 dark:text-white">Envios</h3>
-                            <select v-model="chartPeriod" :disabled="loadingChart" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
-                                <option :value="7">Últimos 7 dias</option>
-                                <option :value="15">Últimos 15 dias</option>
-                                <option :value="30">Últimos 30 dias</option>
-                            </select>
+                            <div class="flex items-center gap-2">
+                                <select v-model="chartViewMode" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                                    <option value="stacked">Empresas</option>
+                                    <option value="total">Total</option>
+                                </select>
+                                <select v-model="chartPeriod" :disabled="loadingChart" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                                    <option :value="7">Últimos 7 dias</option>
+                                    <option :value="15">Últimos 15 dias</option>
+                                    <option :value="30">Últimos 30 dias</option>
+                                </select>
+                            </div>
                         </div>
                         
                         <!-- Stacked Bar Chart (CSS Pure) -->
@@ -367,7 +384,7 @@ watch(selectedConnectionId, async (newVal) => {
                                 <div class="w-full rounded-t-lg relative flex flex-col justify-end overflow-hidden transition-all duration-300 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50" style="height: 100%;">
                                     
                                     <!-- Stacked Segments -->
-                                    <template v-for="(dataset, dIndex) in localChartData.datasets" :key="dIndex">
+                                    <template v-for="(dataset, dIndex) in usedDatasets" :key="dIndex">
                                         <div 
                                             v-if="dataset.data[index] > 0"
                                             :style="{ height: getSegmentHeight(index, dataset), backgroundColor: dataset.backgroundColor }"
@@ -383,7 +400,7 @@ watch(selectedConnectionId, async (newVal) => {
 
                                     <div class="opacity-0 group-hover:opacity-100 absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-900 text-white text-[11px] py-2 px-3 rounded shadow-lg pointer-events-none z-30 w-max max-w-[260px]">
                                         <div class="font-semibold text-center mb-1">Total: {{ getTotal(index) }}</div>
-                                        <div v-for="item in breakdownByDay[index].slice(0,6)" :key="item.label" class="flex items-center justify-between gap-2">
+                                        <div v-if="chartViewMode === 'stacked'" v-for="item in breakdownByDay[index].slice(0,6)" :key="item.label" class="flex items-center justify-between gap-2">
                                             <span class="flex items-center"><span class="w-2 h-2 rounded-full mr-1" :style="{ backgroundColor: item.color }"></span>{{ item.label }}</span>
                                             <span>{{ item.value }}</span>
                                         </div>
@@ -395,7 +412,7 @@ watch(selectedConnectionId, async (newVal) => {
                         
                         <!-- Legend -->
                         <div class="mt-6 flex flex-wrap gap-3 justify-center">
-                            <div v-for="(dataset, i) in localChartData.datasets" :key="i" class="flex items-center">
+                            <div v-for="(dataset, i) in usedDatasets" :key="i" class="flex items-center">
                                 <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: dataset.backgroundColor }"></span>
                                 <span class="text-xs text-gray-600 dark:text-gray-400">{{ dataset.label }}</span>
                             </div>
@@ -405,7 +422,7 @@ watch(selectedConnectionId, async (newVal) => {
                         </div>
                     </div>
                     
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm lg:col-span-1">
                         <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Status do Sistema</h3>
                         <div class="space-y-4">
                             <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
