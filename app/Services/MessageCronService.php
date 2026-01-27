@@ -197,8 +197,8 @@ class MessageCronService
 
         $query = Invoice::whereDate('data_vencimento', $targetDate)
             ->where(function ($q) {
-                $q->whereNull('status')
-                  ->orWhereNotIn('status', ['PAID', 'PAGO', 'RECEIVED', 'BAIXADO', 'LIQUIDADO']);
+                $q->whereIn('status', ['PENDING', 'ABERTO'])
+                  ->orWhereNull('status');
             })
             ->where(function ($q) {
                 $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
