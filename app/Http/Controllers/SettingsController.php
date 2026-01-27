@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Cliente;
 use App\Models\ContaAzulConnection;
+use App\Models\MessageCron;
 use App\Models\SystemSetting;
 use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
 use App\Services\ContaAzulService;
+use App\Services\MessageCronService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -100,6 +103,46 @@ class SettingsController extends Controller
         $settings->contaazul_cron_enabled = $enabled;
         $settings->save();
         return response()->json(['success' => true, 'enabled' => $enabled]);
+    }
+
+    public function delayedCronStatus()
+    {
+        $now = Carbon::now();
+        $today = $now->toDateString();
+        $pendingQuery = MessageCron::where('is_active', true)
+            ->where('run_when_delayed', true)
+            ->where('send_time', '<=', $now->format('H:i'))
+            ->where(function ($q) use ($today) {
+                $q->whereNull('last_run_at')->orWhereDate('last_run_at', '<', $today);
+            });
+        $pendingCount = $pendingQuery->count();
+        $next = $pendingQuery->orderBy('send_time', 'asc')->first();
+        $nextExpectedRunAt = $next ? Carbon::parse($today . ' ' . $next->send_time)->toDateTimeString() : null;
+        $lastProcessedAt = MessageCron::whereNotNull('last_run_at')->max('last_run_at');
+        return response()->json([
+            'pending_count' => $pendingCount,
+            'next_expected_run_at' => $nextExpectedRunAt,
+            'last_processed_at' => $lastProcessedAt ? Carbon::parse($lastProcessedAt)->toDateTimeString() : null,
+        ]);
+    }
+
+    public function processNextDelayedCron(MessageCronService $service)
+    {
+        $now = Carbon::now();
+        $today = $now->toDateString();
+        $cron = MessageCron::where('is_active', true)
+            ->where('run_when_delayed', true)
+            ->where('send_time', '<=', $now->format('H:i'))
+            ->where(function ($q) use ($today) {
+                $q->whereNull('last_run_at')->orWhereDate('last_run_at', '<', $today);
+            })
+            ->orderBy('send_time', 'asc')
+            ->first();
+        if (! $cron) {
+            return response()->json(['success' => false, 'error' => 'Nenhuma automação atrasada para processar.']);
+        }
+        $service->processCron($cron, true);
+        return response()->json(['success' => true, 'cron_id' => $cron->id]);
     }
 
     public function systemSave(Request $request)
