@@ -39,6 +39,7 @@ class SettingsController extends Controller
     public function runArtisanCommand(Request $request)
     {
         $command = $request->input('command');
+        $connectionId = $request->input('connection_id');
         $allowedCommands = [
             'message:calculate-future' => 'Cálculo de Envios Futuros',
             'contaazul:sync-stale' => 'Sincronização de Dados Obsoletos',
@@ -50,7 +51,11 @@ class SettingsController extends Controller
         }
 
         try {
-            \Illuminate\Support\Facades\Artisan::call($command);
+            if ($command === 'message:calculate-future' && $connectionId) {
+                \Illuminate\Support\Facades\Artisan::call($command, ['connection_id' => $connectionId]);
+            } else {
+                \Illuminate\Support\Facades\Artisan::call($command);
+            }
             $output = \Illuminate\Support\Facades\Artisan::output();
             return response()->json(['success' => true, 'output' => $output]);
         } catch (\Exception $e) {
@@ -286,6 +291,8 @@ class SettingsController extends Controller
                 $clientsData = [];
                 if (isset($response['items'])) {
                     $clientsData = $response['items'];
+                } elseif (isset($response['itens'])) {
+                    $clientsData = $response['itens'];
                 } elseif (is_array($response)) {
                     $clientsData = $response;
                 }
@@ -437,6 +444,8 @@ class SettingsController extends Controller
                     $clientsData = [];
                     if (isset($response['items'])) {
                         $clientsData = $response['items'];
+                    } elseif (isset($response['itens'])) {
+                        $clientsData = $response['itens'];
                     } elseif (is_array($response)) {
                         $clientsData = $response;
                     }

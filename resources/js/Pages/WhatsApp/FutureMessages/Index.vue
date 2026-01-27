@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import Pagination from '@/Components/Pagination.vue';
+import axios from 'axios';
 
 const props = defineProps({
     schedules: Object,
@@ -31,6 +32,28 @@ const clearFilters = () => {
         date: '',
     };
     filter();
+};
+
+const recalculating = ref(false);
+const recalculateFuture = async () => {
+    recalculating.value = true;
+    try {
+        const payload = { command: 'message:calculate-future' };
+        if (form.value.connection_id) {
+            payload.connection_id = form.value.connection_id;
+        }
+        const { data } = await axios.post(route('cron.run-command'), payload);
+        if (data.success) {
+            alert('Cálculo de Envios Futuros executado com sucesso.');
+            router.reload({ only: ['schedules'] });
+        } else {
+            alert('Erro ao executar: ' + (data.error || 'Falha desconhecida'));
+        }
+    } catch (e) {
+        alert('Erro na requisição: ' + (e.response?.data?.error || e.message));
+    } finally {
+        recalculating.value = false;
+    }
 };
 
 const formatDate = (date) => {
@@ -128,6 +151,9 @@ const statusClass = (status) => {
                         <div class="md:col-span-2 flex gap-2">
                             <PrimaryButton @click="filter" class="w-full justify-center">Filtrar</PrimaryButton>
                             <button @click="clearFilters" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">Limpar</button>
+                            <button @click="recalculateFuture" :disabled="recalculating" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600">
+                                Recalcular Envios Futuros
+                            </button>
                         </div>
                     </div>
                 </div>
