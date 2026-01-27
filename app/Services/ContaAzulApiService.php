@@ -241,6 +241,20 @@ class ContaAzulApiService
             $clienteCaId = $item['cliente']['id'] ?? null;
             $clienteLocalId = $clienteCaId ? ($clientMap[$clienteCaId] ?? null) : null;
             
+            // Proteção anti-duplicação entre empresas:
+            // Se já existe uma fatura com o mesmo CA ID em outra conexão, não regravar aqui.
+            try {
+                $existsInOtherConn = \App\Models\Invoice::where('ca_id', $caId)
+                    ->where('connection_id', '!=', $connection->id)
+                    ->exists();
+                if ($existsInOtherConn) {
+                    \Illuminate\Support\Facades\Log::warning("Dedup: fatura CA {$caId} já existente em outra conexão. Ignorando na conexão {$connection->id}.");
+                    continue;
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error("Falha na verificação de duplicidade de fatura: " . $e->getMessage());
+            }
+            
             // Optimization: Only fetch details if we don't have a link or if it's a new invoice
             // Note: If status changes (e.g. pending -> overdue), the link usually remains valid, but let's be safe.
             // If we have a link and it's not empty, we skip the detail request to save time.

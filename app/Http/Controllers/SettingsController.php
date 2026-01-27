@@ -343,6 +343,41 @@ class SettingsController extends Controller
                         $state = $primaryAddress['estado'] ?? null;
                     }
 
+                    // Proteção anti-duplicação entre empresas:
+                    // Se já existe um cliente IDÊNTICO (mesmo CPF/CNPJ) em outra conexão, não duplicar aqui.
+                    // Também protege por e-mail+telefone quando CPF/CNPJ estiver ausente.
+                    try {
+                        $existsInOther = false;
+                        if (!empty($cpfCnpj)) {
+                            $existsInOther = \App\Models\Cliente::where('cpf_cnpj', $cpfCnpj)
+                                ->where('connection_id', '!=', $connection->id)
+                                ->exists();
+                        } else {
+                            $email = $caClient['email'] ?? null;
+                            $normalizedPhone = preg_replace('/\D+/', '', (string) ($mobilePhone ?? $phone ?? ''));
+                            if (!empty($email) && !empty($normalizedPhone)) {
+                                $existsInOther = \App\Models\Cliente::where('connection_id', '!=', $connection->id)
+                                    ->where(function($q) use ($email, $normalizedPhone) {
+                                        $q->where('email', $email)
+                                          ->where(function($qq) use ($normalizedPhone) {
+                                              $qq->whereRaw("REGEXP_REPLACE(COALESCE(mobile_phone, phone, ''), '[^0-9]', '') = ?", [$normalizedPhone]);
+                                          });
+                                    })->exists();
+                            }
+                        }
+                        if ($existsInOther) {
+                            Log::warning("Dedup: cliente potencialmente duplicado detectado e ignorado na conexão {$connection->id}.", [
+                                'ca_client_id' => $caClient['id'] ?? null,
+                                'cpf_cnpj' => $cpfCnpj,
+                                'email' => $caClient['email'] ?? null,
+                                'phone' => $mobilePhone ?? $phone,
+                            ]);
+                            continue;
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Falha na verificação de duplicidade de cliente: " . $e->getMessage());
+                    }
+
                     Cliente::updateOrCreate(
                         ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
                         [
