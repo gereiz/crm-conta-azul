@@ -39,6 +39,10 @@ class MessageCron extends Model
         'last_run_at' => 'datetime',
         'day_of_month' => 'array',
         'day_of_week' => 'array',
+        'days_before_due' => 'integer',
+        'days_after_due' => 'integer',
+        'period_value' => 'integer',
+        'interval_days' => 'integer',
     ];
 
     public function messageTemplate()

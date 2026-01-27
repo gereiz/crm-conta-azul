@@ -47,10 +47,10 @@ const form = useForm({
     exclude_weekends: props.cron?.exclude_weekends ?? false,
 
     // Type specific
-    period_value: props.cron?.period_value ?? 30,
+    period_value: props.cron?.period_value ?? 10,
     period_unit: props.cron?.period_unit ?? 'days',
-    days_before_due: props.cron?.days_before_due ?? 3,
-    days_after_due: props.cron?.days_after_due || 5,
+    days_before_due: props.cron?.days_before_due ?? 10,
+    days_after_due: props.cron?.days_after_due ?? 1,
     limit_link_preview: props.cron?.limit_link_preview ?? false,
     disable_link_preview: props.cron?.disable_link_preview ?? false,
     run_when_delayed: props.cron?.run_when_delayed ?? false,

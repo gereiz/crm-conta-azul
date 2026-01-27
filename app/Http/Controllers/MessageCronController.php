@@ -120,7 +120,7 @@ class MessageCronController extends Controller
 
         $cron->update($validated);
 
-        return redirect()->route('settings.crons.index')->with('success', 'Automação atualizada com sucesso!');
+        return redirect()->route('settings.crons.index')->with('success', "Automação '{$cron->name}' atualizada com sucesso!");
     }
 
     public function destroy(MessageCron $cron)
