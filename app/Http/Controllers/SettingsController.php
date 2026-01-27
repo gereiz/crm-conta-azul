@@ -39,7 +39,6 @@ class SettingsController extends Controller
     public function runArtisanCommand(Request $request)
     {
         $command = $request->input('command');
-        $connectionId = $request->input('connection_id');
         $allowedCommands = [
             'message:calculate-future' => 'Cálculo de Envios Futuros',
             'contaazul:sync-stale' => 'Sincronização de Dados Obsoletos',
@@ -51,11 +50,7 @@ class SettingsController extends Controller
         }
 
         try {
-            if ($command === 'message:calculate-future' && $connectionId) {
-                \Illuminate\Support\Facades\Artisan::call($command, ['connection_id' => $connectionId]);
-            } else {
-                \Illuminate\Support\Facades\Artisan::call($command);
-            }
+            \Illuminate\Support\Facades\Artisan::call($command);
             $output = \Illuminate\Support\Facades\Artisan::output();
             return response()->json(['success' => true, 'output' => $output]);
         } catch (\Exception $e) {
@@ -90,33 +85,6 @@ class SettingsController extends Controller
         $settings = SystemSetting::latest()->first();
         $enabled = $settings ? (bool) ($settings->contaazul_cron_enabled ?? true) : true;
         return response()->json(['enabled' => $enabled]);
-    }
-
-    public function delayedCronStatus()
-    {
-        $pending = \App\Models\DelayedCronQueue::whereNull('processed_at')
-            ->orderBy('expected_run_at', 'asc')
-            ->get(['id', 'message_cron_id', 'expected_run_at']);
-        $next = $pending->first();
-        $last = \App\Models\DelayedCronQueue::whereNotNull('processed_at')
-            ->orderBy('processed_at', 'desc')
-            ->first(['processed_at']);
-        return response()->json([
-            'pending_count' => $pending->count(),
-            'next_expected_run_at' => $next?->expected_run_at?->toDateTimeString(),
-            'last_processed_at' => $last?->processed_at?->toDateTimeString(),
-        ]);
-    }
-
-    public function processNextDelayedCron(Request $request)
-    {
-        try {
-            \Illuminate\Support\Facades\Artisan::call('message:process-delayed-crons', ['--force' => true]);
-            $output = \Illuminate\Support\Facades\Artisan::output();
-            return response()->json(['success' => true, 'output' => $output]);
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
-        }
     }
 
     public function contaAzulCronToggle(Request $request)
@@ -291,35 +259,15 @@ class SettingsController extends Controller
             }
 
             $page = 1;
-            $size = 100; // Aumentado para performance
+            $size = 50; // Aumentado para performance
             $hasMore = true;
             $syncedCount = 0;
 
-            // Reabilitando sincronização de clientes conforme solicitado pelo usuário.
-            // O usuário relatou que funcionava anteriormente.
-            // Se o token tiver permissão parcial ou se o erro 401 for intermitente, isso tentará buscar.
-            
             while ($hasMore) {
-                try {
-                    $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
-                } catch (\Exception $e) {
-                    Log::warning("Erro ao buscar página {$page} de clientes: " . $e->getMessage());
-                    // Se falhar a primeira página com 401, provavelmente é permissão. Paramos.
-                    if ($page === 1 && str_contains($e->getMessage(), '401')) {
-                        $hasMore = false;
-                        break;
-                    }
-                    // Se for outro erro, tentamos continuar ou parar dependendo da lógica desejada.
-                    // Aqui vamos assumir que erro de API para o loop.
-                    $hasMore = false;
-                    break;
-                }
-
+                $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
                 $clientsData = [];
                 if (isset($response['items'])) {
                     $clientsData = $response['items'];
-                } elseif (isset($response['itens'])) {
-                    $clientsData = $response['itens'];
                 } elseif (is_array($response)) {
                     $clientsData = $response;
                 }
@@ -365,7 +313,6 @@ class SettingsController extends Controller
                             'person_type' => $caClient['tipo_pessoa'] ?? null,
                             'city' => $city,
                             'state' => $state,
-                            'birthdate' => $caClient['data_nascimento'] ?? null,
                             // O updated_at será atualizado automaticamente, permitindo o pruning
                         ]
                     );
@@ -399,14 +346,7 @@ class SettingsController extends Controller
             }
 
             // Sincroniza faturas
-            // ATENÇÃO: Faturas também podem falhar se dependerem do escopo 'sales'.
-            // Vamos tentar, mas capturando erro específico para não parar tudo.
-            try {
-                $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
-            } catch (\Exception $e) {
-                Log::warning("Falha ao sincronizar faturas (provável falta de permissão 'sales'): " . $e->getMessage());
-                $invoicesCount = 0;
-            }
+            $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
             
             // Atualiza timestamp da conexão
             $connection->last_sync_at = now();
@@ -471,8 +411,6 @@ class SettingsController extends Controller
                     $clientsData = [];
                     if (isset($response['items'])) {
                         $clientsData = $response['items'];
-                    } elseif (isset($response['itens'])) {
-                        $clientsData = $response['itens'];
                     } elseif (is_array($response)) {
                         $clientsData = $response;
                     }
@@ -512,7 +450,6 @@ class SettingsController extends Controller
                                 'person_type' => $caClient['tipo_pessoa'] ?? null,
                                 'city' => $city,
                                 'state' => $state,
-                                'birthdate' => $caClient['data_nascimento'] ?? null,
                             ]
                         );
                         $syncedCount++;

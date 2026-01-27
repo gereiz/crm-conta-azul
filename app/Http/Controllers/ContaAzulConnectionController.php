@@ -64,34 +64,35 @@ class ContaAzulConnectionController extends Controller
         ]);
 
         // Tratamento para evitar falha de descriptografia se a chave mudou
-        // Usamos DB::table para ignorar os mutators/accessors do Eloquent que tentam descriptografar o valor antigo
-        // antes de salvar o novo.
+        // Se a APP_KEY mudou, o acesso aos atributos criptografados (como ca_client_secret)
+        // vai lançar exceção na leitura implícita que o Eloquent pode fazer antes do update.
+        // Mas o update sobrescreve. O problema é se o update tenta ler os valores antigos para comparar "dirty".
+        // Para garantir, forçamos a definição dos atributos sem leitura prévia se possível,
+        // ou capturamos a exceção para permitir a sobrescrita.
         
         try {
-            // Criptografa manualmente o novo secret para salvar direto no banco
-            $encryptedSecret = \Illuminate\Support\Facades\Crypt::encryptString($data['ca_client_secret']);
+            $connection->update($data);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            // Se falhou ao descriptografar, significa que os dados antigos estão corrompidos (chave mudou).
+            // Como estamos fornecendo TODOS os dados sensíveis novamente no request (secret, etc),
+            // podemos forçar a gravação direta ignorando o estado anterior.
             
-            \Illuminate\Support\Facades\DB::table('conta_azul_connections')
-                ->where('id', $connection->id)
-                ->update([
-                    'empresa_nome' => $data['empresa_nome'],
-                    'email_desenvolvedor' => $data['email_desenvolvedor'],
-                    'ca_client_id' => $data['ca_client_id'],
-                    'ca_client_secret' => $encryptedSecret,
-                    'ca_redirect_uri' => $data['ca_redirect_uri'],
-                    'is_active' => $data['is_active'],
-                    'access_token' => null,  // Reseta tokens pois a credencial mudou/foi corrigida
-                    'refresh_token' => null,
-                    'token_expires_at' => null,
-                    'updated_at' => now(),
-                ]);
-
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Erro ao atualizar conexão Conta Azul: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Erro ao salvar conexão: ' . $e->getMessage());
+            $connection->empresa_nome = $data['empresa_nome'];
+            $connection->email_desenvolvedor = $data['email_desenvolvedor'];
+            $connection->ca_client_id = $data['ca_client_id'];
+            $connection->ca_client_secret = $data['ca_client_secret']; // Será encriptado com a NOVA chave
+            $connection->ca_redirect_uri = $data['ca_redirect_uri'];
+            $connection->is_active = $data['is_active'];
+            
+            // Limpa tokens antigos pois eles também estarão corrompidos
+            $connection->access_token = null;
+            $connection->refresh_token = null;
+            $connection->token_expires_at = null;
+            
+            $connection->save();
         }
 
-        return redirect()->back()->with('success', 'Conexão atualizada com sucesso. Agora clique em Reconectar.');
+        return redirect()->back()->with('success', 'Conexão atualizada.');
     }
 
     public function destroy(ContaAzulConnection $connection)
@@ -112,12 +113,9 @@ class ContaAzulConnectionController extends Controller
     public function callback(Request $request, ContaAzulConnection $connection)
     {
         $state = $request->input('state');
-        
-        // Try specific state key first, then fallback to global
-        $savedState = session('contaazul_state_' . $connection->id) ?? session('contaazul_state');
+        $savedState = session('contaazul_state');
 
         if (!$state || $state !== $savedState) {
-            \Illuminate\Support\Facades\Log::warning("Callback ContaAzul: State mismatch for Conn {$connection->id}. Received: $state | Saved: $savedState");
             return redirect()->route('contaazul.connections.index')->with('error', 'Falha na autenticação Conta Azul (State inválido).');
         }
 
@@ -127,23 +125,7 @@ class ContaAzulConnectionController extends Controller
         }
 
         $code = $request->input('code');
-        $error = $request->input('error');
-        
-        if ($error) {
-            $errorDesc = $request->input('error_description');
-            \Illuminate\Support\Facades\Log::error("Erro no callback Conta Azul: $error - $errorDesc");
-            return redirect()->route('contaazul.connections.index')->with('error', "Falha na autorização: $errorDesc");
-        }
-
         $data = $this->auth->exchangeCode($connection, $code);
-
-        // DEBUG: Log do payload de token completo para ver escopos
-        \Illuminate\Support\Facades\Log::info("Token Payload Recebido (Conn {$connection->id}): " . json_encode($data));
-
-        if (isset($data['error']) && $data['error'] === 'decrypt_error') {
-            return redirect()->route('contaazul.connections.index')->with('error', 'A senha do aplicativo (Client Secret) está corrompida no banco. Por favor, edite a conexão e insira a senha novamente.');
-        }
-
         if (!$data || empty($data['access_token'])) {
             return redirect()->route('contaazul.connections.index')->with('error', 'Falha ao obter token da Conta Azul.');
         }

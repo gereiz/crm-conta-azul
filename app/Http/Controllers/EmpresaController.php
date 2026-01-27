@@ -22,24 +22,16 @@ class EmpresaController extends Controller
     {
         $search = $request->input('search');
         $size = $request->input('size', 10);
-        $sort = $request->input('sort', 'empresa_nome');
-        $direction = $request->input('direction', 'asc');
-
-        $validSorts = ['empresa_nome', 'is_active', 'last_sync_at', 'token_expires_at'];
-        if (!in_array($sort, $validSorts)) {
-            $sort = 'empresa_nome';
-        }
 
         $connections = ContaAzulConnection::query()
-            ->with('messageSettings') // Carrega as configurações de mensagem
             ->when($search, fn($q) => $q->where('empresa_nome', 'like', "%{$search}%"))
-            ->orderBy($sort, $direction)
+            ->orderBy('empresa_nome')
             ->paginate($size)
             ->withQueryString();
 
         return Inertia::render('Empresas/Index', [
             'connections' => $connections,
-            'filters' => $request->only(['search', 'size', 'sort', 'direction']),
+            'filters' => $request->only(['search', 'size']),
         ]);
     }
 

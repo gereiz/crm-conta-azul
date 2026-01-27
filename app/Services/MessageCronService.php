@@ -195,8 +195,14 @@ class MessageCronService
         $targetDate = Carbon::now()->addDays($daysBefore)->format('Y-m-d');
         $today = Carbon::today()->format('Y-m-d');
 
-        $query = Invoice::where('status', 'PENDING')
-            ->whereDate('data_vencimento', $targetDate);
+        $query = Invoice::whereDate('data_vencimento', $targetDate)
+            ->where(function ($q) {
+                $q->whereNull('status')
+                  ->orWhereNotIn('status', ['PAID', 'PAGO', 'RECEIVED', 'BAIXADO', 'LIQUIDADO']);
+            })
+            ->where(function ($q) {
+                $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
+            });
         
         if (!empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);

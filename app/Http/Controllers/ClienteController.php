@@ -116,9 +116,6 @@ class ClienteController extends Controller
         $connectionId = $request->input('connection_id');
 
         $query = \App\Models\Invoice::with('cliente');
-        
-        // Filtro fixo: Apenas faturas vencidas (data <= hoje)
-        $query->whereDate('data_vencimento', '<=', now()->toDateString());
 
         if ($startDate && $endDate) {
             $query->whereBetween('data_vencimento', [$startDate, $endDate]);

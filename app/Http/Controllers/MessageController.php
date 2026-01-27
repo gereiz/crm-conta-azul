@@ -161,7 +161,6 @@ class MessageController extends Controller
                     '@@invoicePastDueDates@@' => $dates,
                     '@@invoiceTotalValue@@' => number_format($totalValue, 2, ',', '.'),
                     '@@invoiceBoletoUrl@@' => $firstUrl ? ($firstUrl->link_boleto ?? '') : '',
-                    '@@invoiceUrl@@' => $firstUrl ? ($firstUrl->link_boleto ?? '') : '',
                     '@@invoiceBoletoUrls@@' => $allUrls,
                     '@@invoicePastDuePairs@@' => $pairs,
                     '@@invoiceDueDate@@' => $adjustedEarliest ? $adjustedEarliest->format('d/m/Y') : '',
