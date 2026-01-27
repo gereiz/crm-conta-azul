@@ -141,6 +141,9 @@ class MessageCronService
         $query->where(function ($q) {
             $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
         });
+        // Garantir apenas faturas de BOLETO
+        $query->whereNotNull('payment_type')
+              ->where('payment_type', 'LIKE', '%BOLETO%');
 
         $invoices = $query->with('cliente')->get();
 

@@ -90,6 +90,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/cron/conta-azul', [SettingsController::class, 'contaAzulCronStatus'])->name('cron.contaazul.status');
         Route::post('/cron/conta-azul', [SettingsController::class, 'contaAzulCronToggle'])->name('cron.contaazul.toggle');
         Route::post('/cron/run-command', [SettingsController::class, 'runArtisanCommand'])->name('cron.run-command');
+        Route::get('/cron/delayed/status', [SettingsController::class, 'delayedCronStatus'])->name('cron.delayed.status');
+        Route::post('/cron/delayed/process', [SettingsController::class, 'processNextDelayedCron'])->name('cron.delayed.process');
 
         // Mensagens Padrão
         Route::resource('templates', WhatsappTemplateController::class);

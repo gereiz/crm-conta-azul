@@ -108,6 +108,35 @@ const updateCronStatus = async () => {
     }
 };
 
+// Status de crons atrasadas
+const delayedStatus = ref({ pending_count: 0, next_expected_run_at: null, last_processed_at: null });
+const loadingDelayed = ref(false);
+const loadDelayedStatus = async () => {
+    loadingDelayed.value = true;
+    try {
+        const { data } = await axios.get(route('settings.cron.delayed.status'));
+        delayedStatus.value = data;
+    } catch (e) {
+        delayedStatus.value = { pending_count: 0, next_expected_run_at: null, last_processed_at: null };
+    } finally {
+        loadingDelayed.value = false;
+    }
+};
+const processNextDelayed = async () => {
+    if (!confirm('Processar imediatamente a próxima automação atrasada?')) return;
+    try {
+        const { data } = await axios.post(route('settings.cron.delayed.process'));
+        if (data.success) {
+            alert('Processamento iniciado/executado com sucesso.');
+            await loadDelayedStatus();
+        } else {
+            alert('Falha ao processar: ' + (data.error || 'Erro desconhecido'));
+        }
+    } catch (e) {
+        alert('Erro na requisição: ' + (e.response?.data?.error || e.message));
+    }
+};
+
 const runSystemCommand = async (command) => {
     if (!confirm('Deseja executar este comando manualmente?')) return;
     
@@ -130,6 +159,7 @@ onMounted(async () => {
     } catch (e) {
         cronEnabled.value = true;
     }
+    await loadDelayedStatus();
 });
 </script>
 
@@ -291,7 +321,7 @@ onMounted(async () => {
                         <!-- System Commands Section -->
                         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
                             <h4 class="text-md font-semibold mb-3 text-gray-800 dark:text-gray-200">Execução Manual de Tarefas do Sistema</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div class="p-3 bg-white dark:bg-gray-800 rounded shadow-sm border border-gray-100 dark:border-gray-700">
                                     <div class="font-medium text-sm mb-1">Cálculo de Envios Futuros</div>
                                     <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 h-8">
@@ -317,6 +347,24 @@ onMounted(async () => {
                                     </div>
                                     <button @click="runSystemCommand('contaazul:refresh-tokens')" class="w-full px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 rounded text-xs font-semibold transition-colors">
                                         Executar Agora
+                                    </button>
+                                </div>
+                                <div class="p-3 bg-white dark:bg-gray-800 rounded shadow-sm border border-gray-100 dark:border-gray-700">
+                                    <div class="font-medium text-sm mb-1">Fila de Crons Atrasadas</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                        <div class="flex items-center gap-2">
+                                            <span :class="[
+                                                'px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full',
+                                                (delayedStatus.pending_count||0) > 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                                            ]">
+                                                Pendentes: {{ delayedStatus.pending_count || 0 }}
+                                            </span>
+                                            <span class="text-xs text-gray-600 dark:text-gray-300">Próxima: {{ delayedStatus.next_expected_run_at ? formatDate(delayedStatus.next_expected_run_at) : '-' }}</span>
+                                        </div>
+                                        <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Última processada: {{ delayedStatus.last_processed_at ? formatDate(delayedStatus.last_processed_at) : '-' }}</div>
+                                    </div>
+                                    <button @click="processNextDelayed" class="w-full px-3 py-1.5 bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 rounded text-xs font-semibold transition-colors">
+                                        Processar Próxima Agora
                                     </button>
                                 </div>
                             </div>

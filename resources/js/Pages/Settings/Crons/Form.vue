@@ -53,6 +53,7 @@ const form = useForm({
     days_after_due: props.cron?.days_after_due || 5,
     limit_link_preview: props.cron?.limit_link_preview ?? false,
     disable_link_preview: props.cron?.disable_link_preview ?? false,
+    run_when_delayed: props.cron?.run_when_delayed ?? false,
 });
 
 const submit = () => {
@@ -241,6 +242,12 @@ watch(() => form.type, (newType) => {
                                 <input id="disable_link_preview" type="checkbox" v-model="form.disable_link_preview" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
                                 <label for="disable_link_preview" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Remover preview (links clicáveis sem esquema e instrução “copie e cole”)</label>
                             </div>
+                            <!-- Rodar mesmo em atraso -->
+                            <div class="flex items-center">
+                                <input id="run_when_delayed" type="checkbox" v-model="form.run_when_delayed" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                                <label for="run_when_delayed" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Rodar mesmo em atraso</label>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Quando ativo, se uma execução prevista (ex.: terça/quinta às 09:00) for perdida, será enfileirada e executada com espaçamento mínimo de 15 minutos entre automações.</p>
 
                             <!-- Conditional Fields -->
                             <div v-if="form.type === 'billing'" class="space-y-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">

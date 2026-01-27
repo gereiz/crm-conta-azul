@@ -69,6 +69,7 @@ class MessageCronController extends Controller
             'is_active' => 'boolean',
             'limit_link_preview' => 'boolean',
             'disable_link_preview' => 'boolean',
+            'run_when_delayed' => 'boolean',
         ]);
 
         $validated['created_by'] = Auth::id();
@@ -114,6 +115,7 @@ class MessageCronController extends Controller
             'is_active' => 'boolean',
             'limit_link_preview' => 'boolean',
             'disable_link_preview' => 'boolean',
+            'run_when_delayed' => 'boolean',
         ]);
 
         $cron->update($validated);

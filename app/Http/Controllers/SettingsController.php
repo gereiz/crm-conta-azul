@@ -92,6 +92,33 @@ class SettingsController extends Controller
         return response()->json(['enabled' => $enabled]);
     }
 
+    public function delayedCronStatus()
+    {
+        $pending = \App\Models\DelayedCronQueue::whereNull('processed_at')
+            ->orderBy('expected_run_at', 'asc')
+            ->get(['id', 'message_cron_id', 'expected_run_at']);
+        $next = $pending->first();
+        $last = \App\Models\DelayedCronQueue::whereNotNull('processed_at')
+            ->orderBy('processed_at', 'desc')
+            ->first(['processed_at']);
+        return response()->json([
+            'pending_count' => $pending->count(),
+            'next_expected_run_at' => $next?->expected_run_at?->toDateTimeString(),
+            'last_processed_at' => $last?->processed_at?->toDateTimeString(),
+        ]);
+    }
+
+    public function processNextDelayedCron(Request $request)
+    {
+        try {
+            \Illuminate\Support\Facades\Artisan::call('message:process-delayed-crons', ['--force' => true]);
+            $output = \Illuminate\Support\Facades\Artisan::output();
+            return response()->json(['success' => true, 'output' => $output]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
     public function contaAzulCronToggle(Request $request)
     {
         if (! $request->user() || ($request->user()->role ?? '') !== 'admin') {

@@ -26,6 +26,7 @@ class MessageCron extends Model
         'limit_link_preview',
         'disable_link_preview',
         'last_run_at',
+        'run_when_delayed',
         'created_by'
     ];
 
@@ -34,6 +35,7 @@ class MessageCron extends Model
         'exclude_weekends' => 'boolean',
         'limit_link_preview' => 'boolean',
         'disable_link_preview' => 'boolean',
+        'run_when_delayed' => 'boolean',
         'last_run_at' => 'datetime',
         'day_of_month' => 'array',
         'day_of_week' => 'array',

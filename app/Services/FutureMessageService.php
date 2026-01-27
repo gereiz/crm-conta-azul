@@ -226,7 +226,15 @@ class FutureMessageService
             
             // Verifica se já enviou mensagem de EMISSÃO para esta fatura
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
-                ->where('invoice_id', $invoice->id)
+                ->when($invoice->ca_id, function($q) use ($invoice) {
+                    // boleto_ids é JSON; checamos se contém o ca_id da fatura
+                    $q->whereJsonContains('boleto_ids', $invoice->ca_id)
+                      ->orWhereJsonContains('boleto_ids', (string) $invoice->ca_id);
+                }, function($q) use ($invoice) {
+                    // Fallback: sem ca_id, evita duplicar pelo cliente e tipo 'boleto'
+                    $q->where('cliente_id', $invoice->cliente_id)
+                      ->where('message_type', 'boleto');
+                })
                 ->exists();
 
             if ($alreadySent) continue;
@@ -313,6 +321,9 @@ class FutureMessageService
         if ($periodStart) {
             $query->where('data_vencimento', '>=', $periodStart);
         }
+        // Somente boletos para cobranças
+        $query->whereNotNull('payment_type')
+              ->where('payment_type', 'LIKE', '%BOLETO%');
 
         $invoices = $query->get();
         
