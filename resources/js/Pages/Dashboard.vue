@@ -131,6 +131,35 @@ watch(() => props.chartData, (newVal) => {
     if (newVal) localChartData.value = newVal;
 }, { immediate: true });
 
+const totalsByDay = computed(() => {
+    const labels = localChartData.value?.labels || [];
+    const datasets = localChartData.value?.datasets || [];
+    return labels.map((_, i) => datasets.reduce((sum, ds) => sum + (Number(ds?.data?.[i] || 0)), 0));
+});
+const maxTotal = computed(() => {
+    const t = totalsByDay.value;
+    return t.length ? Math.max(...t, 1) : 1;
+});
+const breakdownByDay = computed(() => {
+    const labels = localChartData.value?.labels || [];
+    const datasets = localChartData.value?.datasets || [];
+    return labels.map((_, i) => {
+        return datasets.map(ds => ({
+            label: ds.label,
+            value: Number(ds?.data?.[i] || 0),
+            color: ds.backgroundColor
+        })).filter(x => x.value > 0).sort((a, b) => b.value - a.value);
+    });
+});
+const getSegmentHeight = (index, dataset) => {
+    const v = Number(dataset?.data?.[index] || 0);
+    if (v <= 0) return '0%';
+    const pct = (v / maxTotal.value) * 100;
+    const minPct = 3;
+    return `${Math.max(pct, minPct)}%`;
+};
+const getTotal = (index) => totalsByDay.value?.[index] || 0;
+
 const fetchChartData = async () => {
     loadingChart.value = true;
     try {
@@ -324,7 +353,7 @@ watch(selectedConnectionId, async (newVal) => {
                         </div>
                         
                         <!-- Stacked Bar Chart (CSS Pure) -->
-                        <div class="h-64 flex items-end justify-between gap-2 px-2 relative" :class="{ 'opacity-50': loadingChart }">
+                        <div class="h-64 flex items-end justify-between gap-2 px-2 relative overflow-visible" :class="{ 'opacity-50': loadingChart }">
                             <!-- Y-Axis Lines (Background) -->
                             <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
                                 <div class="border-t border-gray-900 w-full"></div>
@@ -341,20 +370,23 @@ watch(selectedConnectionId, async (newVal) => {
                                     <template v-for="(dataset, dIndex) in localChartData.datasets" :key="dIndex">
                                         <div 
                                             v-if="dataset.data[index] > 0"
-                                            :style="{ height: (dataset.data[index] * 5) + '%', backgroundColor: dataset.backgroundColor }"
-                                            class="w-full transition-all duration-500 relative group/segment"
+                                            :style="{ height: getSegmentHeight(index, dataset), backgroundColor: dataset.backgroundColor }"
+                                            class="w-full transition-all duration-500 relative group/segment outline outline-1 outline-white/70 dark:outline-gray-900/40"
                                             :title="dataset.label + ': ' + dataset.data[index]"
                                         >
                                             <!-- Tooltip per segment -->
-                                            <div class="opacity-0 group-hover/segment:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[10px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20">
+                                            <div class="opacity-0 group-hover/segment:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[11px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20 shadow">
                                                 {{ dataset.label }}: {{ dataset.data[index] }}
                                             </div>
                                         </div>
                                     </template>
 
-                                    <!-- Total Tooltip (Top of bar) -->
-                                    <div class="opacity-0 group-hover:opacity-100 absolute top-0 left-1/2 -translate-x-1/2 mt-[-20px] text-gray-600 dark:text-gray-300 text-xs font-bold pointer-events-none z-10">
-                                        {{ localChartData.datasets.reduce((acc, ds) => acc + (ds.data[index] || 0), 0) }}
+                                    <div class="opacity-0 group-hover:opacity-100 absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-900 text-white text-[11px] py-2 px-3 rounded shadow-lg pointer-events-none z-30 w-max max-w-[260px]">
+                                        <div class="font-semibold text-center mb-1">Total: {{ getTotal(index) }}</div>
+                                        <div v-for="item in breakdownByDay[index].slice(0,6)" :key="item.label" class="flex items-center justify-between gap-2">
+                                            <span class="flex items-center"><span class="w-2 h-2 rounded-full mr-1" :style="{ backgroundColor: item.color }"></span>{{ item.label }}</span>
+                                            <span>{{ item.value }}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <span class="text-[10px] text-gray-400 mt-2 font-medium rotate-45 sm:rotate-0 origin-left">{{ label }}</span>
