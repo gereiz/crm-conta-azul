@@ -54,6 +54,13 @@ class MessageCronController extends Controller
             'whatsapp_number_id' => 'required|exists:whatsapp_numbers,id',
             'connection_id' => 'nullable|exists:conta_azul_connections,id',
             'type' => 'required|in:billing,due_date,boleto,birthday',
+            'rule_type' => 'required|in:daily,monthly_day,weekly_day,interval_days',
+            'day_of_month' => 'nullable|array',
+            'day_of_month.*' => 'integer|min:1|max:31',
+            'day_of_week' => 'nullable|array',
+            'day_of_week.*' => 'integer|min:0|max:6',
+            'interval_days' => 'nullable|integer|min:1',
+            'exclude_weekends' => 'boolean',
             'period_value' => 'nullable|integer',
             'period_unit' => 'nullable|in:days,months,years',
             'days_before_due' => 'nullable|integer',
@@ -62,6 +69,7 @@ class MessageCronController extends Controller
             'is_active' => 'boolean',
             'limit_link_preview' => 'boolean',
             'disable_link_preview' => 'boolean',
+            'run_when_delayed' => 'boolean',
         ]);
 
         $validated['created_by'] = Auth::id();
@@ -92,6 +100,13 @@ class MessageCronController extends Controller
             'whatsapp_number_id' => 'required|exists:whatsapp_numbers,id',
             'connection_id' => 'nullable|exists:conta_azul_connections,id',
             'type' => 'required|in:billing,due_date,boleto,birthday',
+            'rule_type' => 'required|in:daily,monthly_day,weekly_day,interval_days',
+            'day_of_month' => 'nullable|array',
+            'day_of_month.*' => 'integer|min:1|max:31',
+            'day_of_week' => 'nullable|array',
+            'day_of_week.*' => 'integer|min:0|max:6',
+            'interval_days' => 'nullable|integer|min:1',
+            'exclude_weekends' => 'boolean',
             'period_value' => 'nullable|integer',
             'period_unit' => 'nullable|in:days,months,years',
             'days_before_due' => 'nullable|integer',
@@ -100,6 +115,7 @@ class MessageCronController extends Controller
             'is_active' => 'boolean',
             'limit_link_preview' => 'boolean',
             'disable_link_preview' => 'boolean',
+            'run_when_delayed' => 'boolean',
         ]);
 
         $cron->update($validated);
