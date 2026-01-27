@@ -412,15 +412,36 @@ class SettingsController extends Controller
                 usleep(200000); 
             }
 
-            // Pruning: Se for update, remove clientes que não foram tocados (não vieram na API)
-            // Mas cuidado: se a API falhar em trazer alguns, podemos deletar indevidamente.
-            // Vamos assumir que se syncedCount > 0, a sincronização funcionou e podemos limpar os antigos.
+            // Pruning incremental por ID (mais robusto):
+            // Remove clientes que existem no sistema para esta conexão mas não vieram da Conta Azul.
+            // Mantém proteção: não remove clientes que possuem faturas vinculadas.
             if ($mode === 'update' && $syncedCount > 0) {
-                // Deleta clientes desta conexão que não foram atualizados desde o início do processo
-                // Damos uma margem de segurança de alguns segundos antes do startTime
-                Cliente::where('connection_id', $connection->id)
-                    ->where('updated_at', '<', $startTime)
-                    ->delete();
+                try {
+                    $processedIds = \App\Models\Cliente::where('connection_id', $connection->id)
+                        ->where('updated_at', '>=', $startTime)
+                        ->pluck('ca_id')
+                        ->filter()
+                        ->values()
+                        ->all();
+                    
+                    if (!empty($processedIds)) {
+                        $toDeleteQuery = \App\Models\Cliente::where('connection_id', $connection->id)
+                            ->whereNotIn('ca_id', $processedIds);
+                        
+                        // Proteção anti-erro: não remover clientes com faturas vinculadas
+                        $toDeleteQuery->whereDoesntHave('invoices');
+                        
+                        $toDeleteQuery->delete();
+                    } else {
+                        // Fallback seguro: se por algum motivo não houve IDs processados,
+                        // aplica a regra anterior baseada em updated_at.
+                        Cliente::where('connection_id', $connection->id)
+                            ->where('updated_at', '<', $startTime)
+                            ->delete();
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Falha no pruning de clientes: ' . $e->getMessage());
+                }
             }
 
             // Sincroniza faturas

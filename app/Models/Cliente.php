@@ -33,4 +33,9 @@ class Cliente extends Model
     {
         $this->attributes['mobile_phone'] = $value !== null ? preg_replace('/\D/', '', (string) $value) : null;
     }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class, 'cliente_id');
+    }
 }

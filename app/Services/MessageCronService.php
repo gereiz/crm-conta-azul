@@ -151,11 +151,14 @@ class MessageCronService
 
     protected function processBilling(MessageCron $cron, string $batchId)
     {
-        $daysLate = $cron->days_after_due ?? 0;
-        $dueDateLimit = Carbon::now()->subDays($daysLate)->format('Y-m-d');
+        $daysLate = (int) ($cron->days_after_due ?? 0);
+        // Semântica: "maior que X dias de atraso" => vencimento <= hoje - (X + 1) dias
+        // Ex.: X=0 => ontem (>=1 dia); X=1 => anteontem (>=2 dias)
+        $strictThresholdDays = $daysLate + 1;
+        $dueDateLimit = Carbon::now()->subDays($strictThresholdDays)->format('Y-m-d');
         $periodStart = $this->getPeriodStartDate($cron);
 
-        $query = Invoice::where('data_vencimento', '<', $dueDateLimit);
+        $query = Invoice::where('data_vencimento', '<=', $dueDateLimit);
         
         if (!empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);

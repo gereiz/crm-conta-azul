@@ -282,13 +282,9 @@ class ContaAzulService
 
     public function syncOverdueInvoices()
     {
-        // Estratégia: Obter todas as faturas em atraso da API e atualizar a base local.
-        // Como o status pode mudar para PAGO, o ideal é limpar a tabela de faturas (ou marcar como resolvidas)
-        // antes de inserir as novas, para garantir que o que está no banco é o retrato fiel do "Atrasado".
-        // Por segurança, vamos usar updateOrCreate e depois remover as que não vieram na lista (se quisermos manter histórico, a lógica seria outra).
-        // Mas para "Faturas em Atraso", Truncate + Insert é mais limpo se a tabela for só para isso.
-        // Se a tabela for 'invoices' geral, não podemos truncar.
-        // Assumindo que a tabela 'invoices' é para cache de faturas em atraso conforme o contexto atual.
+        // Estratégia incremental: Obter todas as faturas em atraso da API e atualizar a base local
+        // sem limpar tudo. Mantém existentes, adiciona novas e remove apenas as que
+        // estavam como ATRASADO/OVERDUE e não vieram na lista atual.
 
         // Vamos buscar TODAS as páginas de faturas em atraso
         // Expandindo o range para 5 anos para garantir que pegamos faturas antigas
@@ -317,15 +313,16 @@ class ContaAzulService
             }
         }
 
-        // Agora sincroniza com o banco
-        // Se a tabela for EXCLUSIVA para atrasados, podemos truncar.
-        // Vamos assumir que sim por enquanto, ou deletar apenas as que não estão na lista.
         $defaultConnection = ContaAzulConnection::orderBy('empresa_nome')->first();
+        // Preload existentes para otimização de detalhes
+        $existingInvoices = [];
         if ($defaultConnection) {
-            Invoice::where('connection_id', $defaultConnection->id)->delete();
-        } else {
-            Invoice::whereNull('connection_id')->delete();
+            $existingInvoices = Invoice::where('connection_id', $defaultConnection->id)
+                ->get(['ca_id', 'link_boleto', 'status'])
+                ->keyBy('ca_id')
+                ->toArray();
         }
+        $processedCaIds = [];
 
         foreach ($allInvoices as $item) {
             // Tenta encontrar o cliente local
@@ -340,18 +337,31 @@ class ContaAzulService
                 }
             }
 
-            // Buscar detalhes da fatura (boleto URL e tipo de pagamento)
+            $caId = $item['id'] ?? null;
+            if (!$caId) {
+                continue;
+            }
+            $processedCaIds[] = $caId;
+
+            // Buscar detalhes da fatura (boleto URL e tipo de pagamento) com otimização:
+            // Só busca se não temos link salvo previamente.
             $invoiceDetails = ['url' => null, 'payment_type' => null];
-            if (isset($item['id'])) {
-                $invoiceDetails = $this->getInvoiceDetails($item['id']);
-                // Pequeno delay para evitar rate limit agressivo se houver muitas faturas
-                usleep(200000); // 0.2s
+            $existing = $existingInvoices[$caId] ?? null;
+            $shouldFetchDetails = true;
+            if ($existing && !empty($existing['link_boleto'])) {
+                $shouldFetchDetails = false;
+                $invoiceDetails['url'] = $existing['link_boleto'];
+            }
+            if ($shouldFetchDetails) {
+                $invoiceDetails = $this->getInvoiceDetails($caId);
+                // Delay para evitar rate limit agressivo
+                usleep(150000); // 0.15s
             }
 
             Invoice::updateOrCreate(
                 [
                     'connection_id' => $defaultConnection?->id,
-                    'ca_id' => $item['id'],
+                    'ca_id' => $caId,
                 ],
                 [
                     'connection_id' => $defaultConnection?->id,
@@ -368,6 +378,15 @@ class ContaAzulService
                     'cliente_nome' => $item['cliente']['nome'] ?? null,
                 ]
             );
+        }
+
+        // Pruning seguro: remove apenas faturas marcadas como ATRASADO/OVERDUE
+        // que não vieram na lista atual para a conexão padrão
+        if ($defaultConnection && !empty($processedCaIds)) {
+            Invoice::where('connection_id', $defaultConnection->id)
+                ->whereIn('status', ['ATRASADO', 'OVERDUE'])
+                ->whereNotIn('ca_id', $processedCaIds)
+                ->delete();
         }
 
         return count($allInvoices);

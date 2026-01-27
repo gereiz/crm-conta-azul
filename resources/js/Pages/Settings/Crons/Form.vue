@@ -253,8 +253,8 @@ watch(() => form.type, (newType) => {
                                 <h3 class="font-medium text-gray-900 dark:text-gray-100">Regras de Cobrança</h3>
                                 <div>
                                     <InputLabel for="days_after_due" value="Dias em atraso (maior que)" />
-                                    <TextInput id="days_after_due" type="number" class="mt-1 block w-full" v-model="form.days_after_due" min="1" required />
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ex: Enviar se atraso > 5 dias</p>
+                                    <TextInput id="days_after_due" type="number" class="mt-1 block w-full" v-model="form.days_after_due" min="0" required />
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ex: Enviar se atraso > 0 dias (equivale a 1 dia de atraso)</p>
                                     <InputError class="mt-2" :message="form.errors.days_after_due" />
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">

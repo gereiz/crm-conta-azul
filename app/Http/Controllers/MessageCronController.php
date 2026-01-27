@@ -23,7 +23,7 @@ class MessageCronController extends Controller
 
     public function index()
     {
-        $crons = MessageCron::with('messageTemplate')->latest()->get();
+        $crons = MessageCron::with(['messageTemplate', 'whatsappNumber'])->latest()->get();
         return Inertia::render('Settings/Crons/Index', [
             'crons' => $crons,
             'can' => [

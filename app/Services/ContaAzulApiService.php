@@ -302,18 +302,21 @@ class ContaAzulApiService
             );
         }
 
-        // 4. Soft Pruning: Delete only invoices that are NOT in the current list
-        // This replaces the aggressive "delete all" at the beginning
+        // 4. Soft Pruning: remove apenas faturas ABERTAS/EM ATRASO que não vieram na lista atual
+        // Protege faturas pagas/baixadas/quitadas.
         if (!empty($processedCaIds)) {
             \App\Models\Invoice::where('connection_id', $connection->id)
+                ->whereIn('status', ['OVERDUE', 'ATRASADO', 'PENDING', 'ABERTO'])
                 ->whereNotIn('ca_id', $processedCaIds)
                 ->delete();
         } else {
-             // If list is empty, it means we really have no invoices (or API failed silently). 
-             // If we trust the empty list, we delete everything.
-             if (count($allInvoices) === 0) {
-                 \App\Models\Invoice::where('connection_id', $connection->id)->delete();
-             }
+            // Se a lista estiver realmente vazia (nenhuma fatura aberta retornada pela API),
+            // aplicamos pruning apenas sobre faturas ABERTAS/EM ATRASO desta conexão.
+            if (count($allInvoices) === 0) {
+                \App\Models\Invoice::where('connection_id', $connection->id)
+                    ->whereIn('status', ['OVERDUE', 'ATRASADO', 'PENDING', 'ABERTO'])
+                    ->delete();
+            }
         }
         
         return count($allInvoices);
