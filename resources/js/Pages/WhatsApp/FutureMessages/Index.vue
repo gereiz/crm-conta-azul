@@ -42,7 +42,7 @@ const recalculateFuture = async () => {
         if (form.value.connection_id) {
             payload.connection_id = form.value.connection_id;
         }
-        const { data } = await axios.post(route('cron.run-command'), payload);
+        const { data } = await axios.post(route('settings.cron.run-command'), payload);
         if (data.success) {
             alert('Cálculo de Envios Futuros executado com sucesso.');
             router.reload({ only: ['schedules'] });
@@ -127,14 +127,14 @@ const statusClass = (status) => {
                 <!-- Filters -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6 p-6">
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div class="md:col-span-4">
+                        <div class="md:col-span-3">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Empresa</label>
                             <select v-model="form.connection_id" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500">
                                 <option value="">Todas</option>
                                 <option v-for="c in connections" :key="c.id" :value="c.id">{{ c.empresa_nome }}</option>
                             </select>
                         </div>
-                        <div class="md:col-span-3">
+                        <div class="md:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
                             <select v-model="form.type" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500">
                                 <option value="">Todos</option>
@@ -144,12 +144,12 @@ const statusClass = (status) => {
                                 <option value="birthday">Aniversário</option>
                             </select>
                         </div>
-                        <div class="md:col-span-3">
+                        <div class="md:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data Prevista</label>
                             <input type="date" v-model="form.date" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500">
                         </div>
-                        <div class="md:col-span-2 flex gap-2">
-                            <PrimaryButton @click="filter" class="w-full justify-center">Filtrar</PrimaryButton>
+                        <div class="md:col-span-5 flex gap-2">
+                            <PrimaryButton @click="filter" class="justify-center px-4 py-2">Filtrar</PrimaryButton>
                             <button @click="clearFilters" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">Limpar</button>
                             <button @click="recalculateFuture" :disabled="recalculating" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600">
                                 Recalcular Envios Futuros
