@@ -166,6 +166,21 @@ const processNextDelayed = async () => {
     }
 };
 
+const clearDelayedQueue = async () => {
+    if (!confirm('Limpar a fila de crons atrasadas? Isso marcará todas como executadas hoje.')) return;
+    try {
+        const { data } = await axios.post(route('settings.cron.delayed.clear'));
+        if (data.success) {
+            alert(`Fila limpa. ${data.cleared_count || 0} automações foram atualizadas.`);
+            await loadDelayedStatus();
+        } else {
+            alert('Falha ao limpar: ' + (data.error || 'Erro desconhecido'));
+        }
+    } catch (e) {
+        alert('Erro na requisição: ' + (e.response?.data?.error || e.message));
+    }
+};
+
 const runSystemCommand = async (command) => {
     if (!confirm('Deseja executar este comando manualmente?')) return;
     
@@ -403,6 +418,9 @@ onMounted(async () => {
                                     </div>
                                     <button @click="processNextDelayed" class="w-full px-3 py-1.5 bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 rounded text-xs font-semibold transition-colors">
                                         Processar Próxima Agora
+                                    </button>
+                                    <button @click="clearDelayedQueue" class="w-full mt-2 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 rounded text-xs font-semibold transition-colors">
+                                        Limpar Fila
                                     </button>
                                 </div>
                             </div>

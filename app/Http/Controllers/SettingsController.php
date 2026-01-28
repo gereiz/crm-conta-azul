@@ -145,6 +145,24 @@ class SettingsController extends Controller
         return response()->json(['success' => true, 'cron_id' => $cron->id]);
     }
 
+    public function clearDelayedCrons()
+    {
+        $now = Carbon::now();
+        $today = $now->toDateString();
+        $query = MessageCron::where('is_active', true)
+            ->where('run_when_delayed', true)
+            ->where('send_time', '<=', $now->format('H:i'))
+            ->where(function ($q) use ($today) {
+                $q->whereNull('last_run_at')->orWhereDate('last_run_at', '<', $today);
+            });
+        $ids = $query->pluck('id');
+        if ($ids->isEmpty()) {
+            return response()->json(['success' => true, 'cleared_count' => 0]);
+        }
+        MessageCron::whereIn('id', $ids)->update(['last_run_at' => $now]);
+        return response()->json(['success' => true, 'cleared_count' => $ids->count()]);
+    }
+
     public function systemSave(Request $request)
     {
         $data = $request->validate([

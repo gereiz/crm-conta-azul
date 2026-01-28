@@ -95,6 +95,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/cron/run-command', [SettingsController::class, 'runArtisanCommand'])->name('cron.run-command');
         Route::get('/cron/delayed/status', [SettingsController::class, 'delayedCronStatus'])->name('cron.delayed.status');
         Route::post('/cron/delayed/process', [SettingsController::class, 'processNextDelayedCron'])->name('cron.delayed.process');
+        Route::post('/cron/delayed/clear', [SettingsController::class, 'clearDelayedCrons'])->name('cron.delayed.clear');
 
         // Mensagens Padrão
         Route::resource('templates', WhatsappTemplateController::class);

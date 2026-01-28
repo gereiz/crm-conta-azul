@@ -22,14 +22,17 @@ class ProcessMessageCrons extends Command
 
     public function handle()
     {
-        $now = Carbon::now();
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $now = Carbon::now($tz);
         $currentTime = $now->format('H:i');
         
-        $this->info("Iniciando processamento de crons: {$now->toDateTimeString()}");
+        $this->info("Iniciando processamento de crons: {$now->toDateTimeString()} (TZ: {$tz}, HH:mm={$currentTime})");
 
-        // Buscar crons ativos que devem rodar neste minuto
         $crons = MessageCron::where('is_active', true)
-            ->where('send_time', $currentTime)
+            ->where(function ($q) use ($currentTime) {
+                $q->where('send_time', $currentTime)
+                  ->orWhere('send_time', ltrim($currentTime, '0'));
+            })
             ->with(['messageTemplate', 'whatsappNumber'])
             ->get();
 
