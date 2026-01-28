@@ -293,6 +293,12 @@ class SettingsController extends Controller
                 return response()->json(['error' => 'Conexão não encontrada.'], 404);
             }
 
+            // Renova o token ANTES de sincronizar manualmente
+            $token = $this->contaAzulAuthService->getValidToken($connection, true);
+            if (! $token) {
+                return response()->json(['error' => 'Falha ao renovar token antes da sincronização.'], 400);
+            }
+
             // Marca o tempo de início para pruning (se for update)
             $startTime = now();
 
@@ -496,15 +502,16 @@ class SettingsController extends Controller
             }
             $summary = [];
             foreach ($connections as $connection) {
+                // Renova token ANTES de sincronizar manualmente cada empresa
+                $token = $this->contaAzulAuthService->getValidToken($connection, true);
+                if (! $token) {
+                    $summary[] = "Conexão {$connection->empresa_nome}: falha ao renovar token. Pulando.";
+                    continue;
+                }
                 $page = 1;
                 $size = 20;
                 $hasMore = true;
                 $syncedCount = 0;
-                $token = $this->contaAzulAuthService->getValidToken($connection) ?? $this->contaAzulAuthService->getValidToken($connection, true);
-                if (! $token) {
-                    $summary[] = "Conexão {$connection->empresa_nome}: sem token válido.";
-                    continue;
-                }
                 while ($hasMore) {
                     $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
                     $clientsData = [];

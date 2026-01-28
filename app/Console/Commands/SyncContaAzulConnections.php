@@ -34,19 +34,7 @@ class SyncContaAzulConnections extends Command
             return 0;
         }
         $now = Carbon::now();
-        $this->info("Iniciando verificação de conexões para sync às {$now->toDateTimeString()}");
-
-        $staleExists = ContaAzulConnection::active()
-            ->where(function ($q) {
-                $q->whereNull('last_sync_at')
-                  ->orWhere('last_sync_at', '<', Carbon::now()->subHours(24));
-            })
-            ->exists();
-
-        if (! $staleExists) {
-            $this->info('Nenhuma empresa com sync vencido (>24h). Nada a fazer.');
-            return 0;
-        }
+        $this->info("Iniciando sincronização automática de faturas às {$now->toDateTimeString()}");
 
         $connections = ContaAzulConnection::active()->orderBy('empresa_nome')->get();
         foreach ($connections as $connection) {
@@ -58,20 +46,19 @@ class SyncContaAzulConnections extends Command
                     continue;
                 }
 
-                $syncedClients = $this->syncClients($connection);
                 $syncedInvoices = $this->api->syncOverdueInvoices($connection);
 
                 $connection->last_sync_at = Carbon::now();
                 $connection->save();
 
-                $this->info("Empresa {$connection->empresa_nome}: {$syncedClients} clientes e {$syncedInvoices} faturas sincronizados.");
+                $this->info("Empresa {$connection->empresa_nome}: {$syncedInvoices} faturas sincronizadas.");
             } catch (\Exception $e) {
                 Log::error("Erro ao sincronizar conexão {$connection->id}: ".$e->getMessage());
                 $this->error("Erro ao sincronizar {$connection->empresa_nome}: ".$e->getMessage());
             }
         }
 
-        $this->info('Sincronização concluída.');
+        $this->info('Sincronização de faturas concluída.');
         return 0;
     }
 
