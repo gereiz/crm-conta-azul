@@ -35,15 +35,8 @@ class PhoneSanitizerService
             return null;
         }
 
-        // 3. Garante DDI 55
-        // Se tem 10 ou 11 dígitos, assume que falta o 55
-        if (strlen($digits) >= 10 && strlen($digits) <= 11) {
-            $digits = '55' . $digits;
-        }
-        // Se tem menos de 10, provavelmente é inválido para envio completo com DDD,
-        // mas se o usuário digitar sem DDD (ex: 998887777), não temos como adivinhar o DDD.
-        // Vamos assumir que se não começar com 55, adicionamos.
-        if (!str_starts_with($digits, '55')) {
+        // 3. DDI: se já possuir DDI (>=12 dígitos), mantém; caso contrário, aplica 55 como padrão
+        if (strlen($digits) < 12 && !str_starts_with($digits, '55')) {
             $digits = '55' . $digits;
         }
 
@@ -52,7 +45,7 @@ class PhoneSanitizerService
         // Exceção (Solicitação Usuário): Remover 9º dígito APENAS para DDDs de MG (30-39).
         // Motivo: Relato de falha de envio para MG com 9 dígitos via Whapi.
         
-        if (strlen($digits) === 13) {
+        if (strlen($digits) === 13 && str_starts_with($digits, '55')) {
             // Indices: 01 (55), 23 (DDD), 4 (9)
             $ddd = substr($digits, 2, 2);
             $firstDigit = $digits[4];

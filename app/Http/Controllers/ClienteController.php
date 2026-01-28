@@ -195,4 +195,15 @@ class ClienteController extends Controller
             'invoices' => $invoices
         ]);
     }
+
+    public function update(Request $request, Cliente $cliente)
+    {
+        $validated = $request->validate([
+            'phone' => 'nullable|string|max:20',
+            'mobile_phone' => 'nullable|string|max:20',
+            'birthdate' => 'nullable|date',
+        ]);
+        $cliente->update($validated);
+        return redirect()->back()->with('success', 'Dados de contato atualizados com sucesso.');
+    }
 }

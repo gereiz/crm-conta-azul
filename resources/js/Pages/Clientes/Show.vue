@@ -17,6 +17,33 @@ const props = defineProps({
     templates: Array,
 });
 
+const localId = computed(() => props.cliente.local_id || props.cliente.id);
+const editingContact = ref(false);
+const contactForm = useForm({
+    phone: props.cliente.phone || props.cliente.telefone_comercial || '',
+    mobile_phone: props.cliente.mobile_phone || props.cliente.telefone_celular || '',
+    birthdate: props.cliente.birthdate || props.cliente.data_nascimento || '',
+});
+const contactSaved = ref(false);
+const saveContact = () => {
+    contactForm.put(route('clientes.update', localId.value), {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingContact.value = false;
+            contactSaved.value = true;
+            if (isMessageModalOpen.value) {
+                form.to = formatPhoneForWhatsapp(contactForm.mobile_phone || contactForm.phone);
+            }
+        },
+    });
+};
+
+watch(() => [contactForm.mobile_phone, contactForm.phone], () => {
+    if (isMessageModalOpen.value) {
+        form.to = formatPhoneForWhatsapp(contactForm.mobile_phone || contactForm.phone);
+    }
+});
+
 const isMessageModalOpen = ref(false);
 const isInvoicesModalOpen = ref(false);
 
@@ -59,11 +86,9 @@ const formatPhoneForWhatsapp = (phone) => {
     // Remove leading zero
     if (digits.startsWith('0')) digits = digits.substring(1);
 
-    // Force add 55 if missing
-    if (!digits.startsWith('55') || (digits.length >= 10 && digits.length <= 12)) {
-         if (!digits.startsWith('55')) {
-            digits = '55' + digits;
-         }
+    // DDI: se já tiver DDI (>=12 dígitos), mantém; senão, aplica 55
+    if (digits.length < 12 && !digits.startsWith('55')) {
+        digits = '55' + digits;
     }
     
     // Default
@@ -74,7 +99,7 @@ const formatPhoneForWhatsapp = (phone) => {
 
 const form = useForm({
     whatsapp_id: '',
-    to: formatPhoneForWhatsapp(props.cliente.mobile_phone || props.cliente.phone),
+    to: formatPhoneForWhatsapp(contactForm.mobile_phone || contactForm.phone),
     message: '',
 });
 
@@ -270,7 +295,7 @@ const openMessageModal = () => {
 const closeMessageModal = () => {
     isMessageModalOpen.value = false;
     form.reset();
-    form.to = formatPhoneForWhatsapp(props.cliente.mobile_phone || props.cliente.phone);
+    form.to = formatPhoneForWhatsapp(contactForm.mobile_phone || contactForm.phone);
 };
 
 const openInvoicesModal = () => {
@@ -364,17 +389,43 @@ const retrySend = () => {
                                     <p><span class="font-bold">Vinculado à Empresa:</span> {{ cliente.company_name || '-' }}</p>
                                     <p><span class="font-bold">Tipo:</span> {{ cliente.tipo_pessoa || cliente.person_type }}</p>
                                     <p><span class="font-bold">Documento:</span> {{ cliente.cpf || cliente.cnpj || cliente.document }}</p>
-                                    <p><span class="font-bold">Data Nascimento:</span> {{ cliente.data_nascimento || cliente.date_of_birth }}</p>
+                                    <p><span class="font-bold">Data Nascimento:</span> {{ contactForm.birthdate || cliente.data_nascimento || cliente.date_of_birth }}</p>
                                 </div>
                             </div>
 
                             <!-- Contato -->
                             <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm">
                                 <h3 class="text-lg font-semibold mb-4 border-b pb-2">Contato</h3>
-                                <div class="space-y-2">
+                                <div v-if="!editingContact" class="space-y-2">
                                     <p><span class="font-bold">Email:</span> {{ cliente.email }}</p>
-                                    <p><span class="font-bold">Telefone:</span> {{ cliente.telefone_comercial || cliente.phone }}</p>
-                                    <p><span class="font-bold">Celular:</span> {{ cliente.telefone_celular || cliente.mobile_phone }}</p>
+                                    <p><span class="font-bold">Telefone:</span> {{ contactForm.phone || cliente.telefone_comercial || cliente.phone }}</p>
+                                    <p><span class="font-bold">Celular:</span> {{ contactForm.mobile_phone || cliente.telefone_celular || cliente.mobile_phone }}</p>
+                                    <p class="text-xs text-gray-600 dark:text-gray-300">Em uso para WhatsApp: {{ contactForm.mobile_phone ? 'Celular' : 'Telefone' }}</p>
+                                    <div v-if="contactSaved" class="mt-2 px-3 py-2 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-sm">
+                                        Dados de contato atualizados com sucesso.
+                                    </div>
+                                    <PrimaryButton class="mt-3" @click="editingContact = true">Editar Contato</PrimaryButton>
+                                </div>
+                                <div v-else class="space-y-3">
+                                    <div>
+                                        <InputLabel for="phone" value="Telefone" />
+                                        <PhoneInput id="phone" v-model="contactForm.phone" class="mt-1 block w-full" />
+                                        <InputError class="mt-2" :message="contactForm.errors.phone" />
+                                    </div>
+                                    <div>
+                                        <InputLabel for="mobile_phone" value="Celular" />
+                                        <PhoneInput id="mobile_phone" v-model="contactForm.mobile_phone" class="mt-1 block w-full" />
+                                        <InputError class="mt-2" :message="contactForm.errors.mobile_phone" />
+                                    </div>
+                                    <div>
+                                        <InputLabel for="birthdate" value="Data de Nascimento" />
+                                        <input id="birthdate" type="date" v-model="contactForm.birthdate" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm" />
+                                        <InputError class="mt-2" :message="contactForm.errors.birthdate" />
+                                    </div>
+                                    <div class="flex gap-2 mt-2">
+                                        <SecondaryButton @click="editingContact = false">Cancelar</SecondaryButton>
+                                        <PrimaryButton @click="saveContact">Salvar</PrimaryButton>
+                                    </div>
                                 </div>
                             </div>
 
@@ -490,7 +541,7 @@ const retrySend = () => {
                             v-model="form.to"
                             required
                         />
-                         <p class="text-sm text-gray-500 mt-1">Formato: (99) 99999-9999</p>
+                         <p class="text-sm text-gray-500 mt-1">Aceita DDI. Somente dígitos. Ex.: 5511999999999 ou 351912345678.</p>
                         <InputError class="mt-2" :message="form.errors.to" />
                     </div>
 
