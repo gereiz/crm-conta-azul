@@ -645,16 +645,14 @@ class MessageCronService
 
     protected function sendGroupedMessageForClient(MessageCron $cron, Cliente $cliente, $invoices, string $batchId)
     {
-        $blockedAny = collect($invoices)->contains(function($invoice) use ($cron, $cliente) {
-            $context = [
-                'cliente_nome' => $cliente->name ?? ($invoice->cliente_nome ?? ''),
-                'cliente_ca_id' => $cliente->ca_id ?? $invoice->cliente_ca_id,
-                'invoice_ca_id' => $invoice->ca_id,
-                'descricao' => $invoice->descricao,
-            ];
-            return $this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context);
-        });
-        if ($blockedAny) {
+        $connIdCtx = (int) (($cliente->connection_id ?? $cron->connection_id));
+        $clientBlocked = $this->restrictionService->isBlocked($connIdCtx, [
+            'cliente_nome' => $cliente->name ?? '',
+            'cliente_ca_id' => $cliente->ca_id ?? null,
+            'invoice_ca_id' => null,
+            'descricao' => '',
+        ]);
+        if ($clientBlocked) {
             $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
             $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
             
@@ -670,14 +668,61 @@ class MessageCronService
                 'total_boletos' => is_countable($invoices) ? count($invoices) : null,
                 'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
                 'status' => 'skipped',
-                'error_message' => 'Bloqueado por regra de restrição',
+                'error_message' => 'Bloqueado por regra de restrição (cliente)',
                 'batch_id' => $batchId,
                 'sent_at' => now(),
             ]);
             return 'skipped';
         }
 
-        $invoices = is_array($invoices) ? $invoices : (is_countable($invoices) ? $invoices->all() : []);
+        $originalInvoices = collect(is_array($invoices) ? $invoices : (is_countable($invoices) ? $invoices->all() : []));
+        $validInvoices = $originalInvoices->reject(function($invoice) use ($cron, $cliente) {
+            $context = [
+                'cliente_nome' => $cliente->name ?? ($invoice->cliente_nome ?? ''),
+                'cliente_ca_id' => $cliente->ca_id ?? $invoice->cliente_ca_id,
+                'invoice_ca_id' => $invoice->ca_id,
+                'descricao' => $invoice->descricao,
+            ];
+            return $this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context);
+        });
+        $blockedInvoices = $originalInvoices->filter(function($invoice) use ($cron, $cliente) {
+            $context = [
+                'cliente_nome' => $cliente->name ?? ($invoice->cliente_nome ?? ''),
+                'cliente_ca_id' => $cliente->ca_id ?? $invoice->cliente_ca_id,
+                'invoice_ca_id' => $invoice->ca_id,
+                'descricao' => $invoice->descricao,
+            ];
+            return $this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context);
+        });
+        Log::info('Cron billing - restrições aplicadas no agrupamento', [
+            'cron_id' => $cron->id,
+            'cliente_id' => $cliente->id,
+            'total_invoices' => $originalInvoices->count(),
+            'blocked_count' => $blockedInvoices->count(),
+            'blocked_ids' => $blockedInvoices->pluck('id')->toArray(),
+        ]);
+        if ($validInvoices->isEmpty()) {
+            $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
+            $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
+            WhatsappMessageLog::create([
+                'connection_id' => $cron->connection_id ?? ($cliente->connection_id ?? null),
+                'message_cron_id' => $cron->id,
+                'cliente_id' => $cliente->id,
+                'client_name' => $cliente->name,
+                'phone_original' => $originalPhone,
+                'phone_sanitized' => $sanitizedPhone,
+                'message_type' => $cron->type,
+                'message_template_id' => $cron->message_template_id,
+                'total_boletos' => is_countable($invoices) ? count($invoices) : null,
+                'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
+                'status' => 'skipped',
+                'error_message' => 'Bloqueado por regra de restrição (todas as faturas)',
+                'batch_id' => $batchId,
+                'sent_at' => now(),
+            ]);
+            return 'skipped';
+        }
+        $invoices = $validInvoices->all();
 
         $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
         if (!$originalPhone) {

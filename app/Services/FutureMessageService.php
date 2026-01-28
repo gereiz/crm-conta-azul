@@ -344,15 +344,13 @@ class FutureMessageService
             if (!$cliente) continue;
 
             $firstInvoice = $clientInvoices->first();
-            $blockedAny = $clientInvoices->contains(function($invoice) use ($cron, $cliente) {
-                return $this->restrictionService->isBlocked($cron->connection_id, [
-                    'cliente_nome' => $cliente->name,
-                    'cliente_ca_id' => $cliente->ca_id,
-                    'invoice_ca_id' => $invoice->ca_id,
-                    'descricao' => $invoice->descricao
-                ]);
-            });
-            $this->createSchedule($cron, $cliente, $firstInvoice, $targetDate, $targetDate, $blockedAny ? 'Restrição de envio configurada' : null);
+            $clientBlocked = $this->restrictionService->isBlocked($cron->connection_id, [
+                'cliente_nome' => $cliente->name,
+                'cliente_ca_id' => $cliente->ca_id,
+                'invoice_ca_id' => null,
+                'descricao' => ''
+            ]);
+            $this->createSchedule($cron, $cliente, $firstInvoice, $targetDate, $targetDate, $clientBlocked ? 'Restrição de envio configurada (cliente)' : null);
         }
     }
 }
