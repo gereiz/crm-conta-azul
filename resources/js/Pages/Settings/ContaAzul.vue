@@ -45,6 +45,7 @@ const selectedConnection = computed(() => {
     return props.connections?.find(c => c.id === selectedConnectionId.value) || null;
 });
 
+const syncTarget = ref('invoices');
 const showingReconnectModal = ref(false);
 const reconnectMode = ref('auto'); // auto, manual
 const reconnecting = ref(false);
@@ -110,13 +111,13 @@ const confirmReconnect = async () => {
     }
 };
 
-const syncClientes = (truncate = false) => {
+const syncClientes = (mode = 'update') => {
     if (!selectedConnectionId.value) {
         alert('Selecione uma empresa para sincronizar.');
         return;
     }
     syncing.value = true;
-    router.post(route('settings.contaazul.sync'), { connection_id: selectedConnectionId.value, truncate }, {
+    router.post(route('settings.contaazul.sync'), { connection_id: selectedConnectionId.value, mode, target: syncTarget.value }, {
         onFinish: () => syncing.value = false,
     });
 };
@@ -126,11 +127,11 @@ const showSyncConfirm = () => {
         alert('Selecione uma empresa para sincronizar.');
         return;
     }
-    if (props.connections && props.connections.length === 1) {
+    if (props.connections && props.connections.length === 1 && syncTarget.value === 'all') {
         showingSyncConfirmModal.value = true;
         return;
     }
-    syncClientes(false);
+    syncClientes('update');
 };
 
 const closeSyncConfirm = () => {
@@ -139,6 +140,7 @@ const closeSyncConfirm = () => {
 
 const showingSyncAllModal = ref(false);
 const syncAllMode = ref('update');
+const syncBatchTarget = ref('invoices');
 const syncQueue = ref([]);
 const currentSyncIndex = ref(0);
 const syncLogs = ref([]);
@@ -197,19 +199,17 @@ const processNextSync = async () => {
     try {
         const response = await axios.post(route('settings.contaazul.sync'), { 
             connection_id: connection.id, 
-            mode: syncAllMode.value 
+            mode: syncAllMode.value,
+            target: syncBatchTarget.value
         });
-        
-        // Remove a mensagem de "Sincronizando..." para não duplicar visualmente ou atualiza status
-        // Vamos manter o histórico
         
         if (response.data.success) {
             const clientes = response.data.details?.clientes_count || 0;
             const faturas = response.data.details?.invoices_count || 0;
-            syncLogs.value.push({ 
-                status: 'success', 
-                message: `${connection.empresa_nome}: Sucesso (${clientes} clientes, ${faturas} faturas)` 
-            });
+            const msg = syncBatchTarget.value === 'all'
+                ? `${connection.empresa_nome}: Sucesso (${clientes} clientes, ${faturas} faturas)`
+                : `${connection.empresa_nome}: Sucesso (${faturas} faturas)`;
+            syncLogs.value.push({ status: 'success', message: msg });
         } else {
             syncLogs.value.push({ 
                 status: 'error', 
@@ -358,6 +358,10 @@ const deleteConnection = (id) => {
                         </div>
 
                             <div class="flex items-center gap-3">
+                                <select v-model="syncTarget" class="text-sm border-gray-300 rounded-md">
+                                    <option value="invoices">Apenas faturas</option>
+                                    <option value="all">Clientes + faturas</option>
+                                </select>
                                 <button 
                                     @click="showSyncConfirm" 
                                     :disabled="syncing || !selectedConnectionId"
@@ -376,7 +380,17 @@ const deleteConnection = (id) => {
                         </div>
 
                         <div class="mt-4 text-sm text-gray-500">
-                            <p>Esta ação irá buscar todos os clientes do Conta Azul e atualizar/criar no banco de dados local.</p>
+                            <p v-if="syncTarget === 'all'">Esta ação irá buscar todos os clientes do Conta Azul e atualizar/criar no banco de dados local, além de sincronizar faturas.</p>
+                            <p v-else>Esta ação irá sincronizar apenas as faturas em atraso desta empresa.</p>
+                        </div>
+
+                        <!-- Aviso de política de sincronização -->
+                        <div class="mt-4 p-4 rounded-md border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
+                            <p class="font-semibold">Política de Sincronização</p>
+                            <ul class="list-disc list-inside mt-1">
+                                <li>Clientes: sincronização somente manual através dos botões acima.</li>
+                                <li>Faturas: sincronização automática diária às <strong>01:00</strong> para todas as empresas ativas.</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -384,11 +398,17 @@ const deleteConnection = (id) => {
                 <!-- Modal Confirmação Single -->
                 <Modal :show="showingSyncConfirmModal" @close="closeSyncConfirm">
                     <div class="p-6">
-                        <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">Sincronizar Clientes</h2>
-                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Há apenas uma empresa cadastrada. Deseja deletar todos os clientes antes de sincronizar?</p>
+                        <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">Sincronização</h2>
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Há apenas uma empresa cadastrada. Como deseja sincronizar?</p>
+                        <div class="mt-4">
+                            <select v-model="syncTarget" class="text-sm border-gray-300 rounded-md w-full">
+                                <option value="invoices">Apenas faturas</option>
+                                <option value="all">Clientes + faturas</option>
+                            </select>
+                        </div>
                         <div class="mt-6 flex justify-end gap-3">
-                            <SecondaryButton @click="() => { closeSyncConfirm(); syncClientes(false); }">Somente sincronizar</SecondaryButton>
-                            <PrimaryButton @click="() => { closeSyncConfirm(); syncClientes(true); }">Deletar e sincronizar</PrimaryButton>
+                            <SecondaryButton @click="() => { closeSyncConfirm(); syncClientes('update'); }">Atualizar Diferenças</SecondaryButton>
+                            <PrimaryButton @click="() => { closeSyncConfirm(); syncClientes('reset'); }">Resetar e Sincronizar</PrimaryButton>
                         </div>
                     </div>
                 </Modal>
@@ -405,6 +425,14 @@ const deleteConnection = (id) => {
                                 Você está prestes a sincronizar <strong>{{ props.connections.filter(c => c.is_active).length }}</strong> empresas ativas.
                                 Como deseja proceder?
                             </p>
+                            
+                            <div class="mb-6">
+                                <label class="text-sm text-gray-700 dark:text-gray-300">Alvo da sincronização</label>
+                                <select v-model="syncBatchTarget" class="mt-1 text-sm border-gray-300 rounded-md w-full">
+                                    <option value="invoices">Apenas faturas</option>
+                                    <option value="all">Clientes + faturas</option>
+                                </select>
+                            </div>
                             
                             <div class="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md mb-6 border border-yellow-200 dark:border-yellow-800">
                                 <h4 class="font-bold text-yellow-800 dark:text-yellow-200 text-sm mb-2">Opções:</h4>

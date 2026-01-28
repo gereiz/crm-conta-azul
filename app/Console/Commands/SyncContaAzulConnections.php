@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\ContaAzulConnection;
 use App\Models\Cliente;
+use App\Models\SyncJobLog;
 use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
 use App\Models\SystemSetting;
@@ -46,15 +47,37 @@ class SyncContaAzulConnections extends Command
                     continue;
                 }
 
+                $log = SyncJobLog::create([
+                    'conta_azul_connection_id' => $connection->id,
+                    'job_type' => 'invoices',
+                    'started_at' => Carbon::now(),
+                    'status' => 'success',
+                ]);
+
                 $syncedInvoices = $this->api->syncOverdueInvoices($connection);
 
                 $connection->last_sync_at = Carbon::now();
                 $connection->save();
 
                 $this->info("Empresa {$connection->empresa_nome}: {$syncedInvoices} faturas sincronizadas.");
+
+                $log->update([
+                    'finished_at' => Carbon::now(),
+                    'items_processed' => (int) $syncedInvoices,
+                    'message' => 'Execução automática diária',
+                ]);
             } catch (\Exception $e) {
                 Log::error("Erro ao sincronizar conexão {$connection->id}: ".$e->getMessage());
                 $this->error("Erro ao sincronizar {$connection->empresa_nome}: ".$e->getMessage());
+                try {
+                    if (isset($log)) {
+                        $log->update([
+                            'finished_at' => Carbon::now(),
+                            'status' => 'error',
+                            'message' => $e->getMessage(),
+                        ]);
+                    }
+                } catch (\Throwable $t) {}
             }
         }
 

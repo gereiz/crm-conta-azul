@@ -284,6 +284,7 @@ class SettingsController extends Controller
         try {
             $connectionId = $request->input('connection_id');
             $mode = $request->input('mode', 'update'); // 'reset' or 'update'
+            $target = $request->input('target', 'all'); // 'all' or 'invoices'
             
             if (! $connectionId) {
                 return response()->json(['error' => 'Selecione uma empresa para sincronizar.'], 400);
@@ -303,8 +304,12 @@ class SettingsController extends Controller
             $startTime = now();
 
             if ($mode === 'reset') {
-                Cliente::where('connection_id', $connection->id)->delete();
-                \App\Models\Invoice::where('connection_id', $connection->id)->delete();
+                if ($target === 'all') {
+                    Cliente::where('connection_id', $connection->id)->delete();
+                    \App\Models\Invoice::where('connection_id', $connection->id)->delete();
+                } else {
+                    \App\Models\Invoice::where('connection_id', $connection->id)->delete();
+                }
             }
 
             $page = 1;
@@ -312,116 +317,118 @@ class SettingsController extends Controller
             $hasMore = true;
             $syncedCount = 0;
 
-            while ($hasMore) {
-                $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
-                $clientsData = [];
-                if (isset($response['items'])) {
-                    $clientsData = $response['items'];
-                } elseif (is_array($response)) {
-                    $clientsData = $response;
-                }
-                
-                if (empty($clientsData)) {
-                    $hasMore = false;
-                    break;
-                }
-
-                foreach ($clientsData as $caClient) {
-                    // Filtra apenas clientes ativos e com perfil de cliente
-                    $perfis = $caClient['perfis'] ?? [];
-                    $perfis = array_map('strtolower', $perfis);
-                    if (! in_array('cliente', $perfis)) {
-                        continue;
+            if ($target === 'all') {
+                while ($hasMore) {
+                    $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
+                    $clientsData = [];
+                    if (isset($response['items'])) {
+                        $clientsData = $response['items'];
+                    } elseif (is_array($response)) {
+                        $clientsData = $response;
                     }
-                    if (empty($caClient['ativo'])) {
-                        continue;
-                    }
-
-                    $cpfCnpj = $caClient['documento'] ?? ($caClient['cpf'] ?? ($caClient['cnpj'] ?? null));
-                    $phone = $caClient['telefone'] ?? ($caClient['telefone_comercial'] ?? null);
-                    $mobilePhone = $caClient['telefone_celular'] ?? null;
                     
-                    $city = null;
-                    $state = null;
-                    if (! empty($caClient['enderecos']) && is_array($caClient['enderecos'])) {
-                        $primaryAddress = $caClient['enderecos'][0];
-                        $city = $primaryAddress['cidade'] ?? null;
-                        $state = $primaryAddress['estado'] ?? null;
+                    if (empty($clientsData)) {
+                        $hasMore = false;
+                        break;
                     }
-
-                    // Proteção anti-duplicação entre empresas:
-                    // Se já existe um cliente IDÊNTICO (mesmo CPF/CNPJ) em outra conexão, não duplicar aqui.
-                    // Também protege por e-mail+telefone quando CPF/CNPJ estiver ausente.
-                    try {
-                        $existsInOther = false;
-                        if (!empty($cpfCnpj)) {
-                            $existsInOther = \App\Models\Cliente::where('cpf_cnpj', $cpfCnpj)
-                                ->where('connection_id', '!=', $connection->id)
-                                ->exists();
-                        } else {
-                            $email = $caClient['email'] ?? null;
-                            $normalizedPhone = preg_replace('/\D+/', '', (string) ($mobilePhone ?? $phone ?? ''));
-                            if (!empty($email) && !empty($normalizedPhone)) {
-                                $existsInOther = \App\Models\Cliente::where('connection_id', '!=', $connection->id)
-                                    ->where(function($q) use ($email, $normalizedPhone) {
-                                        $q->where('email', $email)
-                                          ->where(function($qq) use ($normalizedPhone) {
-                                              $qq->whereRaw("REGEXP_REPLACE(COALESCE(mobile_phone, phone, ''), '[^0-9]', '') = ?", [$normalizedPhone]);
-                                          });
-                                    })->exists();
-                            }
-                        }
-                        if ($existsInOther) {
-                            Log::warning("Dedup: cliente potencialmente duplicado detectado e ignorado na conexão {$connection->id}.", [
-                                'ca_client_id' => $caClient['id'] ?? null,
-                                'cpf_cnpj' => $cpfCnpj,
-                                'email' => $caClient['email'] ?? null,
-                                'phone' => $mobilePhone ?? $phone,
-                            ]);
+    
+                    foreach ($clientsData as $caClient) {
+                        // Filtra apenas clientes ativos e com perfil de cliente
+                        $perfis = $caClient['perfis'] ?? [];
+                        $perfis = array_map('strtolower', $perfis);
+                        if (! in_array('cliente', $perfis)) {
                             continue;
                         }
-                    } catch (\Exception $e) {
-                        Log::error("Falha na verificação de duplicidade de cliente: " . $e->getMessage());
+                        if (empty($caClient['ativo'])) {
+                            continue;
+                        }
+    
+                        $cpfCnpj = $caClient['documento'] ?? ($caClient['cpf'] ?? ($caClient['cnpj'] ?? null));
+                        $phone = $caClient['telefone'] ?? ($caClient['telefone_comercial'] ?? null);
+                        $mobilePhone = $caClient['telefone_celular'] ?? null;
+                        
+                        $city = null;
+                        $state = null;
+                        if (! empty($caClient['enderecos']) && is_array($caClient['enderecos'])) {
+                            $primaryAddress = $caClient['enderecos'][0];
+                            $city = $primaryAddress['cidade'] ?? null;
+                            $state = $primaryAddress['estado'] ?? null;
+                        }
+    
+                        // Proteção anti-duplicação entre empresas:
+                        // Se já existe um cliente IDÊNTICO (mesmo CPF/CNPJ) em outra conexão, não duplicar aqui.
+                        // Também protege por e-mail+telefone quando CPF/CNPJ estiver ausente.
+                        try {
+                            $existsInOther = false;
+                            if (!empty($cpfCnpj)) {
+                                $existsInOther = \App\Models\Cliente::where('cpf_cnpj', $cpfCnpj)
+                                    ->where('connection_id', '!=', $connection->id)
+                                    ->exists();
+                            } else {
+                                $email = $caClient['email'] ?? null;
+                                $normalizedPhone = preg_replace('/\D+/', '', (string) ($mobilePhone ?? $phone ?? ''));
+                                if (!empty($email) && !empty($normalizedPhone)) {
+                                    $existsInOther = \App\Models\Cliente::where('connection_id', '!=', $connection->id)
+                                        ->where(function($q) use ($email, $normalizedPhone) {
+                                            $q->where('email', $email)
+                                              ->where(function($qq) use ($normalizedPhone) {
+                                                  $qq->whereRaw("REGEXP_REPLACE(COALESCE(mobile_phone, phone, ''), '[^0-9]', '') = ?", [$normalizedPhone]);
+                                              });
+                                        })->exists();
+                                }
+                            }
+                            if ($existsInOther) {
+                                Log::warning("Dedup: cliente potencialmente duplicado detectado e ignorado na conexão {$connection->id}.", [
+                                    'ca_client_id' => $caClient['id'] ?? null,
+                                    'cpf_cnpj' => $cpfCnpj,
+                                    'email' => $caClient['email'] ?? null,
+                                    'phone' => $mobilePhone ?? $phone,
+                                ]);
+                                continue;
+                            }
+                        } catch (\Exception $e) {
+                            Log::error("Falha na verificação de duplicidade de cliente: " . $e->getMessage());
+                        }
+    
+                        Cliente::updateOrCreate(
+                            ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
+                            [
+                                'connection_id' => $connection->id,
+                                'name' => $caClient['nome'] ?? 'Sem Nome',
+                                'company_name' => $connection->empresa_nome,
+                                'email' => $caClient['email'] ?? null,
+                                'phone' => $phone,
+                                'mobile_phone' => $mobilePhone,
+                                'cpf_cnpj' => $cpfCnpj,
+                                'person_type' => $caClient['tipo_pessoa'] ?? null,
+                                'city' => $city,
+                                'state' => $state,
+                                // O updated_at será atualizado automaticamente, permitindo o pruning
+                            ]
+                        );
+                        $syncedCount++;
                     }
-
-                    Cliente::updateOrCreate(
-                        ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
-                        [
-                            'connection_id' => $connection->id,
-                            'name' => $caClient['nome'] ?? 'Sem Nome',
-                            'company_name' => $connection->empresa_nome,
-                            'email' => $caClient['email'] ?? null,
-                            'phone' => $phone,
-                            'mobile_phone' => $mobilePhone,
-                            'cpf_cnpj' => $cpfCnpj,
-                            'person_type' => $caClient['tipo_pessoa'] ?? null,
-                            'city' => $city,
-                            'state' => $state,
-                            // O updated_at será atualizado automaticamente, permitindo o pruning
-                        ]
-                    );
-                    $syncedCount++;
+    
+                    if (count($clientsData) < $size) {
+                        $hasMore = false;
+                    } else {
+                        $page++;
+                    }
+                    
+                    // Safety break
+                    if ($page > 500) {
+                        $hasMore = false;
+                    }
+                    
+                    // Pequena pausa para evitar rate limit excessivo
+                    usleep(200000); 
                 }
-
-                if (count($clientsData) < $size) {
-                    $hasMore = false;
-                } else {
-                    $page++;
-                }
-                
-                // Safety break
-                if ($page > 500) {
-                    $hasMore = false;
-                }
-                
-                // Pequena pausa para evitar rate limit excessivo
-                usleep(200000); 
             }
 
             // Pruning incremental por ID (mais robusto):
             // Remove clientes que existem no sistema para esta conexão mas não vieram da Conta Azul.
             // Mantém proteção: não remove clientes que possuem faturas vinculadas.
-            if ($mode === 'update' && $syncedCount > 0) {
+            if ($target === 'all' && $mode === 'update' && $syncedCount > 0) {
                 try {
                     $processedIds = \App\Models\Cliente::where('connection_id', $connection->id)
                         ->where('updated_at', '>=', $startTime)
@@ -471,7 +478,9 @@ class SettingsController extends Controller
             if ($request->wantsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso.",
+                    'message' => $target === 'all'
+                        ? "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso."
+                        : "Sincronização concluída! {$invoicesApiCount} faturas em atraso.",
                     'details' => [
                         'clientes_count' => $clientesDbCount,
                         'invoices_count' => $invoicesApiCount,
@@ -480,7 +489,10 @@ class SettingsController extends Controller
                 ]);
             }
 
-            return redirect()->back()->with('success', "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso processados para a conexão {$connection->empresa_nome}.");
+            $msg = $target === 'all'
+                ? "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso processados para a conexão {$connection->empresa_nome}."
+                : "Sincronização concluída! {$invoicesApiCount} faturas em atraso processadas para a conexão {$connection->empresa_nome}.";
+            return redirect()->back()->with('success', $msg);
 
         } catch (\Exception $e) {
             Log::error('Erro na sincronização de clientes: '.$e->getMessage());
