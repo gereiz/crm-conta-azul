@@ -645,21 +645,16 @@ class MessageCronService
 
     protected function sendGroupedMessageForClient(MessageCron $cron, Cliente $cliente, $invoices, string $batchId)
     {
-        // Filtrar faturas com restrição dinâmica (via BillingRestrictionService)
-        $validInvoices = collect($invoices)->reject(function($invoice) use ($cron, $cliente) {
-             $context = [
+        $blockedAny = collect($invoices)->contains(function($invoice) use ($cron, $cliente) {
+            $context = [
                 'cliente_nome' => $cliente->name ?? ($invoice->cliente_nome ?? ''),
                 'cliente_ca_id' => $cliente->ca_id ?? $invoice->cliente_ca_id,
                 'invoice_ca_id' => $invoice->ca_id,
                 'descricao' => $invoice->descricao,
             ];
-            
-            // Verifica se esta fatura específica está bloqueada
             return $this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context);
         });
-
-        // Se todas foram bloqueadas, loga e pula
-        if ($validInvoices->isEmpty()) {
+        if ($blockedAny) {
             $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
             $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
             
@@ -672,18 +667,17 @@ class MessageCronService
                 'phone_sanitized' => $sanitizedPhone,
                 'message_type' => $cron->type,
                 'message_template_id' => $cron->message_template_id,
-                'total_boletos' => count($invoices),
+                'total_boletos' => is_countable($invoices) ? count($invoices) : null,
                 'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
                 'status' => 'skipped',
-                'error_message' => 'Bloqueado por regra de restrição (todas as faturas)',
+                'error_message' => 'Bloqueado por regra de restrição',
                 'batch_id' => $batchId,
                 'sent_at' => now(),
             ]);
             return 'skipped';
         }
 
-        // Atualiza a lista de faturas para usar apenas as válidas
-        $invoices = $validInvoices->all();
+        $invoices = is_array($invoices) ? $invoices : (is_countable($invoices) ? $invoices->all() : []);
 
         $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
         if (!$originalPhone) {

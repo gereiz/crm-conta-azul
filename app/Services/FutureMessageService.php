@@ -344,9 +344,15 @@ class FutureMessageService
             if (!$cliente) continue;
 
             $firstInvoice = $clientInvoices->first();
-            
-            // Check duplicidade (já enviado hoje)
-            $this->createSchedule($cron, $cliente, $firstInvoice, $targetDate, $targetDate);
+            $blockedAny = $clientInvoices->contains(function($invoice) use ($cron, $cliente) {
+                return $this->restrictionService->isBlocked($cron->connection_id, [
+                    'cliente_nome' => $cliente->name,
+                    'cliente_ca_id' => $cliente->ca_id,
+                    'invoice_ca_id' => $invoice->ca_id,
+                    'descricao' => $invoice->descricao
+                ]);
+            });
+            $this->createSchedule($cron, $cliente, $firstInvoice, $targetDate, $targetDate, $blockedAny ? 'Restrição de envio configurada' : null);
         }
     }
 }
