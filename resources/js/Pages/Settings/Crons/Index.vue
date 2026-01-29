@@ -120,10 +120,40 @@ const cronReport = computed(() => {
 const cronEnabled = ref(true);
 const loadingCron = ref(false);
 const searchQuery = ref('');
+const filterMode = ref('none'); // none | weekly | monthly | date
+const filterWeekday = ref('');
+const filterMonthDay = ref('');
+const filterDate = ref('');
 const filteredCrons = computed(() => {
     const q = searchQuery.value.trim().toLowerCase();
-    if (!q) return props.crons || [];
-    return (props.crons || []).filter(c => (c.name || '').toLowerCase().includes(q));
+    const list = props.crons || [];
+    return list.filter(c => {
+        const nameOk = !q || (c.name || '').toLowerCase().includes(q);
+        if (!nameOk) return false;
+        if (filterMode.value === 'none') return true;
+        if (filterMode.value === 'weekly') {
+            if (filterWeekday.value === '' || filterWeekday.value === null) return true;
+            if (c.rule_type === 'daily') return true;
+            return c.rule_type === 'weekly_day' && Array.isArray(c.day_of_week) && c.day_of_week.includes(Number(filterWeekday.value));
+        }
+        if (filterMode.value === 'monthly') {
+            if (!filterMonthDay.value) return true;
+            if (c.rule_type === 'daily') return true;
+            return c.rule_type === 'monthly_day' && Array.isArray(c.day_of_month) && c.day_of_month.includes(Number(filterMonthDay.value));
+        }
+        if (filterMode.value === 'date') {
+            if (!filterDate.value) return true;
+            const dt = new Date(filterDate.value);
+            if (isNaN(dt.getTime())) return true;
+            const w = dt.getDay();
+            const d = dt.getDate();
+            if (c.rule_type === 'daily') return true;
+            const weeklyOk = c.rule_type === 'weekly_day' && Array.isArray(c.day_of_week) && c.day_of_week.includes(w);
+            const monthlyOk = c.rule_type === 'monthly_day' && Array.isArray(c.day_of_month) && c.day_of_month.includes(d);
+            return weeklyOk || monthlyOk;
+        }
+        return true;
+    });
 });
 const updateCronStatus = async () => {
     loadingCron.value = true;
@@ -278,6 +308,30 @@ onMounted(async () => {
                             <h3 class="text-lg font-medium">Suas Automações</h3>
                             <div class="flex items-center gap-2">
                                 <TextInput v-model="searchQuery" placeholder="Filtrar por nome da automação" class="w-64" />
+                                <select v-model="filterMode" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
+                                    <option value="none">Sem filtro de data</option>
+                                    <option value="weekly">Dia da semana</option>
+                                    <option value="monthly">Dia do mês</option>
+                                    <option value="date">Data específica</option>
+                                </select>
+                                <select v-if="filterMode === 'weekly'" v-model="filterWeekday" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
+                                    <option value="">Todos</option>
+                                    <option :value="0">Dom</option>
+                                    <option :value="1">Seg</option>
+                                    <option :value="2">Ter</option>
+                                    <option :value="3">Qua</option>
+                                    <option :value="4">Qui</option>
+                                    <option :value="5">Sex</option>
+                                    <option :value="6">Sáb</option>
+                                </select>
+                                <select v-if="filterMode === 'monthly'" v-model="filterMonthDay" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
+                                    <option value="">Todos</option>
+                                    <option v-for="d in 31" :key="d" :value="d">{{ d }}</option>
+                                </select>
+                                <input v-if="filterMode === 'date'" type="date" v-model="filterDate" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200" />
+                                <button @click="filterMode='none'; filterWeekday=''; filterMonthDay=''; filterDate=''" class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    Limpar
+                                </button>
                             </div>
                         </div>
 
