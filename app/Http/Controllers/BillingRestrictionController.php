@@ -13,6 +13,7 @@ class BillingRestrictionController extends Controller
     {
         $restrictions = BillingRestriction::with('connection')->orderByDesc('created_at')->paginate(20);
         $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
+
         return Inertia::render('Settings/Restrictions/Index', [
             'restrictions' => $restrictions,
             'connections' => $connections,
@@ -32,8 +33,9 @@ class BillingRestrictionController extends Controller
             'value' => 'required|string|max:255',
             'is_active' => 'boolean',
         ]);
-        
+
         BillingRestriction::create($validated);
+
         return redirect()->back()->with('success', 'Regra criada com sucesso.');
     }
 
@@ -50,14 +52,16 @@ class BillingRestrictionController extends Controller
             'value' => 'required|string|max:255',
             'is_active' => 'boolean',
         ]);
-        
+
         $restriction->update($validated);
+
         return redirect()->back()->with('success', 'Regra atualizada com sucesso.');
     }
 
     public function destroy(BillingRestriction $restriction)
     {
         $restriction->delete();
+
         return redirect()->back()->with('success', 'Regra excluída com sucesso.');
     }
 
@@ -65,6 +69,7 @@ class BillingRestrictionController extends Controller
     {
         $restriction->is_active = ! $restriction->is_active;
         $restriction->save();
+
         return redirect()->back()->with('success', 'Status da regra atualizado.');
     }
 
@@ -78,11 +83,12 @@ class BillingRestrictionController extends Controller
         $items = \App\Models\Cliente::where('connection_id', $request->connection_id)
             ->when($q, function ($query) use ($q) {
                 $query->where('name', 'like', "%{$q}%")
-                      ->orWhere('company_name', 'like', "%{$q}%");
+                    ->orWhere('company_name', 'like', "%{$q}%");
             })
             ->orderBy('name')
             ->limit(10)
             ->get(['id', 'ca_id', 'name', 'company_name']);
+
         return response()->json($items);
     }
 
@@ -96,11 +102,12 @@ class BillingRestrictionController extends Controller
         $items = \App\Models\Invoice::where('connection_id', $request->connection_id)
             ->when($q, function ($query) use ($q) {
                 $query->where('ca_id', 'like', "%{$q}%")
-                      ->orWhere('descricao', 'like', "%{$q}%");
+                    ->orWhere('descricao', 'like', "%{$q}%");
             })
             ->orderByDesc('data_vencimento')
             ->limit(10)
             ->get(['id', 'ca_id', 'descricao']);
+
         return response()->json($items);
     }
 }

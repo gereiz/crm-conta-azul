@@ -15,7 +15,7 @@ return new class extends Migration
             // Alterar colunas para JSON (ou TEXT se o banco não suportar JSON nativo, mas Laravel trata bem)
             // Como estamos alterando tipo, pode ser necessário doctrine/dbal, mas vamos tentar o change().
             // Se falhar, fazemos drop e add (já que os dados são novos).
-            
+
             // Abordagem segura: drop e add com novo tipo
             $table->dropColumn(['day_of_month', 'day_of_week']);
         });

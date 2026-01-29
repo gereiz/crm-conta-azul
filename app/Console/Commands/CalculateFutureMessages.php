@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Services\FutureMessageService;
 use App\Models\ContaAzulConnection;
+use App\Services\FutureMessageService;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class CalculateFutureMessages extends Command
@@ -37,12 +37,12 @@ class CalculateFutureMessages extends Command
     public function handle()
     {
         $connectionId = $this->argument('connection_id');
-        
+
         $query = ContaAzulConnection::where('is_active', true);
         if ($connectionId) {
             $query->where('id', $connectionId);
         }
-        
+
         $connections = $query->get();
 
         $this->info("Calculando envios futuros para {$connections->count()} conexões...");
@@ -52,12 +52,13 @@ class CalculateFutureMessages extends Command
                 $this->futureService->calculateForConnection($connection);
                 $this->info("Conexão {$connection->empresa_nome}: Atualizado.");
             } catch (\Exception $e) {
-                $this->error("Erro na conexão {$connection->empresa_nome}: " . $e->getMessage());
-                Log::error("Erro no cálculo de envios futuros (Conn {$connection->id}): " . $e->getMessage());
+                $this->error("Erro na conexão {$connection->empresa_nome}: ".$e->getMessage());
+                Log::error("Erro no cálculo de envios futuros (Conn {$connection->id}): ".$e->getMessage());
             }
         }
 
         $this->info('Cálculo concluído.');
+
         return Command::SUCCESS;
     }
 }

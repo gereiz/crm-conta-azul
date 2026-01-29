@@ -28,14 +28,14 @@ class ContaAzulService
         $this->clientId = trim(config('services.contaazul.client_id'));
         $this->clientSecret = trim(config('services.contaazul.client_secret'));
         $this->redirectUri = trim(config('services.contaazul.redirect_uri'));
-        $rawScope = (string)(trim(config('services.contaazul.scope')) ?: 'openid profile email sales');
+        $rawScope = (string) (trim(config('services.contaazul.scope')) ?: 'openid profile email sales');
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
         $allowed = ['openid', 'profile', 'email', 'offline_access', 'sales', 'customer', 'service', 'product', 'contract'];
         $parts = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
-        $parts = array_map(fn($s) => strtolower(trim($s)), $parts);
+        $parts = array_map(fn ($s) => strtolower(trim($s)), $parts);
         $filtered = array_values(array_unique(array_intersect($parts, $allowed)));
         if (empty($filtered)) {
-            $filtered = ['openid','profile','email','sales'];
+            $filtered = ['openid', 'profile', 'email', 'sales'];
         }
         $this->scope = implode(' ', $filtered);
     }
@@ -338,7 +338,7 @@ class ContaAzulService
             }
 
             $caId = $item['id'] ?? null;
-            if (!$caId) {
+            if (! $caId) {
                 continue;
             }
             $processedCaIds[] = $caId;
@@ -348,7 +348,7 @@ class ContaAzulService
             $invoiceDetails = ['url' => null, 'payment_type' => null];
             $existing = $existingInvoices[$caId] ?? null;
             $shouldFetchDetails = true;
-            if ($existing && !empty($existing['link_boleto'])) {
+            if ($existing && ! empty($existing['link_boleto'])) {
                 $shouldFetchDetails = false;
                 $invoiceDetails['url'] = $existing['link_boleto'];
             }
@@ -382,7 +382,7 @@ class ContaAzulService
 
         // Pruning seguro: remove apenas faturas marcadas como ATRASADO/OVERDUE
         // que não vieram na lista atual para a conexão padrão
-        if ($defaultConnection && !empty($processedCaIds)) {
+        if ($defaultConnection && ! empty($processedCaIds)) {
             Invoice::where('connection_id', $defaultConnection->id)
                 ->whereIn('status', ['ATRASADO', 'OVERDUE'])
                 ->whereNotIn('ca_id', $processedCaIds)

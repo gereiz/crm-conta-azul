@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\WhatsappMessageLog;
 use App\Models\ContaAzulConnection;
-use App\Models\Cliente;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
+use App\Models\WhatsappMessageLog;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -21,7 +19,7 @@ class WhatsappReportController extends Controller
         $startDate = request()->input('start_date');
         $endDate = request()->input('end_date');
         $search = request()->input('search');
-        
+
         $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
         $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
 
@@ -37,10 +35,10 @@ class WhatsappReportController extends Controller
         }
 
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('client_name', 'like', "%{$search}%")
-                  ->orWhere('phone_original', 'like', "%{$search}%")
-                  ->orWhere('phone_sanitized', 'like', "%{$search}%");
+                    ->orWhere('phone_original', 'like', "%{$search}%")
+                    ->orWhere('phone_sanitized', 'like', "%{$search}%");
             });
         }
 
@@ -61,18 +59,18 @@ class WhatsappReportController extends Controller
     public function download($id)
     {
         $log = WhatsappMessageLog::with(['connection', 'template'])->findOrFail($id);
-        
+
         $date = Carbon::parse($log->sent_at);
         $filenameDate = $date->format('d-m-Y');
         $safeClientName = Str::slug($log->client_name ?? 'desconhecido', '_');
         $filename = "log_whatsapp_{$filenameDate}_{$safeClientName}.xlsx";
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
 
         // Headers
         $headers = ['Empresa', 'Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
-        $sheet->fromArray([$headers], NULL, 'A1');
+        $sheet->fromArray([$headers], null, 'A1');
 
         // Data
         $rowData = [
@@ -86,9 +84,9 @@ class WhatsappReportController extends Controller
             $log->status,
             $log->error_message,
             $date->format('d/m/Y H:i:s'),
-            $log->content
+            $log->content,
         ];
-        $sheet->fromArray([$rowData], NULL, 'A2');
+        $sheet->fromArray([$rowData], null, 'A2');
 
         foreach (range('A', 'K') as $columnID) {
             $sheet->getColumnDimension($columnID)->setAutoSize(true);
@@ -96,7 +94,7 @@ class WhatsappReportController extends Controller
 
         $writer = new Xlsx($spreadsheet);
 
-        return response()->streamDownload(function() use ($writer) {
+        return response()->streamDownload(function () use ($writer) {
             $writer->save('php://output');
         }, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -108,7 +106,7 @@ class WhatsappReportController extends Controller
         $dateParam = $request->input('date');
         $startParam = $request->input('start_date');
         $endParam = $request->input('end_date');
-        
+
         if ($startParam || $endParam) {
             $start = $startParam ? Carbon::parse($startParam)->startOfDay() : Carbon::today()->startOfDay();
             $end = $endParam ? Carbon::parse($endParam)->endOfDay() : ($start ? $start->copy()->endOfDay() : Carbon::today()->endOfDay());
@@ -125,7 +123,7 @@ class WhatsappReportController extends Controller
 
         $groups = $logs->groupBy('connection_id');
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $first = true;
 
         foreach ($groups as $connectionId => $groupLogs) {
@@ -135,7 +133,7 @@ class WhatsappReportController extends Controller
             $sheet->setTitle(Str::substr(Str::slug($companyName), 0, 31));
 
             $headers = ['Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
-            $sheet->fromArray([$headers], NULL, 'A1');
+            $sheet->fromArray([$headers], null, 'A1');
 
             $row = 2;
             foreach ($groupLogs as $log) {
@@ -149,9 +147,9 @@ class WhatsappReportController extends Controller
                     $log->status,
                     $log->error_message,
                     Carbon::parse($log->sent_at)->format('d/m/Y H:i:s'),
-                    $log->content
+                    $log->content,
                 ];
-                $sheet->fromArray([$rowData], NULL, 'A' . $row);
+                $sheet->fromArray([$rowData], null, 'A'.$row);
                 $row++;
             }
 
@@ -160,9 +158,10 @@ class WhatsappReportController extends Controller
             }
         }
 
-        $filename = "relatorio_whatsapp_agrupado_" . $start->format('d-m-Y') . ".xlsx";
+        $filename = 'relatorio_whatsapp_agrupado_'.$start->format('d-m-Y').'.xlsx';
         $writer = new Xlsx($spreadsheet);
-        return response()->streamDownload(function() use ($writer) {
+
+        return response()->streamDownload(function () use ($writer) {
             $writer->save('php://output');
         }, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

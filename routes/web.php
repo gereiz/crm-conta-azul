@@ -1,27 +1,21 @@
 <?php
 
+use App\Http\Controllers\BillingRestrictionController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\ContaAzulConnectionController;
 use App\Http\Controllers\ContaAzulController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmpresaController;
+use App\Http\Controllers\InstallController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WhatsAppController;
-use App\Models\User;
-use Illuminate\Foundation\Application;
-use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
-
-use App\Http\Controllers\DashboardController;
-
-use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\WhatsappTemplateController;
-use App\Models\SystemSetting;
-use App\Http\Controllers\ContaAzulConnectionController;
-use App\Http\Controllers\BillingRestrictionController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\InstallController;
+use Illuminate\Support\Facades\Route;
 
 // Rotas de Instalação (Públicas, mas protegidas pelo middleware CheckInstalled)
 Route::prefix('install')->name('install.')->group(function () {
@@ -86,7 +80,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/conta-azul/sync', [SettingsController::class, 'syncClientes'])->name('contaazul.sync');
         Route::post('/conta-azul/sync-all', [SettingsController::class, 'syncAllClientes'])->name('contaazul.syncAll');
         Route::get('/conta-azul/token', [SettingsController::class, 'getToken'])->name('contaazul.token');
-        
+
         Route::get('/system', [SettingsController::class, 'system'])->name('system.index');
         Route::post('/system', [SettingsController::class, 'systemSave'])->name('system.save');
         Route::get('/system/json', [SettingsController::class, 'systemJson'])->name('system.json');
@@ -99,7 +93,7 @@ Route::middleware('auth')->group(function () {
 
         // Mensagens Padrão
         Route::resource('templates', WhatsappTemplateController::class);
-        
+
         // Crons (Mensagens Automáticas)
         Route::post('crons/{cron}/run', [\App\Http\Controllers\MessageCronController::class, 'runNow'])->name('crons.run');
         Route::resource('crons', \App\Http\Controllers\MessageCronController::class);
@@ -108,7 +102,7 @@ Route::middleware('auth')->group(function () {
         Route::post('restrictions/{restriction}/toggle', [BillingRestrictionController::class, 'toggle'])->name('restrictions.toggle');
         Route::get('restrictions/autocomplete/clients', [BillingRestrictionController::class, 'autocompleteClients'])->name('restrictions.autocomplete.clients');
         Route::get('restrictions/autocomplete/invoices', [BillingRestrictionController::class, 'autocompleteInvoices'])->name('restrictions.autocomplete.invoices');
-        
+
         Route::resource('roles', RoleController::class)->middleware('permission:roles.manage');
         Route::resource('permissions', PermissionController::class)->middleware('permission:permissions.manage');
     });
@@ -123,12 +117,12 @@ Route::middleware('auth')->group(function () {
     Route::get('whatsapp/reports', [\App\Http\Controllers\WhatsappReportController::class, 'index'])->name('whatsapp.reports.index');
     Route::get('whatsapp/reports/{id}/download', [\App\Http\Controllers\WhatsappReportController::class, 'download'])->name('whatsapp.reports.download');
     Route::get('whatsapp/reports/cron/download-grouped', [\App\Http\Controllers\WhatsappReportController::class, 'downloadGroupedAutomations'])->name('whatsapp.reports.cron.download_grouped');
-    
+
     // Envios Futuros
     Route::get('whatsapp/future-messages', [\App\Http\Controllers\FutureMessageController::class, 'index'])->name('whatsapp.future.index');
-    
+
     Route::resource('whatsapp', WhatsAppController::class);
-    
+
     // Envio de Mensagens
     Route::post('/messages/send', [MessageController::class, 'send'])->name('messages.send')->middleware('permission:messages.send');
 

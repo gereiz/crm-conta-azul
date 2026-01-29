@@ -4,10 +4,11 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
-        if (!Schema::hasTable('user_roles')) {
+        if (! Schema::hasTable('user_roles')) {
             Schema::create('user_roles', function (Blueprint $table) {
                 $table->id();
                 $table->string('name')->unique();
@@ -23,4 +24,3 @@ return new class extends Migration {
         Schema::dropIfExists('user_roles');
     }
 };
-

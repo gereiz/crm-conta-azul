@@ -3,14 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\ContaAzulConnection;
-use App\Services\ContaAzulAuthService;
 use App\Services\ContaAzulApiService;
+use App\Services\ContaAzulAuthService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ContaAzulConnectionController extends Controller
 {
     protected ContaAzulAuthService $auth;
+
     protected ContaAzulApiService $api;
 
     public function __construct(ContaAzulAuthService $auth, ContaAzulApiService $api)
@@ -49,6 +50,7 @@ class ContaAzulConnectionController extends Controller
         ]);
 
         $connection = ContaAzulConnection::create($data);
+
         return redirect()->back()->with('success', 'Conexão criada.');
     }
 
@@ -69,26 +71,26 @@ class ContaAzulConnectionController extends Controller
         // Mas o update sobrescreve. O problema é se o update tenta ler os valores antigos para comparar "dirty".
         // Para garantir, forçamos a definição dos atributos sem leitura prévia se possível,
         // ou capturamos a exceção para permitir a sobrescrita.
-        
+
         try {
             $connection->update($data);
         } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
             // Se falhou ao descriptografar, significa que os dados antigos estão corrompidos (chave mudou).
             // Como estamos fornecendo TODOS os dados sensíveis novamente no request (secret, etc),
             // podemos forçar a gravação direta ignorando o estado anterior.
-            
+
             $connection->empresa_nome = $data['empresa_nome'];
             $connection->email_desenvolvedor = $data['email_desenvolvedor'];
             $connection->ca_client_id = $data['ca_client_id'];
             $connection->ca_client_secret = $data['ca_client_secret']; // Será encriptado com a NOVA chave
             $connection->ca_redirect_uri = $data['ca_redirect_uri'];
             $connection->is_active = $data['is_active'];
-            
+
             // Limpa tokens antigos pois eles também estarão corrompidos
             $connection->access_token = null;
             $connection->refresh_token = null;
             $connection->token_expires_at = null;
-            
+
             $connection->save();
         }
 
@@ -98,6 +100,7 @@ class ContaAzulConnectionController extends Controller
     public function destroy(ContaAzulConnection $connection)
     {
         $connection->delete();
+
         return redirect()->back()->with('success', 'Conexão removida.');
     }
 
@@ -107,6 +110,7 @@ class ContaAzulConnectionController extends Controller
             return redirect()->back()->with('error', 'Conexão inválida: Client ID ou Redirect URI ausentes.');
         }
         $url = $this->auth->getAuthUrl($connection);
+
         return redirect()->away($url);
     }
 
@@ -115,28 +119,29 @@ class ContaAzulConnectionController extends Controller
         $state = $request->input('state');
         $savedState = session('contaazul_state');
 
-        if (!$state || $state !== $savedState) {
+        if (! $state || $state !== $savedState) {
             return redirect()->route('contaazul.connections.index')->with('error', 'Falha na autenticação Conta Azul (State inválido).');
         }
 
         $payload = json_decode(base64_decode($state), true);
-        if (!$payload || ($payload['connection_id'] ?? null) != $connection->id) {
+        if (! $payload || ($payload['connection_id'] ?? null) != $connection->id) {
             return redirect()->route('contaazul.connections.index')->with('error', 'Conexão inválida no callback.');
         }
 
         $code = $request->input('code');
         $data = $this->auth->exchangeCode($connection, $code);
-        if (!$data || empty($data['access_token'])) {
+        if (! $data || empty($data['access_token'])) {
             return redirect()->route('contaazul.connections.index')->with('error', 'Falha ao obter token da Conta Azul.');
         }
         $this->auth->saveTokens($connection, $data);
+
         return redirect()->route('contaazul.connections.index')->with('success', 'Conexão reautorizada com sucesso.');
     }
 
     public function refreshToken(ContaAzulConnection $connection)
     {
         try {
-            if (!$connection->refresh_token) {
+            if (! $connection->refresh_token) {
                 return response()->json(['success' => false, 'error' => 'Sem refresh token disponível. Realize a conexão manual.']);
             }
 
@@ -148,7 +153,7 @@ class ContaAzulConnectionController extends Controller
                 return response()->json(['success' => false, 'error' => 'Falha ao renovar token. O refresh token pode ter expirado.']);
             }
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'error' => 'Erro interno: ' . $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Erro interno: '.$e->getMessage()]);
         }
     }
 }

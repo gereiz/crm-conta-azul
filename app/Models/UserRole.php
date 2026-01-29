@@ -21,4 +21,3 @@ class UserRole extends Model
         return $this->belongsToMany(Permission::class, 'role_permissions', 'role_id', 'permission_id');
     }
 }
-

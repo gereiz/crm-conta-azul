@@ -21,11 +21,11 @@ return new class extends Migration
             $table->date('data_vencimento')->nullable();
             $table->date('data_emissao')->nullable();
             $table->string('link_boleto')->nullable();
-            
+
             // Relacionamento com cliente local
             $table->foreignId('cliente_id')->nullable()->constrained('clientes')->onDelete('cascade');
             // Armazena também o ID do cliente na CA caso o local não exista ainda
-            $table->string('cliente_ca_id')->nullable(); 
+            $table->string('cliente_ca_id')->nullable();
             $table->string('cliente_nome')->nullable(); // Backup do nome
 
             $table->timestamps();

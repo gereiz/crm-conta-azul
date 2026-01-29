@@ -38,6 +38,7 @@ class ContaAzulApiService
             // Fallback: Se falhar na URL antiga, tenta a nova V2
             if ($urlToUse === $this->baseUrl) {
                 Log::warning("Falha de conexão na API antiga ({$e->getMessage()}). Tentando API V2...");
+
                 return $this->request($connection, $method, $endpoint, $params, $retry, $attempts, 'https://api-v2.contaazul.com/v1');
             }
 
@@ -56,6 +57,7 @@ class ContaAzulApiService
             if ($response->status() !== 401) { // Só loga se não for 401 para evitar spam
                 Log::warning("Erro na API antiga (Status: {$response->status()}). Tentando API V2...");
             }
+
             return $this->request($connection, $method, $endpoint, $params, $retry, $attempts, 'https://api-v2.contaazul.com/v1');
         }
 
@@ -71,6 +73,7 @@ class ContaAzulApiService
             $waitTime = 5 * ($attempts + 1); // 5s, 10s, 15s...
             Log::warning("Rate limit Conta Azul ({$endpoint}). Aguardando {$waitTime}s para tentar novamente (Tentativa {$attempts}/5).");
             sleep($waitTime);
+
             return $this->request($connection, $method, $endpoint, $params, $retry, $attempts + 1, $customBaseUrl);
         }
 
@@ -79,7 +82,7 @@ class ContaAzulApiService
             // ou que o escopo 'sales' esteja faltando mesmo.
             // Log detalhado para debug
             Log::warning("Token rejeitado (401) na URL: {$urlToUse}/{$endpoint}");
-            
+
             // Retorna null para sinalizar falha sem quebrar a execução (SettingsController trata isso)
             return null;
         }
@@ -116,7 +119,7 @@ class ContaAzulApiService
         // Devemos buscar até o futuro (ex: +30 dias ou +1 ano) para capturar faturas que AINDA vão vencer.
         // O endpoint 'contas-a-receber/buscar' suporta filtro por status 'ABERTO' (que inclui atrasado e a vencer).
         $dataVencimentoAte = $endDate ?? \Carbon\Carbon::now()->addMonths(12)->format('Y-m-d');
-        
+
         $apiParams = [
             'pagina' => $page,
             'tamanho_pagina' => $size,
@@ -143,20 +146,20 @@ class ContaAzulApiService
             'url' => $response['url'] ?? null,
             'payment_type' => $response['metodo_pagamento'] ?? null,
         ];
-        
+
         // Estratégia melhorada para encontrar URL
         if (empty($details['url']) && isset($response['solicitacoes_cobrancas']) && is_array($response['solicitacoes_cobrancas'])) {
             // Tenta encontrar a primeira solicitação válida com URL, preferindo as mais recentes (se ordenado) ou qualquer uma válida
             // Iteramos de trás para frente para pegar a última (geralmente a mais atual)
             $solicitacoes = array_reverse($response['solicitacoes_cobrancas']);
             foreach ($solicitacoes as $solicitacao) {
-                if (!empty($solicitacao['url'])) {
+                if (! empty($solicitacao['url'])) {
                     $details['url'] = $solicitacao['url'];
                     break;
                 }
             }
         }
-        
+
         // Fallback: Se ainda não tem URL, tenta construir manualmente se houver token ou ID conhecido
         // (Isso depende de como a CA expõe links públicos, às vezes não expõe sem solicitação)
 
@@ -184,6 +187,7 @@ class ContaAzulApiService
         // ou manter 'vencido' se a API separar.
         // Assumindo que queremos o total de tudo que está aberto:
         $value = $response['totais']['valor'] ?? ($response['totais']['vencido']['valor'] ?? 0.0);
+
         return ['count' => (int) $count, 'value' => (float) $value];
     }
 
@@ -235,12 +239,14 @@ class ContaAzulApiService
 
         foreach ($allInvoices as $item) {
             $caId = $item['id'] ?? null;
-            if (!$caId) continue;
-            
+            if (! $caId) {
+                continue;
+            }
+
             $processedCaIds[] = $caId;
             $clienteCaId = $item['cliente']['id'] ?? null;
             $clienteLocalId = $clienteCaId ? ($clientMap[$clienteCaId] ?? null) : null;
-            
+
             // Proteção anti-duplicação entre empresas:
             // Se já existe uma fatura com o mesmo CA ID em outra conexão, não regravar aqui.
             try {
@@ -249,21 +255,22 @@ class ContaAzulApiService
                     ->exists();
                 if ($existsInOtherConn) {
                     \Illuminate\Support\Facades\Log::warning("Dedup: fatura CA {$caId} já existente em outra conexão. Ignorando na conexão {$connection->id}.");
+
                     continue;
                 }
             } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error("Falha na verificação de duplicidade de fatura: " . $e->getMessage());
+                \Illuminate\Support\Facades\Log::error('Falha na verificação de duplicidade de fatura: '.$e->getMessage());
             }
-            
+
             // Optimization: Only fetch details if we don't have a link or if it's a new invoice
             // Note: If status changes (e.g. pending -> overdue), the link usually remains valid, but let's be safe.
             // If we have a link and it's not empty, we skip the detail request to save time.
-            
+
             $invoiceDetails = ['url' => null, 'payment_type' => null];
             $existing = $existingInvoices[$caId] ?? null;
-            
+
             $shouldFetchDetails = true;
-            if ($existing && !empty($existing['link_boleto'])) {
+            if ($existing && ! empty($existing['link_boleto'])) {
                 $shouldFetchDetails = false;
                 $invoiceDetails['url'] = $existing['link_boleto'];
                 // We might miss payment_type update if we skip, but it rarely changes.
@@ -282,7 +289,7 @@ class ContaAzulApiService
             $valorPago = isset($item['pago']) ? (float) $item['pago'] : null;
             $naoPago = isset($item['nao_pago']) ? (float) $item['nao_pago'] : null;
             $saldoDevedor = $naoPago ?? ($valorPago !== null ? max(0.0, $valorOriginal - $valorPago) : $valorOriginal);
-            
+
             \App\Models\Invoice::updateOrCreate(
                 ['connection_id' => $connection->id, 'ca_id' => $caId],
                 [
@@ -304,7 +311,7 @@ class ContaAzulApiService
 
         // 4. Soft Pruning: remove apenas faturas ABERTAS/EM ATRASO que não vieram na lista atual
         // Protege faturas pagas/baixadas/quitadas.
-        if (!empty($processedCaIds)) {
+        if (! empty($processedCaIds)) {
             \App\Models\Invoice::where('connection_id', $connection->id)
                 ->whereIn('status', ['OVERDUE', 'ATRASADO', 'PENDING', 'ABERTO'])
                 ->whereNotIn('ca_id', $processedCaIds)
@@ -318,7 +325,7 @@ class ContaAzulApiService
                     ->delete();
             }
         }
-        
+
         return count($allInvoices);
     }
 }

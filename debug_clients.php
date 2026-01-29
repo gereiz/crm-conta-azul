@@ -1,7 +1,6 @@
 <?php
 
 use App\Services\ContaAzulService;
-use Illuminate\Support\Facades\Http;
 
 $service = app(ContaAzulService::class);
 $token = $service->getValidToken();

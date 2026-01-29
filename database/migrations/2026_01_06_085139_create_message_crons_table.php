@@ -18,21 +18,21 @@ return new class extends Migration
             // Verificando rotas: Route::resource('templates', WhatsappTemplateController::class);
             // Provavelmente a tabela é 'whatsapp_templates' ou 'message_templates'.
             // Vou verificar models.
-            
+
             $table->string('type'); // billing, due_date, boleto, birthday
-            
+
             $table->integer('period_value')->nullable();
             $table->string('period_unit')->nullable(); // days, months, years
-            
+
             $table->integer('days_before_due')->nullable();
             $table->integer('days_after_due')->nullable();
-            
+
             $table->string('send_time'); // HH:mm
             $table->boolean('is_active')->default(true);
             $table->timestamp('last_run_at')->nullable();
-            
+
             $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
-            
+
             $table->timestamps();
         });
     }

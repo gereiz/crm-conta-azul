@@ -2,24 +2,26 @@
 
 namespace App\Services;
 
+use App\Models\Cliente;
+use App\Models\CompanyMessageSetting;
+use App\Models\Invoice;
 use App\Models\MessageCron;
 use App\Models\WhatsappMessageLog;
-use App\Models\CompanyMessageSetting;
-use App\Models\CompanyCronRule;
-use App\Models\Invoice;
-use App\Models\Cliente;
 use App\Models\WhatsappNumber;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class MessageCronService
 {
     protected $whapiService;
+
     protected $restrictionService;
+
     protected int $batchSize = 30;
+
     protected int $batchDelaySeconds = 300;
 
     public function __construct(WhapiService $whapiService, BillingRestrictionService $restrictionService)
@@ -37,28 +39,30 @@ class MessageCronService
             'sent' => 0,
             'errors' => 0,
             'skipped' => 0,
-            'total' => 0
+            'total' => 0,
         ];
 
         try {
             // Verifica se deve rodar HOJE com base nas regras do próprio CRON
-            if (!$forceRun && !$this->shouldRunToday($cron)) {
+            if (! $forceRun && ! $this->shouldRunToday($cron)) {
                 Log::info("Cron {$cron->id} ignorado: Regras de agendamento não satisfeitas para hoje.");
                 $stats['skipped'] = 0;
+
                 return $stats;
             }
 
-            if (!empty($cron->connection_id)) {
+            if (! empty($cron->connection_id)) {
                 $typeEnabled = CompanyMessageSetting::where('conta_azul_connection_id', $cron->connection_id)
                     ->where('message_type', $cron->type)
                     ->value('is_enabled');
-                if (!$typeEnabled) {
+                if (! $typeEnabled) {
                     Log::info("Cron {$cron->id} ignorado: tipo {$cron->type} desabilitado para conexão {$cron->connection_id}.");
                     $stats['skipped'] = 0;
+
                     return $stats;
                 }
             }
-            
+
             switch ($cron->type) {
                 case 'billing':
                     $stats = $this->processBilling($cron, $batchId);
@@ -75,11 +79,12 @@ class MessageCronService
             }
 
             $cron->update(['last_run_at' => now()]);
-            
+
             return $stats;
 
         } catch (\Exception $e) {
-            Log::error("Erro ao processar cron {$cron->id}: " . $e->getMessage());
+            Log::error("Erro ao processar cron {$cron->id}: ".$e->getMessage());
+
             return $stats;
         }
     }
@@ -99,19 +104,28 @@ class MessageCronService
                 return true;
 
             case 'monthly_day':
-                if (empty($cron->day_of_month)) return false;
+                if (empty($cron->day_of_month)) {
+                    return false;
+                }
                 // Suporte a array JSON ou valor único antigo (fallback)
-                $days = is_array($cron->day_of_month) ? $cron->day_of_month : [(int)$cron->day_of_month];
+                $days = is_array($cron->day_of_month) ? $cron->day_of_month : [(int) $cron->day_of_month];
+
                 return in_array($now->day, $days);
 
             case 'weekly_day':
-                if ($cron->day_of_week === null) return false;
-                $days = is_array($cron->day_of_week) ? $cron->day_of_week : [(int)$cron->day_of_week];
+                if ($cron->day_of_week === null) {
+                    return false;
+                }
+                $days = is_array($cron->day_of_week) ? $cron->day_of_week : [(int) $cron->day_of_week];
+
                 return in_array($now->dayOfWeek, $days);
 
             case 'interval_days':
-                if (!$cron->last_run_at) return true; // Nunca rodou, roda hoje
+                if (! $cron->last_run_at) {
+                    return true;
+                } // Nunca rodou, roda hoje
                 $daysSinceLastRun = $now->diffInDays($cron->last_run_at->startOfDay());
+
                 return $daysSinceLastRun >= $cron->interval_days;
 
             default:
@@ -121,16 +135,21 @@ class MessageCronService
 
     protected function checkCronNumberStatus(MessageCron $cron)
     {
-        if (!$cron->whatsapp_number_id) return false;
+        if (! $cron->whatsapp_number_id) {
+            return false;
+        }
         $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
+
         return $this->whapiService->isConnected($whatsapp);
     }
 
     protected function applyPerNumberBatchGate(MessageCron $cron, int $total)
     {
-        if (!$cron->whatsapp_number_id) return;
+        if (! $cron->whatsapp_number_id) {
+            return;
+        }
         $batches = (int) ceil(max(0, $total) / $this->batchSize);
-        $busyKey = 'whatsapp_busy_until_' . $cron->whatsapp_number_id;
+        $busyKey = 'whatsapp_busy_until_'.$cron->whatsapp_number_id;
         $now = Carbon::now();
         $busyUntil = Cache::get($busyKey);
         if ($busyUntil) {
@@ -138,9 +157,12 @@ class MessageCronService
                 $ts = Carbon::parse($busyUntil);
                 if ($ts->gt($now)) {
                     $wait = $ts->diffInSeconds($now);
-                    if ($wait > 0) sleep($wait);
+                    if ($wait > 0) {
+                        sleep($wait);
+                    }
                 }
-            } catch (\Exception $e) {}
+            } catch (\Exception $e) {
+            }
         }
         $extra = max(0, $batches - 1) * $this->batchDelaySeconds;
         if ($extra > 0) {
@@ -159,11 +181,11 @@ class MessageCronService
         $periodStart = $this->getPeriodStartDate($cron);
 
         $query = Invoice::where('data_vencimento', '<=', $dueDateLimit);
-        
-        if (!empty($cron->connection_id)) {
+
+        if (! empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
         }
-        
+
         if ($periodStart) {
             $query->where('data_vencimento', '>=', $periodStart);
         }
@@ -174,7 +196,7 @@ class MessageCronService
         $query->where(function ($q) {
             $q->where(function ($qq) {
                 $qq->whereNotNull('payment_type')
-                   ->where('payment_type', 'LIKE', '%BOLETO%');
+                    ->where('payment_type', 'LIKE', '%BOLETO%');
             })->orWhere(function ($qq) {
                 $qq->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
             });
@@ -183,8 +205,8 @@ class MessageCronService
         $invoices = $query->with('cliente')->get();
 
         // Agrupar por cliente para envio único
-        $groups = $invoices->filter(fn($inv) => $inv->cliente_id && $inv->cliente)->groupBy('cliente_id');
-        
+        $groups = $invoices->filter(fn ($inv) => $inv->cliente_id && $inv->cliente)->groupBy('cliente_id');
+
         Log::info('Cron billing - seleção e agrupamento', [
             'cron_id' => $cron->id,
             'connection_id' => $cron->connection_id,
@@ -204,18 +226,25 @@ class MessageCronService
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $clienteId => $clientInvoices) {
                 $cliente = $clientInvoices->first()->cliente;
-                if (!$isNumberActive) {
+                if (! $isNumberActive) {
                     $phone = $cliente->mobile_phone ?? $cliente->phone;
-                    $this->logError($cron, $cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", count($clientInvoices));
+                    $this->logError($cron, $cliente, $phone, 'Número de envio desconectado/inativo (Cron abortado).', count($clientInvoices));
                     $stats['errors']++;
+
                     continue;
                 }
                 $result = $this->sendGroupedMessageForClient($cron, $cliente, $clientInvoices, $batchId);
-                if ($result === 'sent') $stats['sent']++;
-                elseif ($result === 'error') $stats['errors']++;
-                else $stats['skipped']++;
+                if ($result === 'sent') {
+                    $stats['sent']++;
+                } elseif ($result === 'error') {
+                    $stats['errors']++;
+                } else {
+                    $stats['skipped']++;
+                }
             }
-            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
+            if ($chunkIndex < ($chunks->count() - 1)) {
+                sleep($this->batchDelaySeconds);
+            }
         }
 
         return $stats;
@@ -230,16 +259,16 @@ class MessageCronService
         $query = Invoice::whereDate('data_vencimento', $targetDate)
             ->where(function ($q) {
                 $q->whereIn('status', ['PENDING', 'ABERTO'])
-                  ->orWhereNull('status');
+                    ->orWhereNull('status');
             })
             ->where(function ($q) {
                 $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
             });
-        
-        if (!empty($cron->connection_id)) {
+
+        if (! empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
         }
-        
+
         $invoices = $query->with('cliente')->get();
 
         Log::info('Cron due_date - seleção de faturas', [
@@ -258,18 +287,25 @@ class MessageCronService
         $chunks = $invoices->chunk($this->batchSize);
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $invoice) {
-                if (!$isNumberActive) {
+                if (! $isNumberActive) {
                     $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
-                    $this->logError($cron, $invoice->cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", 1);
+                    $this->logError($cron, $invoice->cliente, $phone, 'Número de envio desconectado/inativo (Cron abortado).', 1);
                     $stats['errors']++;
+
                     continue;
                 }
                 $result = $this->sendMessageForInvoice($cron, $invoice, $batchId);
-                if ($result === 'sent') $stats['sent']++;
-                elseif ($result === 'error') $stats['errors']++;
-                else $stats['skipped']++;
+                if ($result === 'sent') {
+                    $stats['sent']++;
+                } elseif ($result === 'error') {
+                    $stats['errors']++;
+                } else {
+                    $stats['skipped']++;
+                }
             }
-            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
+            if ($chunkIndex < ($chunks->count() - 1)) {
+                sleep($this->batchDelaySeconds);
+            }
         }
 
         return $stats;
@@ -280,14 +316,14 @@ class MessageCronService
         $days = (int) ($cron->days_before_due ?? $cron->period_value ?? 0);
         $startDate = Carbon::today()->format('Y-m-d');
         $endDate = Carbon::now()->addDays($days)->format('Y-m-d');
-        
+
         $query = Invoice::where('status', 'PENDING')
             ->whereDate('data_vencimento', '>=', $startDate)
             ->whereDate('data_vencimento', '<=', $endDate)
             ->whereNotNull('link_boleto')
             ->where('link_boleto', '!=', '');
 
-        if (!empty($cron->connection_id)) {
+        if (! empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
         }
         $invoices = $query->with('cliente')->get();
@@ -309,10 +345,11 @@ class MessageCronService
         $chunks = $invoices->chunk($this->batchSize);
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $invoice) {
-                if (!$isNumberActive) {
+                if (! $isNumberActive) {
                     $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
-                    $this->logError($cron, $invoice->cliente, $phone, "Número de envio desconectado/inativo (Cron abortado).", 1);
+                    $this->logError($cron, $invoice->cliente, $phone, 'Número de envio desconectado/inativo (Cron abortado).', 1);
                     $stats['errors']++;
+
                     continue;
                 }
                 $alreadyEverSent = \App\Models\WhatsappMessageLog::where('message_type', 'boleto')
@@ -336,14 +373,21 @@ class MessageCronService
                         'sent_at' => now(),
                     ]);
                     $stats['skipped']++;
+
                     continue;
                 }
                 $result = $this->sendMessageForInvoice($cron, $invoice, $batchId);
-                if ($result === 'sent') $stats['sent']++;
-                elseif ($result === 'error') $stats['errors']++;
-                else $stats['skipped']++;
+                if ($result === 'sent') {
+                    $stats['sent']++;
+                } elseif ($result === 'error') {
+                    $stats['errors']++;
+                } else {
+                    $stats['skipped']++;
+                }
             }
-            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
+            if ($chunkIndex < ($chunks->count() - 1)) {
+                sleep($this->batchDelaySeconds);
+            }
         }
 
         return $stats;
@@ -352,9 +396,9 @@ class MessageCronService
     protected function processBirthday(MessageCron $cron, string $batchId)
     {
         $today = Carbon::now()->format('m-d');
-        
+
         $query = Cliente::whereRaw("DATE_FORMAT(birthdate, '%m-%d') = ?", [$today]);
-        if (!empty($cron->connection_id)) {
+        if (! empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
         }
         $clients = $query->get();
@@ -367,18 +411,25 @@ class MessageCronService
         $chunks = $clients->chunk($this->batchSize);
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $client) {
-                if (!$isNumberActive) {
+                if (! $isNumberActive) {
                     $phone = $client->mobile_phone ?? $client->phone;
-                    $this->logError($cron, $client, $phone, "Número de envio desconectado/inativo (Cron abortado).");
+                    $this->logError($cron, $client, $phone, 'Número de envio desconectado/inativo (Cron abortado).');
                     $stats['errors']++;
+
                     continue;
                 }
                 $result = $this->sendMessageForBirthday($cron, $client, $batchId);
-                if ($result === 'sent') $stats['sent']++;
-                elseif ($result === 'error') $stats['errors']++;
-                else $stats['skipped']++;
+                if ($result === 'sent') {
+                    $stats['sent']++;
+                } elseif ($result === 'error') {
+                    $stats['errors']++;
+                } else {
+                    $stats['skipped']++;
+                }
             }
-            if ($chunkIndex < ($chunks->count() - 1)) sleep($this->batchDelaySeconds);
+            if ($chunkIndex < ($chunks->count() - 1)) {
+                sleep($this->batchDelaySeconds);
+            }
         }
 
         return $stats;
@@ -386,7 +437,9 @@ class MessageCronService
 
     protected function sendMessageForInvoice(MessageCron $cron, Invoice $invoice, string $batchId)
     {
-        if (!$invoice->cliente) return 'skipped';
+        if (! $invoice->cliente) {
+            return 'skipped';
+        }
 
         $ignoreSentToday = false;
         $connId = $invoice->connection_id ?? $cron->connection_id;
@@ -395,12 +448,12 @@ class MessageCronService
                 ->where('message_type', 'ignore_sent_today')
                 ->value('is_enabled');
         }
-        
+
         // Sanitização
         $originalPhone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
 
-        if ($cron->type === 'billing' && !$ignoreSentToday) {
+        if ($cron->type === 'billing' && ! $ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $invoice->cliente_id)
                 ->whereDate('sent_at', Carbon::today())
@@ -422,6 +475,7 @@ class MessageCronService
                     'batch_id' => $batchId,
                     'sent_at' => now(),
                 ]);
+
                 return 'skipped';
             }
         }
@@ -451,23 +505,27 @@ class MessageCronService
                 'batch_id' => $batchId,
                 'sent_at' => now(),
             ]);
+
             return 'skipped';
         }
 
-        if (!$sanitizedPhone) {
-             $this->logError($cron, $invoice->cliente, $originalPhone, "Cliente sem telefone válido após sanitização.", 1);
-             return 'error';
+        if (! $sanitizedPhone) {
+            $this->logError($cron, $invoice->cliente, $originalPhone, 'Cliente sem telefone válido após sanitização.', 1);
+
+            return 'error';
         }
 
-        if (!$cron->messageTemplate) {
-            $this->logError($cron, $invoice->cliente, $originalPhone, "Template de mensagem não encontrado.", 1);
+        if (! $cron->messageTemplate) {
+            $this->logError($cron, $invoice->cliente, $originalPhone, 'Template de mensagem não encontrado.', 1);
+
             return 'error';
         }
 
         // Use the cron's specific WhatsApp number
-        if (!$cron->whatsapp_number_id) {
-             $this->logError($cron, $invoice->cliente, $originalPhone, "Cron sem número de WhatsApp vinculado.", 1);
-             return 'error';
+        if (! $cron->whatsapp_number_id) {
+            $this->logError($cron, $invoice->cliente, $originalPhone, 'Cron sem número de WhatsApp vinculado.', 1);
+
+            return 'error';
         }
 
         $message = $this->replaceVariables($cron->messageTemplate->content, $invoice);
@@ -504,17 +562,21 @@ class MessageCronService
     protected function sendMessageForBirthday(MessageCron $cron, Cliente $client, string $batchId)
     {
         $originalPhone = $client->mobile_phone ?? $client->phone;
-        if (!$originalPhone) return 'skipped';
+        if (! $originalPhone) {
+            return 'skipped';
+        }
 
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
-        if (!$sanitizedPhone) {
-            $this->logError($cron, $client, $originalPhone, "Cliente sem telefone válido após sanitização.");
+        if (! $sanitizedPhone) {
+            $this->logError($cron, $client, $originalPhone, 'Cliente sem telefone válido após sanitização.');
+
             return 'error';
         }
 
         if (PhoneSanitizerService::isLandline($sanitizedPhone)) {
-             $this->logError($cron, $client, $originalPhone, "Telefone fixo (não suportado).");
-             return 'error';
+            $this->logError($cron, $client, $originalPhone, 'Telefone fixo (não suportado).');
+
+            return 'error';
         }
 
         $ignoreSentToday = false;
@@ -526,13 +588,14 @@ class MessageCronService
         }
         // Regra de "Já enviado hoje" não se aplica para aniversários
 
-        if (!$cron->whatsapp_number_id) {
-             $this->logError($cron, $client, $originalPhone, "Cron sem número de WhatsApp vinculado.");
+        if (! $cron->whatsapp_number_id) {
+            $this->logError($cron, $client, $originalPhone, 'Cron sem número de WhatsApp vinculado.');
+
             return 'error';
         }
 
         $content = $this->replaceVariables($cron->messageTemplate->content, null, $client);
-        
+
         try {
             $result = $this->whapiService->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
 
@@ -556,11 +619,12 @@ class MessageCronService
 
         } catch (\Exception $e) {
             $this->logError($cron, $client, $originalPhone, $e->getMessage());
+
             return 'error';
         }
     }
 
-    protected function replaceVariables($content, Invoice $invoice = null, Cliente $client = null)
+    protected function replaceVariables($content, ?Invoice $invoice = null, ?Cliente $client = null)
     {
         $replacements = [];
 
@@ -570,11 +634,15 @@ class MessageCronService
             if ($invoice->data_vencimento < $now) {
                 $lateDays = $now->diffInDays($invoice->data_vencimento);
             }
-            
+
             $dueDate = Carbon::parse($invoice->data_vencimento);
             $adjustedDate = $dueDate->copy();
-            if ($dueDate->isSaturday()) $adjustedDate->addDays(2);
-            if ($dueDate->isSunday()) $adjustedDate->addDays(1);
+            if ($dueDate->isSaturday()) {
+                $adjustedDate->addDays(2);
+            }
+            if ($dueDate->isSunday()) {
+                $adjustedDate->addDays(1);
+            }
 
             $replacements = [
                 '@@clientName@@' => $invoice->cliente->name,
@@ -586,8 +654,8 @@ class MessageCronService
                 '@@invoiceDueDate@@' => $adjustedDate->format('d/m/Y'),
                 '@@invoiceStrictDueDate@@' => $dueDate->format('d/m/Y'),
                 '@@invoiceUrl@@' => $invoice->link_boleto ?? '',
-                '@@invoicePastDueQuantity@@' => '', 
-                '@@invoicePastDueDates@@' => '', 
+                '@@invoicePastDueQuantity@@' => '',
+                '@@invoicePastDueDates@@' => '',
             ];
         } elseif ($client) {
             $replacements = [
@@ -602,14 +670,20 @@ class MessageCronService
 
     protected function getPeriodStartDate(MessageCron $cron)
     {
-        if (!$cron->period_value || !$cron->period_unit) return null;
+        if (! $cron->period_value || ! $cron->period_unit) {
+            return null;
+        }
 
         $date = Carbon::now();
         switch ($cron->period_unit) {
-            case 'days': $date->subDays($cron->period_value); break;
-            case 'months': $date->subMonths($cron->period_value); break;
-            case 'years': $date->subYears($cron->period_value); break;
+            case 'days': $date->subDays($cron->period_value);
+                break;
+            case 'months': $date->subMonths($cron->period_value);
+                break;
+            case 'years': $date->subYears($cron->period_value);
+                break;
         }
+
         return $date->format('Y-m-d');
     }
 
@@ -622,6 +696,7 @@ class MessageCronService
         $text = preg_replace('/\s*(https?:\/\/\S+)\s*/i', "\n$1\n", $text);
         // Compacta múltiplas quebras de linha
         $text = preg_replace("/\n{2,}/", "\n", $text);
+
         return trim($text);
     }
 
@@ -655,7 +730,7 @@ class MessageCronService
         if ($clientBlocked) {
             $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
             $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
-            
+
             WhatsappMessageLog::create([
                 'connection_id' => $cron->connection_id ?? ($cliente->connection_id ?? null),
                 'message_cron_id' => $cron->id,
@@ -672,26 +747,29 @@ class MessageCronService
                 'batch_id' => $batchId,
                 'sent_at' => now(),
             ]);
+
             return 'skipped';
         }
 
         $originalInvoices = collect(is_array($invoices) ? $invoices : (is_countable($invoices) ? $invoices->all() : []));
-        $validInvoices = $originalInvoices->reject(function($invoice) use ($cron, $cliente) {
+        $validInvoices = $originalInvoices->reject(function ($invoice) use ($cron, $cliente) {
             $context = [
                 'cliente_nome' => $cliente->name ?? ($invoice->cliente_nome ?? ''),
                 'cliente_ca_id' => $cliente->ca_id ?? $invoice->cliente_ca_id,
                 'invoice_ca_id' => $invoice->ca_id,
                 'descricao' => $invoice->descricao,
             ];
+
             return $this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context);
         });
-        $blockedInvoices = $originalInvoices->filter(function($invoice) use ($cron, $cliente) {
+        $blockedInvoices = $originalInvoices->filter(function ($invoice) use ($cron, $cliente) {
             $context = [
                 'cliente_nome' => $cliente->name ?? ($invoice->cliente_nome ?? ''),
                 'cliente_ca_id' => $cliente->ca_id ?? $invoice->cliente_ca_id,
                 'invoice_ca_id' => $invoice->ca_id,
                 'descricao' => $invoice->descricao,
             ];
+
             return $this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context);
         });
         Log::info('Cron billing - restrições aplicadas no agrupamento', [
@@ -720,25 +798,29 @@ class MessageCronService
                 'batch_id' => $batchId,
                 'sent_at' => now(),
             ]);
+
             return 'skipped';
         }
         $invoices = $validInvoices->all();
 
         $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
-        if (!$originalPhone) {
-            $this->logError($cron, $cliente, null, "Cliente sem telefone cadastrado.", is_countable($invoices) ? count($invoices) : null);
+        if (! $originalPhone) {
+            $this->logError($cron, $cliente, null, 'Cliente sem telefone cadastrado.', is_countable($invoices) ? count($invoices) : null);
+
             return 'error';
         }
 
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
-        if (!$sanitizedPhone) {
-            $this->logError($cron, $cliente, $originalPhone, "Cliente sem telefone válido após sanitização.", is_countable($invoices) ? count($invoices) : null);
+        if (! $sanitizedPhone) {
+            $this->logError($cron, $cliente, $originalPhone, 'Cliente sem telefone válido após sanitização.', is_countable($invoices) ? count($invoices) : null);
+
             return 'error';
         }
 
         if (PhoneSanitizerService::isLandline($sanitizedPhone)) {
-             $this->logError($cron, $cliente, $originalPhone, "Telefone fixo (não suportado).", is_countable($invoices) ? count($invoices) : null);
-             return 'error';
+            $this->logError($cron, $cliente, $originalPhone, 'Telefone fixo (não suportado).', is_countable($invoices) ? count($invoices) : null);
+
+            return 'error';
         }
 
         $connId = $cron->connection_id ?? ($cliente->connection_id ?? null);
@@ -748,7 +830,7 @@ class MessageCronService
                 ->where('message_type', 'ignore_sent_today')
                 ->value('is_enabled');
         }
-        if ($cron->type === 'billing' && !$ignoreSentToday) {
+        if ($cron->type === 'billing' && ! $ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $cliente->id)
                 ->whereDate('sent_at', Carbon::today())
@@ -770,6 +852,7 @@ class MessageCronService
                     'batch_id' => $batchId,
                     'sent_at' => now(),
                 ]);
+
                 return 'skipped';
             }
         }
@@ -797,48 +880,55 @@ class MessageCronService
                 'batch_id' => $batchId,
                 'sent_at' => now(),
             ]);
+
             return 'skipped';
         }
 
-        if (!$cron->messageTemplate) {
-            $this->logError($cron, $cliente, $originalPhone, "Template de mensagem não encontrado.", is_countable($invoices) ? count($invoices) : null);
+        if (! $cron->messageTemplate) {
+            $this->logError($cron, $cliente, $originalPhone, 'Template de mensagem não encontrado.', is_countable($invoices) ? count($invoices) : null);
+
             return 'error';
         }
 
-        if (!$cron->whatsapp_number_id) {
-            $this->logError($cron, $cliente, $originalPhone, "Cron sem número de WhatsApp vinculado.", is_countable($invoices) ? count($invoices) : null);
+        if (! $cron->whatsapp_number_id) {
+            $this->logError($cron, $cliente, $originalPhone, 'Cron sem número de WhatsApp vinculado.', is_countable($invoices) ? count($invoices) : null);
+
             return 'error';
         }
 
         $dates = collect($invoices)->map(function ($inv) {
             return Carbon::parse($inv->data_vencimento)->format('d/m/Y');
         })->values()->all();
-        $earliest = collect($invoices)->min(fn($inv) => Carbon::parse($inv->data_vencimento));
+        $earliest = collect($invoices)->min(fn ($inv) => Carbon::parse($inv->data_vencimento));
         $adjustedEarliest = $earliest ? (clone $earliest) : null;
         if ($adjustedEarliest) {
-            if ($adjustedEarliest->isSaturday()) $adjustedEarliest->addDays(2);
-            if ($adjustedEarliest->isSunday()) $adjustedEarliest->addDays(1);
+            if ($adjustedEarliest->isSaturday()) {
+                $adjustedEarliest->addDays(2);
+            }
+            if ($adjustedEarliest->isSunday()) {
+                $adjustedEarliest->addDays(1);
+            }
         }
 
         $totalValue = collect($invoices)->sum(function ($inv) {
             return (float) ($inv->saldo_devedor ?? $inv->nao_pago ?? 0);
         });
         $firstUrl = collect($invoices)->first(function ($inv) {
-            return !empty($inv->link_boleto);
+            return ! empty($inv->link_boleto);
         });
         $allUrls = collect($invoices)->pluck('link_boleto')->filter()->implode("\n");
-        $pairs = collect($invoices)->map(function ($inv) use ($cron) {
+        $pairs = collect($invoices)->map(function ($inv) {
             $due = Carbon::parse($inv->data_vencimento)->format('d/m/Y');
             $url = trim($inv->link_boleto ?? '');
-            
+
             if ($url !== '') {
                 $display = "\n{$url}";
             } else {
                 $display = 'boleto não disponível';
                 Log::warning("Boleto não disponível para fatura ID {$inv->id} (CA ID: {$inv->ca_id}) do cliente {$inv->cliente->name}. Motivo: URL vazia no banco de dados.");
             }
-            
-            return $due . ' - ' . $display;
+
+            return $due.' - '.$display;
         })->implode("\n");
 
         $content = $cron->messageTemplate->content;
@@ -908,25 +998,34 @@ class MessageCronService
             $response = Http::withOptions([
                 'verify' => false,
             ])->timeout(10)->get($url);
-            
-            if ($response->ok()) return true;
+
+            if ($response->ok()) {
+                return true;
+            }
             // Considera redirecionamentos e 3xx como válidos para preview
-            if ($response->status() >= 300 && $response->status() < 400) return true;
+            if ($response->status() >= 300 && $response->status() < 400) {
+                return true;
+            }
+
             return false;
         } catch (\Exception $e) {
-            Log::warning("Falha ao verificar link do boleto ({$url}): " . $e->getMessage());
+            Log::warning("Falha ao verificar link do boleto ({$url}): ".$e->getMessage());
+
             return false;
         }
     }
 
     protected function shouldLimitPreview(MessageCron $cron, ?int $connectionId): bool
     {
-        if ($cron->limit_link_preview) return true;
+        if ($cron->limit_link_preview) {
+            return true;
+        }
         if ($connectionId) {
             return (bool) CompanyMessageSetting::where('conta_azul_connection_id', $connectionId)
                 ->where('message_type', 'limit_link_preview')
                 ->value('is_enabled');
         }
+
         return false;
     }
 
@@ -937,12 +1036,15 @@ class MessageCronService
 
     protected function shouldDisablePreview(MessageCron $cron, ?int $connectionId): bool
     {
-        if ($cron->disable_link_preview) return true;
+        if ($cron->disable_link_preview) {
+            return true;
+        }
         if ($connectionId) {
             return (bool) CompanyMessageSetting::where('conta_azul_connection_id', $connectionId)
                 ->where('message_type', 'disable_link_preview')
                 ->value('is_enabled');
         }
+
         return false;
     }
 

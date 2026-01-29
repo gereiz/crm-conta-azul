@@ -2,14 +2,14 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\SystemSetting;
+use Illuminate\Database\Seeder;
 
 class SystemSettingSeeder extends Seeder
 {
     public function run(): void
     {
-        if (!SystemSetting::query()->exists()) {
+        if (! SystemSetting::query()->exists()) {
             SystemSetting::create([
                 'system_name' => 'IbitWeb',
                 'primary_color' => '#6366F1',

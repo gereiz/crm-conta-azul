@@ -2,22 +2,24 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\ContaAzulConnection;
 use App\Models\Cliente;
+use App\Models\ContaAzulConnection;
 use App\Models\SyncJobLog;
+use App\Models\SystemSetting;
 use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
-use App\Models\SystemSetting;
 use Carbon\Carbon;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class SyncContaAzulConnections extends Command
 {
     protected $signature = 'contaazul:sync-stale';
+
     protected $description = 'Verifica conexões com última sincronização >24h e sincroniza clientes e faturas para todas as empresas.';
 
     protected ContaAzulApiService $api;
+
     protected ContaAzulAuthService $auth;
 
     public function __construct(ContaAzulApiService $api, ContaAzulAuthService $auth)
@@ -32,6 +34,7 @@ class SyncContaAzulConnections extends Command
         $settings = SystemSetting::latest()->first();
         if ($settings && $settings->contaazul_cron_enabled === false) {
             $this->info('Cron de sincronização Conta Azul está desativada nas Configurações do Sistema.');
+
             return 0;
         }
         $now = Carbon::now();
@@ -44,6 +47,7 @@ class SyncContaAzulConnections extends Command
                 $token = $this->auth->getValidToken($connection) ?? $this->auth->getValidToken($connection, true);
                 if (! $token) {
                     $this->warn("Sem token válido para conexão {$connection->id}. Pulando.");
+
                     continue;
                 }
 
@@ -77,11 +81,13 @@ class SyncContaAzulConnections extends Command
                             'message' => $e->getMessage(),
                         ]);
                     }
-                } catch (\Throwable $t) {}
+                } catch (\Throwable $t) {
+                }
             }
         }
 
         $this->info('Sincronização de faturas concluída.');
+
         return 0;
     }
 

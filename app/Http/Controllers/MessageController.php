@@ -2,23 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MessageLog;
-use App\Models\WhatsappMessageLog;
-use App\Models\Invoice;
 use App\Models\Cliente;
 use App\Models\CompanyMessageSetting;
+use App\Models\Invoice;
+use App\Models\WhatsappMessageLog;
+use App\Models\WhatsappNumber;
 use App\Services\BillingRestrictionService;
-use App\Services\WhapiService;
 use App\Services\PhoneSanitizerService;
+use App\Services\WhapiService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
-
-use App\Models\WhatsappNumber;
 
 class MessageController extends Controller
 {
     protected $whapiService;
+
     protected $restrictionService;
 
     public function __construct(WhapiService $whapiService, BillingRestrictionService $restrictionService)
@@ -43,15 +42,15 @@ class MessageController extends Controller
         // Validação estrita do número remetente
         $whatsappNumber = WhatsappNumber::find($request->whatsapp_id);
         $connectionStatus = $this->whapiService->getConnectionStatus($whatsappNumber);
-        
-        if (!$connectionStatus['connected']) {
+
+        if (! $connectionStatus['connected']) {
             // Retorna erro específico para abrir o modal no frontend
             return redirect()->back()->with('whatsapp_error', [
                 'type' => 'unavailable',
                 'title' => 'Número de envio indisponível',
-                'message' => 'O número selecionado não está conectado. Detalhe: ' . ($connectionStatus['error'] ?? 'Erro desconhecido.'),
+                'message' => 'O número selecionado não está conectado. Detalhe: '.($connectionStatus['error'] ?? 'Erro desconhecido.'),
                 'number_id' => $whatsappNumber->id,
-                'available_numbers' => WhatsappNumber::where('status', 'active')->where('id', '!=', $whatsappNumber->id)->get(['id', 'description', 'phone', 'ddi', 'ddd'])
+                'available_numbers' => WhatsappNumber::where('status', 'active')->where('id', '!=', $whatsappNumber->id)->get(['id', 'description', 'phone', 'ddi', 'ddd']),
             ]);
         }
 
@@ -70,8 +69,8 @@ class MessageController extends Controller
         // Sanitização do telefone
         $originalPhone = $request->to;
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
-        
-        if (!$sanitizedPhone) {
+
+        if (! $sanitizedPhone) {
             return redirect()->back()->with('error', 'Número de telefone inválido após sanitização.');
         }
 
@@ -83,11 +82,13 @@ class MessageController extends Controller
         try {
             // Determinar cliente (por CA ID ou a partir da fatura)
             $clienteCaId = $request->input('cliente_ca_id');
-            if (!$clienteCaId && $request->filled('invoice_ca_id')) {
+            if (! $clienteCaId && $request->filled('invoice_ca_id')) {
                 $inv = Invoice::where('ca_id', $request->input('invoice_ca_id'))->first();
-                if ($inv) $clienteCaId = $inv->cliente_ca_id;
+                if ($inv) {
+                    $clienteCaId = $inv->cliente_ca_id;
+                }
             }
-            
+
             if ($clienteCaId) {
                 $cliente = Cliente::where('ca_id', $clienteCaId)->first();
             }
@@ -101,11 +102,14 @@ class MessageController extends Controller
                 $invoices = $query->get();
             } elseif ($request->filled('invoice_ca_id')) {
                 $inv = Invoice::where('ca_id', $request->input('invoice_ca_id'))->first();
-                if ($inv) $invoices = collect([$inv]);
+                if ($inv) {
+                    $invoices = collect([$inv]);
+                }
             }
             if ($invoices->count() > 0) {
                 $dates = $invoices->map(function ($inv) {
                     $date = $inv->data_vencimento instanceof \Carbon\Carbon ? $inv->data_vencimento : Carbon::parse($inv->data_vencimento);
+
                     return $date->format('d/m/Y');
                 })->implode(', ');
                 $earliest = $invoices->min(function ($inv) {
@@ -113,8 +117,12 @@ class MessageController extends Controller
                 });
                 $adjustedEarliest = $earliest ? $earliest->copy() : null;
                 if ($adjustedEarliest) {
-                    if ($adjustedEarliest->isSaturday()) $adjustedEarliest->addDays(2);
-                    if ($adjustedEarliest->isSunday()) $adjustedEarliest->addDays(1);
+                    if ($adjustedEarliest->isSaturday()) {
+                        $adjustedEarliest->addDays(2);
+                    }
+                    if ($adjustedEarliest->isSunday()) {
+                        $adjustedEarliest->addDays(1);
+                    }
                 }
                 $totalValue = $invoices->sum(function ($inv) {
                     return (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
@@ -126,7 +134,8 @@ class MessageController extends Controller
                     $due = $date->format('d/m/Y');
                     $url = trim($inv->link_boleto ?? '');
                     $display = $url !== '' ? "\n{$url}" : 'boleto não disponível';
-                    return $due . ' - ' . $display;
+
+                    return $due.' - '.$display;
                 })->implode("\n");
 
                 $totalOpenValue = 0;
@@ -139,10 +148,10 @@ class MessageController extends Controller
                             $q->where('status', 'OPEN')->orWhereNull('status');
                         })
                         ->where(function ($q) {
-                             $q->where('saldo_devedor', '>', 0)->orWhereNull('saldo_devedor');
+                            $q->where('saldo_devedor', '>', 0)->orWhereNull('saldo_devedor');
                         })
                         ->get();
-                    
+
                     $totalOpenQuantity = $allOpenInvoices->count();
                     $totalOpenValue = $allOpenInvoices->sum(function ($inv) {
                         return (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
@@ -226,12 +235,16 @@ class MessageController extends Controller
         $text = preg_replace('/\s*(https?:\/\/\S+)\s*/i', "\n$1\n", $text);
         // Compacta múltiplas quebras de linha
         $text = preg_replace("/\n{2,}/", "\n", $text);
+
         return trim($text);
     }
 
     protected function shouldLimitPreview(?int $connectionId): bool
     {
-        if (!$connectionId) return false;
+        if (! $connectionId) {
+            return false;
+        }
+
         return (bool) CompanyMessageSetting::where('conta_azul_connection_id', $connectionId)
             ->where('message_type', 'limit_link_preview')
             ->value('is_enabled');
@@ -239,7 +252,10 @@ class MessageController extends Controller
 
     protected function shouldDisablePreview(?int $connectionId): bool
     {
-        if (!$connectionId) return false;
+        if (! $connectionId) {
+            return false;
+        }
+
         return (bool) CompanyMessageSetting::where('conta_azul_connection_id', $connectionId)
             ->where('message_type', 'disable_link_preview')
             ->value('is_enabled');

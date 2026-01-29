@@ -2,26 +2,28 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
+use App\Models\ContaAzulConnection;
+use App\Models\Invoice;
 use App\Models\MessageLog;
 use App\Models\User;
-use App\Models\Invoice;
 use App\Models\WhatsappNumber;
-use App\Services\ContaAzulService;
-use App\Services\ContaAzulAuthService;
 use App\Services\ContaAzulApiService;
-use App\Models\ContaAzulConnection;
+use App\Services\ContaAzulAuthService;
+use App\Services\ContaAzulService;
 use App\Services\WhapiService;
-use Inertia\Inertia;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
     protected $contaAzulService;
+
     protected $whapiService;
+
     protected $contaAzulAuthService;
+
     protected $contaAzulApiService;
 
     public function __construct(ContaAzulService $contaAzulService, WhapiService $whapiService, ContaAzulAuthService $contaAzulAuthService, ContaAzulApiService $contaAzulApiService)
@@ -35,6 +37,7 @@ class DashboardController extends Controller
     public function checkWhapiHealth()
     {
         $health = $this->whapiService->checkHealth();
+
         return response()->json($health);
     }
 
@@ -51,15 +54,15 @@ class DashboardController extends Controller
             } else {
                 $count = $this->contaAzulService->syncOverdueInvoices();
             }
-            
+
             // Recalcula totais baseados no banco
-            $overdueCount = \App\Models\Invoice::when($connectionId, fn($q) => $q->where('connection_id', $connectionId))->count();
-            $overdueValue = \App\Models\Invoice::when($connectionId, fn($q) => $q->where('connection_id', $connectionId))->sum('saldo_devedor');
+            $overdueCount = \App\Models\Invoice::when($connectionId, fn ($q) => $q->where('connection_id', $connectionId))->count();
+            $overdueValue = \App\Models\Invoice::when($connectionId, fn ($q) => $q->where('connection_id', $connectionId))->sum('saldo_devedor');
 
             Log::info('Dashboard sync completed', [
                 'count_synced' => $count,
                 'overdue_count' => $overdueCount,
-                'overdue_value' => $overdueValue
+                'overdue_value' => $overdueValue,
             ]);
 
             return response()->json([
@@ -68,10 +71,11 @@ class DashboardController extends Controller
                 'stats' => [
                     'cobrancas_overdue_count' => $overdueCount,
                     'cobrancas_overdue_value' => $overdueValue,
-                ]
+                ],
             ]);
         } catch (\Exception $e) {
-            Log::error('Erro ao sincronizar financeiro no dashboard: ' . $e->getMessage());
+            Log::error('Erro ao sincronizar financeiro no dashboard: '.$e->getMessage());
+
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
@@ -80,13 +84,13 @@ class DashboardController extends Controller
     {
         $periodDays = (int) $request->input('period', 7);
         $allowedPeriods = [7, 15, 30];
-        if (!in_array($periodDays, $allowedPeriods)) {
+        if (! in_array($periodDays, $allowedPeriods)) {
             $periodDays = 7;
         }
 
         $endDate = Carbon::today();
         $startDate = Carbon::today()->subDays($periodDays - 1);
-        
+
         $logs = \App\Models\WhatsappMessageLog::with(['messageCron.connection', 'connection'])
             ->whereBetween('sent_at', [$startDate->startOfDay(), $endDate->endOfDay()])
             ->where('status', 'success')
@@ -94,7 +98,7 @@ class DashboardController extends Controller
 
         $chartData = [
             'labels' => [],
-            'datasets' => []
+            'datasets' => [],
         ];
 
         $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
@@ -104,31 +108,33 @@ class DashboardController extends Controller
 
         $connections = ContaAzulConnection::all();
         $companiesData = [];
-        
+
         foreach ($logs as $log) {
             $dateKey = $log->sent_at ? Carbon::parse($log->sent_at)->format('d/m') : null;
-            if (!$dateKey) continue;
+            if (! $dateKey) {
+                continue;
+            }
 
             $companyName = 'Desconhecida';
-            
+
             // 1. Tenta pegar da conexão associada ao log (se existir)
             if ($log->connection) {
                 $companyName = $log->connection->empresa_nome;
-            } 
+            }
             // 2. Se não tiver conexão direta, tenta via MessageCron (se houver relação)
             elseif ($log->messageCron && $log->messageCron->connection) {
                 $companyName = $log->messageCron->connection->empresa_nome;
-            } 
+            }
             // 3. Tenta via ID da conexão salvo no log (fallback)
             elseif ($log->connection_id) {
-                 $c = $connections->firstWhere('id', $log->connection_id);
-                 $companyName = $c ? $c->empresa_nome : 'Empresa ID ' . $log->connection_id;
+                $c = $connections->firstWhere('id', $log->connection_id);
+                $companyName = $c ? $c->empresa_nome : 'Empresa ID '.$log->connection_id;
             }
 
-            if (!isset($companiesData[$companyName])) {
+            if (! isset($companiesData[$companyName])) {
                 $companiesData[$companyName] = array_fill_keys($chartData['labels'], 0);
             }
-            
+
             $companiesData[$companyName][$dateKey]++;
         }
 
@@ -146,15 +152,15 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'chartData' => $chartData
+            'chartData' => $chartData,
         ]);
     }
- 
+
     public function chartDataWhatsapp(Request $request)
     {
         $periodDays = (int) $request->input('period', 7);
         $allowedPeriods = [7, 15, 30];
-        if (!in_array($periodDays, $allowedPeriods)) {
+        if (! in_array($periodDays, $allowedPeriods)) {
             $periodDays = 7;
         }
         $endDate = Carbon::today();
@@ -178,11 +184,13 @@ class DashboardController extends Controller
         $datasets = [];
         foreach ($logs as $log) {
             $dateKey = $log->sent_at ? Carbon::parse($log->sent_at)->format('d/m') : null;
-            if (!$dateKey) continue;
+            if (! $dateKey) {
+                continue;
+            }
             $numberDesc = $log->messageCron && $log->messageCron->whatsappNumber ? ($log->messageCron->whatsappNumber->description ?? 'Número') : 'Número';
             $type = $log->message_type ?? ($log->messageCron ? $log->messageCron->type : 'default');
-            $key = $numberDesc . ' | ' . $type;
-            if (!isset($datasets[$key])) {
+            $key = $numberDesc.' | '.$type;
+            if (! isset($datasets[$key])) {
                 $datasets[$key] = [
                     'label' => $key,
                     'data' => array_fill_keys($labels, 0),
@@ -195,9 +203,11 @@ class DashboardController extends Controller
             'labels' => $labels,
             'datasets' => array_values(array_map(function ($ds) {
                 $ds['data'] = array_values($ds['data']);
+
                 return $ds;
             }, $datasets)),
         ];
+
         return response()->json([
             'success' => true,
             'chartData' => $chartData,
@@ -208,7 +218,7 @@ class DashboardController extends Controller
     {
         $selectedConnectionId = $request->input('connection_id') ?? session('dashboard_connection_id');
         $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
-        if (!$selectedConnectionId && $connections->isNotEmpty()) {
+        if (! $selectedConnectionId && $connections->isNotEmpty()) {
             $selectedConnectionId = $connections->first()->id;
         }
         session(['dashboard_connection_id' => $selectedConnectionId]);
@@ -222,7 +232,7 @@ class DashboardController extends Controller
         } else {
             $contaAzulConnected = $this->contaAzulService->getValidToken() !== null;
         }
-        
+
         $overdueCount = 0;
         $overdueValue = 0.0;
 
@@ -231,10 +241,10 @@ class DashboardController extends Controller
                 // Usar cache local para performance
                 // O front-end dispara a sincronização (syncFinancials) logo após montar
                 // A tabela invoices contém apenas faturas atrasadas (filtradas por data no sync)
-                $overdueCount = Invoice::when($selectedConnectionId, fn($q) => $q->where('connection_id', $selectedConnectionId))->count();
-                $overdueValue = Invoice::when($selectedConnectionId, fn($q) => $q->where('connection_id', $selectedConnectionId))->sum('saldo_devedor');
+                $overdueCount = Invoice::when($selectedConnectionId, fn ($q) => $q->where('connection_id', $selectedConnectionId))->count();
+                $overdueValue = Invoice::when($selectedConnectionId, fn ($q) => $q->where('connection_id', $selectedConnectionId))->sum('saldo_devedor');
             } catch (\Exception $e) {
-                Log::error('Erro ao buscar cobranças para dashboard: ' . $e->getMessage());
+                Log::error('Erro ao buscar cobranças para dashboard: '.$e->getMessage());
             }
         }
 
@@ -248,7 +258,7 @@ class DashboardController extends Controller
         ];
 
         // Verifica se deve sincronizar (apenas na primeira visita da sessão)
-        $shouldSync = !session()->has('dashboard_synced');
+        $shouldSync = ! session()->has('dashboard_synced');
         if ($shouldSync) {
             session(['dashboard_synced' => true]);
         }
@@ -268,15 +278,16 @@ class DashboardController extends Controller
     public function selectConnection(Request $request)
     {
         $connectionId = $request->input('connection_id');
-        if (!$connectionId) {
+        if (! $connectionId) {
             return response()->json(['success' => false, 'error' => 'connection_id obrigatório'], 422);
         }
         $connection = ContaAzulConnection::find($connectionId);
-        if (!$connection) {
+        if (! $connection) {
             return response()->json(['success' => false, 'error' => 'Conexão não encontrada'], 404);
         }
         session(['dashboard_connection_id' => $connectionId]);
         $connected = $this->contaAzulAuthService->getValidToken($connection) !== null;
+
         return response()->json(['success' => true, 'conta_azul_connected' => $connected]);
     }
 
@@ -292,15 +303,16 @@ class DashboardController extends Controller
         } else {
             $connected = $this->contaAzulService->getValidToken() !== null;
         }
-        $overdueCount = \App\Models\Invoice::when($connectionId, fn($q) => $q->where('connection_id', $connectionId))->count();
-        $overdueValue = \App\Models\Invoice::when($connectionId, fn($q) => $q->where('connection_id', $connectionId))->sum('saldo_devedor');
+        $overdueCount = \App\Models\Invoice::when($connectionId, fn ($q) => $q->where('connection_id', $connectionId))->count();
+        $overdueValue = \App\Models\Invoice::when($connectionId, fn ($q) => $q->where('connection_id', $connectionId))->sum('saldo_devedor');
+
         return response()->json([
             'success' => true,
             'stats' => [
                 'conta_azul_connected' => $connected,
                 'cobrancas_overdue_count' => $overdueCount,
                 'cobrancas_overdue_value' => $overdueValue,
-            ]
+            ],
         ]);
     }
 }

@@ -4,11 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class InstallController extends Controller
 {
@@ -27,11 +26,11 @@ class InstallController extends Controller
             'XML' => extension_loaded('xml'),
         ];
 
-        $allMet = !in_array(false, $requirements);
+        $allMet = ! in_array(false, $requirements);
 
         return Inertia::render('Install/Index', [
             'requirements' => $requirements,
-            'allMet' => $allMet
+            'allMet' => $allMet,
         ]);
     }
 
@@ -52,8 +51,8 @@ class InstallController extends Controller
         ]);
 
         $envContent = file_get_contents(base_path('.env.example'));
-        
-        $key = 'base64:' . base64_encode(random_bytes(32));
+
+        $key = 'base64:'.base64_encode(random_bytes(32));
 
         // Test database connection BEFORE saving to .env
         try {
@@ -71,12 +70,12 @@ class InstallController extends Controller
                     'prefix' => '',
                     'strict' => true,
                     'engine' => null,
-                ]
+                ],
             ]);
-            
+
             DB::connection('install_test')->getPdo();
         } catch (\Exception $e) {
-            return back()->withErrors(['db_host' => 'Erro de conexão: ' . $e->getMessage()]);
+            return back()->withErrors(['db_host' => 'Erro de conexão: '.$e->getMessage()]);
         }
 
         $replacements = [
@@ -103,22 +102,22 @@ class InstallController extends Controller
             // Match KEY=VALUE or KEY="VALUE"
             if (preg_match('/^([^=]+)=(.*)$/', $line, $keyMatch)) {
                 $currentKey = $keyMatch[1];
-                if ($currentKey === 'APP_KEY' && !empty($keyMatch[2])) {
+                if ($currentKey === 'APP_KEY' && ! empty($keyMatch[2])) {
                     $existingAppKey = trim($keyMatch[2], '"\'');
                 }
-                
+
                 if (array_key_exists($currentKey, $replacements)) {
                     // Se a chave for APP_KEY e já existir, mantém a antiga
-                    if ($currentKey === 'APP_KEY' && !empty($existingAppKey)) {
+                    if ($currentKey === 'APP_KEY' && ! empty($existingAppKey)) {
                         $val = $existingAppKey;
                         $key = $existingAppKey; // Atualiza a variável local $key usada depois
                     } else {
                         $val = $replacements[$currentKey];
                     }
-                    
+
                     // Quote value if it contains spaces
                     if (str_contains($val, ' ')) {
-                        $val = '"' . $val . '"';
+                        $val = '"'.$val.'"';
                     }
                     $newEnvLines[] = "{$currentKey}={$val}";
                     $replacedKeys[] = $currentKey;
@@ -132,9 +131,9 @@ class InstallController extends Controller
 
         // Add missing keys
         foreach ($replacements as $key => $val) {
-            if (!in_array($key, $replacedKeys)) {
+            if (! in_array($key, $replacedKeys)) {
                 if (str_contains($val, ' ')) {
-                    $val = '"' . $val . '"';
+                    $val = '"'.$val.'"';
                 }
                 $newEnvLines[] = "{$key}={$val}";
             }
@@ -162,15 +161,17 @@ class InstallController extends Controller
             }
             // Purge na conexão padrão também para garantir
             DB::purge(config('database.default'));
-        } catch (\Exception $e) {}
+        } catch (\Exception $e) {
+        }
 
         Artisan::call('config:clear');
-        
+
         // Force Re-connect database with new config for the rest of request
         try {
             DB::reconnect('mysql');
-        } catch (\Exception $e) {}
-        
+        } catch (\Exception $e) {
+        }
+
         try {
             $newEncrypter = new \Illuminate\Encryption\Encrypter(base64_decode(substr($key, 7)), config('app.cipher'));
             app()->instance('encrypter', $newEncrypter);
@@ -187,10 +188,11 @@ class InstallController extends Controller
             if (\Illuminate\Support\Facades\Schema::hasTable('migrations')) {
                 $hasTables = true;
             }
-        } catch (\Exception $e) {}
+        } catch (\Exception $e) {
+        }
 
         return Inertia::render('Install/Database', [
-            'hasTables' => $hasTables
+            'hasTables' => $hasTables,
         ]);
     }
 
@@ -209,11 +211,13 @@ class InstallController extends Controller
                 if (\Illuminate\Support\Facades\Schema::hasTable('migrations')) {
                     $hasTables = true;
                 }
-            } catch (\Exception $e) {}
-            
+            } catch (\Exception $e) {
+            }
+
             if ($hasTables) {
                 // If tables exist, just update migrations without wiping data
                 Artisan::call('migrate', ['--force' => true]);
+
                 // Skip seeders to avoid duplication
                 return redirect()->route('install.admin');
             } else {
@@ -221,10 +225,10 @@ class InstallController extends Controller
                 Artisan::call('migrate:fresh', ['--force' => true]);
                 Artisan::call('db:seed', ['--force' => true]);
             }
-            
+
             return redirect()->route('install.admin');
         } catch (\Exception $e) {
-            return back()->withErrors(['message' => 'Erro ao migrar banco de dados: ' . $e->getMessage()]);
+            return back()->withErrors(['message' => 'Erro ao migrar banco de dados: '.$e->getMessage()]);
         }
     }
 
@@ -232,12 +236,12 @@ class InstallController extends Controller
     {
         // Verifica se já existem administradores para oferecer a opção de pular
         $hasAdmin = User::where('role', 'admin')
-            ->orWhereHas('roleRef', function($q) {
+            ->orWhereHas('roleRef', function ($q) {
                 $q->where('name', 'Administrador');
             })->exists();
 
         return Inertia::render('Install/Admin', [
-            'hasAdmin' => $hasAdmin
+            'hasAdmin' => $hasAdmin,
         ]);
     }
 
@@ -246,10 +250,10 @@ class InstallController extends Controller
         // Se o usuário optar por pular a criação (skip=true) e já existir admin
         if ($request->boolean('skip')) {
             $hasAdmin = User::where('role', 'admin')
-                ->orWhereHas('roleRef', function($q) {
+                ->orWhereHas('roleRef', function ($q) {
                     $q->where('name', 'Administrador');
                 })->exists();
-                
+
             if ($hasAdmin) {
                 return redirect()->route('install.finish');
             }
@@ -282,8 +286,8 @@ class InstallController extends Controller
     public function finish()
     {
         // Create installed file
-        file_put_contents(storage_path('installed'), 'INSTALLED ON ' . now());
-        
+        file_put_contents(storage_path('installed'), 'INSTALLED ON '.now());
+
         return Inertia::render('Install/Finish');
     }
 }

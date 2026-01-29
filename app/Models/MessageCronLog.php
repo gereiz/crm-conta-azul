@@ -15,7 +15,7 @@ class MessageCronLog extends Model
         'error_message',
         'content',
         'invoice_count',
-        'sent_at'
+        'sent_at',
     ];
 
     protected $casts = [

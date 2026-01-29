@@ -36,7 +36,7 @@ class UserController extends Controller
         ]);
 
         $roleId = $request->role_id;
-        if (!$roleId && $request->role) {
+        if (! $roleId && $request->role) {
             $map = [
                 'admin' => 'Administrador',
                 'operator' => 'Operador',
@@ -57,7 +57,7 @@ class UserController extends Controller
 
         return redirect()->route('users.index')->with('success', 'Usuário criado com sucesso!');
     }
-    
+
     public function update(Request $request, User $user)
     {
         $this->authorize('update', $user);
@@ -69,9 +69,9 @@ class UserController extends Controller
             'role_id' => 'nullable|integer|exists:user_roles,id',
             'is_active' => 'boolean',
         ]);
-        
+
         $roleId = $request->role_id;
-        if (!$roleId && $request->role) {
+        if (! $roleId && $request->role) {
             $map = [
                 'admin' => 'Administrador',
                 'operator' => 'Operador',
@@ -80,7 +80,7 @@ class UserController extends Controller
             $name = $map[$request->role] ?? null;
             $roleId = $name ? UserRole::whereRaw('LOWER(name)=LOWER(?)', [$name])->value('id') : null;
         }
-        
+
         $data = [
             'name' => $request->name,
             'email' => $request->email,
@@ -97,19 +97,17 @@ class UserController extends Controller
             $lower = strtolower($target?->name ?? '');
             $data['role'] = $lower === 'administrador' ? 'admin' : (in_array($lower, ['operador', 'operacional']) ? 'operator' : 'viewer');
         }
-        
+
         $user->update($data);
-        
+
         return redirect()->route('users.index')->with('success', 'Usuário atualizado com sucesso!');
     }
-    
+
     public function destroy(User $user)
     {
         $this->authorize('delete', $user);
         $user->delete();
+
         return redirect()->route('users.index')->with('success', 'Usuário excluído com sucesso!');
     }
-
-
-    
 }

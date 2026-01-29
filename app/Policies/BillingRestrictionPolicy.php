@@ -42,4 +42,3 @@ class BillingRestrictionPolicy
         return $user->isAdmin();
     }
 }
-

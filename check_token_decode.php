@@ -13,7 +13,7 @@ if ($token) {
         print_r($payload);
     } else {
         echo "Token não parece ser um JWT.\n";
-        echo "Token: " . $token->access_token . "\n";
+        echo 'Token: '.$token->access_token."\n";
     }
 } else {
     echo "Nenhum token encontrado.\n";

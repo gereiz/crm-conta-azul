@@ -1,46 +1,49 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
-use App\Services\ContaAzulService;
-use App\Models\ContaAzulToken;
 use App\Models\ContaAzulConnection;
-use App\Services\ContaAzulAuthService;
+use App\Models\ContaAzulToken;
 use App\Services\ContaAzulApiService;
+use App\Services\ContaAzulAuthService;
+use App\Services\ContaAzulService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/debug-credentials', function () {
     $clientId = trim(config('services.contaazul.client_id'));
     $clientSecret = trim(config('services.contaazul.client_secret'));
     $redirectUri = trim(config('services.contaazul.redirect_uri'));
 
-    echo "<h1>Diagnóstico de Credenciais e Banco de Dados</h1>";
+    echo '<h1>Diagnóstico de Credenciais e Banco de Dados</h1>';
 
     // 1. Teste de Banco de Dados
-    echo "<h2>1. Teste de Conexão com Banco de Dados</h2>";
+    echo '<h2>1. Teste de Conexão com Banco de Dados</h2>';
     try {
         DB::connection()->getPdo();
         echo "<p style='color:green'>✅ Conexão com Banco de Dados (MySQL) OK!</p>";
     } catch (\Exception $e) {
-        echo "<p style='color:red'>❌ Erro ao conectar no Banco de Dados: " . $e->getMessage() . "</p>";
+        echo "<p style='color:red'>❌ Erro ao conectar no Banco de Dados: ".$e->getMessage().'</p>';
         echo "<p><strong>Solução:</strong> Verifique se o MySQL do Laragon está rodando (botão 'Start All' ou 'Database').</p>";
     }
 
     // 2. Teste de Credenciais Conta Azul
-    echo "<h2>2. Teste de Credenciais Conta Azul</h2>";
-    
+    echo '<h2>2. Teste de Credenciais Conta Azul</h2>';
+
     // Debug Visual das Credenciais
-    $mask = function($str) {
-        if (strlen($str) < 8) return "******";
-        return substr($str, 0, 4) . "..." . substr($str, -4) . " (Tamanho: " . strlen($str) . ")";
+    $mask = function ($str) {
+        if (strlen($str) < 8) {
+            return '******';
+        }
+
+        return substr($str, 0, 4).'...'.substr($str, -4).' (Tamanho: '.strlen($str).')';
     };
-    
+
     echo "<div style='background:#f0f0f0; padding:10px; border:1px solid #ccc; margin-bottom:10px;'>";
-    echo "<strong>Credenciais Carregadas pelo Laravel:</strong><br>";
-    echo "Client ID: " . $mask($clientId) . "<br>";
-    echo "Client Secret: " . $mask($clientSecret) . "<br>";
-    echo "Redirect URI: " . htmlspecialchars($redirectUri) . "<br>";
-    echo "</div>";
+    echo '<strong>Credenciais Carregadas pelo Laravel:</strong><br>';
+    echo 'Client ID: '.$mask($clientId).'<br>';
+    echo 'Client Secret: '.$mask($clientSecret).'<br>';
+    echo 'Redirect URI: '.htmlspecialchars($redirectUri).'<br>';
+    echo '</div>';
 
     echo "<p>Tentando trocar um código falso ('teste123') usando suas credenciais...</p>";
 
@@ -53,20 +56,20 @@ Route::get('/debug-credentials', function () {
         'client_secret' => $clientSecret,
     ]);
 
-    echo "<h3>Teste A (Credenciais no Corpo):</h3>";
+    echo '<h3>Teste A (Credenciais no Corpo):</h3>';
     dump_response($responseBody);
 
     // Teste B: Via Header (Basic Auth)
     $credentials = base64_encode("{$clientId}:{$clientSecret}");
     $responseHeader = Http::withHeaders([
-        'Authorization' => "Basic {$credentials}"
+        'Authorization' => "Basic {$credentials}",
     ])->asForm()->post('https://auth.contaazul.com/oauth2/token', [
         'grant_type' => 'authorization_code',
         'code' => 'teste_codigo_falso',
         'redirect_uri' => $redirectUri,
     ]);
 
-    echo "<h3>Teste B (Basic Auth Header):</h3>";
+    echo '<h3>Teste B (Basic Auth Header):</h3>';
     dump_response($responseHeader);
 });
 
@@ -76,8 +79,9 @@ Route::get('/debug-clientes', function () {
         $result = $service->getClients([
             'page' => request()->input('page', 1),
             'size' => request()->input('size', 20),
-            'search' => request()->input('search')
+            'search' => request()->input('search'),
         ]);
+
         return response()->json($result);
     } catch (\Exception $e) {
         return response()->json(['error' => $e->getMessage()], 500);
@@ -89,20 +93,21 @@ Route::get('/debug-clientes-local', function () {
     $search = request()->input('search');
     $query = \App\Models\Cliente::query();
     if ($search) {
-        $query->where(function($q) use ($search) {
+        $query->where(function ($q) use ($search) {
             $q->where('name', 'like', "%{$search}%")
-              ->orWhere('email', 'like', "%{$search}%")
-              ->orWhere('cpf_cnpj', 'like', "%{$search}%")
-              ->orWhere('company_name', 'like', "%{$search}%");
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('cpf_cnpj', 'like', "%{$search}%")
+                ->orWhere('company_name', 'like', "%{$search}%");
         });
     }
     $clientes = $query->orderBy('name')->paginate($size)->withQueryString();
+
     return response()->json($clientes);
 });
 
 Route::get('/debug-clientes-direct', function () {
     $token = request()->input('token');
-    if (!$token) {
+    if (! $token) {
         return response()->json(['error' => 'Informe ?token=...'], 400);
     }
     $params = [
@@ -118,6 +123,7 @@ Route::get('/debug-clientes-direct', function () {
             ->withHeaders(['Accept' => 'application/json'])
             ->timeout(60)
             ->get("https://api.contaazul.com/v1/{$endpoint}", $params);
+
         return response()->json([
             'status' => $resp->status(),
             'data' => $resp->json(),
@@ -130,7 +136,9 @@ Route::get('/debug-clientes-direct', function () {
 
 Route::get('/debug-token', function () {
     $t = ContaAzulToken::latest()->first();
-    if (!$t) return response()->json(['token' => null]);
+    if (! $t) {
+        return response()->json(['token' => null]);
+    }
     $data = [
         'access_token_prefix' => substr($t->access_token, 0, 10),
         'expires_in' => $t->expires_in,
@@ -140,14 +148,15 @@ Route::get('/debug-token', function () {
     if (request()->boolean('full')) {
         $data['access_token'] = $t->access_token;
     }
+
     return response()->json($data);
 });
 
-Route::match(['get','post'],'/debug-seed-connection-from-env', function () {
+Route::match(['get', 'post'], '/debug-seed-connection-from-env', function () {
     $clientId = trim(config('services.contaazul.client_id'));
     $clientSecret = trim(config('services.contaazul.client_secret'));
     $redirectUri = trim(config('services.contaazul.redirect_uri'));
-    if (!$clientId || !$clientSecret || !$redirectUri) {
+    if (! $clientId || ! $clientSecret || ! $redirectUri) {
         return response()->json(['error' => 'Credenciais .env ausentes'], 400);
     }
     $conn = ContaAzulConnection::firstOrCreate(
@@ -159,6 +168,7 @@ Route::match(['get','post'],'/debug-seed-connection-from-env', function () {
             'is_active' => true,
         ]
     );
+
     return response()->json(['connection_id' => $conn->id]);
 });
 
@@ -170,6 +180,7 @@ Route::get('/debug-auth-url/{id}', function ($id) {
     $conn = ContaAzulConnection::findOrFail($id);
     $auth = app()->make(ContaAzulAuthService::class);
     $url = $auth->getAuthUrl($conn);
+
     return response()->json([
         'connection_id' => $conn->id,
         'empresa_nome' => $conn->empresa_nome,
@@ -187,15 +198,17 @@ Route::get('/debug-connections/{id}/clients', function ($id) {
         'size' => request()->input('size', 10),
         'search' => request()->input('search'),
     ]);
+
     return response()->json($data);
 });
-if (!function_exists('dump_response')) {
-    function dump_response($response) {
+if (! function_exists('dump_response')) {
+    function dump_response($response)
+    {
         $json = $response->json();
         $status = $response->status();
-        
+
         echo "Status: <strong>$status</strong><br>";
-        echo "Resposta: <pre>" . json_encode($json, JSON_PRETTY_PRINT) . "</pre>";
+        echo 'Resposta: <pre>'.json_encode($json, JSON_PRETTY_PRINT).'</pre>';
 
         if (isset($json['error']) && $json['error'] === 'invalid_grant') {
             echo "<p style='color:green'>✅ <strong>SUCESSO:</strong> O Conta Azul rejeitou o código (esperado), mas ACEITOU suas credenciais!</p>";

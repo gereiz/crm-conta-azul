@@ -26,11 +26,11 @@ class ClienteController extends Controller
         $query = Cliente::query();
 
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('cpf_cnpj', 'like', "%{$search}%")
-                  ->orWhere('company_name', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('cpf_cnpj', 'like', "%{$search}%")
+                    ->orWhere('company_name', 'like', "%{$search}%");
             });
         }
 
@@ -40,10 +40,10 @@ class ClienteController extends Controller
 
         // Validar colunas permitidas para evitar SQL Injection indireta ou erros
         $allowedSorts = ['name', 'email', 'company_name', 'cpf_cnpj', 'mobile_phone'];
-        if (!in_array($sort, $allowedSorts)) {
+        if (! in_array($sort, $allowedSorts)) {
             $sort = 'name';
         }
-        if (!in_array(strtolower($direction), ['asc', 'desc'])) {
+        if (! in_array(strtolower($direction), ['asc', 'desc'])) {
             $direction = 'asc';
         }
 
@@ -65,14 +65,14 @@ class ClienteController extends Controller
         // $id pode ser o ID local ou o UUID da CA (se vindo de URL antiga)
         // Vamos tentar achar pelo ID local primeiro
         $clienteLocal = Cliente::find($id);
-        
-        if (!$clienteLocal) {
-             // Tenta buscar por ca_id
-             $clienteLocal = Cliente::where('ca_id', $id)->first();
+
+        if (! $clienteLocal) {
+            // Tenta buscar por ca_id
+            $clienteLocal = Cliente::where('ca_id', $id)->first();
         }
 
-        if (!$clienteLocal) {
-             return redirect()->route('clientes.index')->with('error', 'Cliente não encontrado na base local.');
+        if (! $clienteLocal) {
+            return redirect()->route('clientes.index')->with('error', 'Cliente não encontrado na base local.');
         }
 
         // Buscar detalhes atualizados na API usando o ca_id
@@ -81,20 +81,20 @@ class ClienteController extends Controller
 
         // Se a API falhar, usamos os dados locais
         $cliente = $clienteApi ?? $clienteLocal->toArray();
-        
+
         // Garante que o ID no objeto cliente seja o ID local para links internos funcionarem, se necessário
         // Mas a view Show provavelmente usa dados da API.
         // Vamos mesclar dados locais com dados da API para garantir
         if ($clienteApi) {
-             $cliente['local_id'] = $clienteLocal->id;
-             $cliente['company_name'] = $clienteLocal->company_name;
+            $cliente['local_id'] = $clienteLocal->id;
+            $cliente['company_name'] = $clienteLocal->company_name;
         }
 
         // Buscar faturas atrasadas do cliente (usando cache local)
         // $invoices = $this->contaAzulService->getCustomerInvoices($caId);
         $invoices = \App\Models\Invoice::where('cliente_ca_id', $caId)
-                    ->orderBy('data_vencimento', 'desc')
-                    ->get();
+            ->orderBy('data_vencimento', 'desc')
+            ->get();
 
         $whatsappNumbers = WhatsappNumber::where('status', 'active')->get();
         $templates = WhatsappTemplate::orderBy('is_default', 'desc')->orderBy('name')->get();
@@ -120,37 +120,37 @@ class ClienteController extends Controller
         if ($startDate && $endDate) {
             $query->whereBetween('data_vencimento', [$startDate, $endDate]);
         }
-        
+
         if ($search) {
-             $query->where(function($q) use ($search) {
-                 $q->whereHas('cliente', function($qc) use ($search) {
-                     $qc->where('name', 'like', "%{$search}%")
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('cliente', function ($qc) use ($search) {
+                    $qc->where('name', 'like', "%{$search}%")
                         ->orWhere('company_name', 'like', "%{$search}%");
-                 })
-                 ->orWhere('cliente_nome', 'like', "%{$search}%");
-             });
+                })
+                    ->orWhere('cliente_nome', 'like', "%{$search}%");
+            });
         }
 
         if ($paymentType) {
             $query->where('payment_type', $paymentType);
         }
-        
+
         if ($connectionId) {
             $query->where('connection_id', $connectionId);
         }
 
         $invoices = $query->orderBy('data_vencimento', 'asc')->paginate(20)->withQueryString();
-        
+
         $whatsappNumbers = WhatsappNumber::where('status', 'active')->get();
         $templates = WhatsappTemplate::orderBy('is_default', 'desc')->orderBy('name')->get();
-        
+
         // Obter tipos de pagamento disponíveis para o filtro
         $paymentTypes = \App\Models\Invoice::select('payment_type')
             ->whereNotNull('payment_type')
             ->distinct()
             ->orderBy('payment_type')
             ->pluck('payment_type');
-        
+
         $connections = \App\Models\ContaAzulConnection::orderBy('empresa_nome')->get();
 
         return Inertia::render('Clientes/InvoicesOverdue', [
@@ -165,7 +165,7 @@ class ClienteController extends Controller
                 'search' => $search,
                 'payment_type' => $paymentType,
                 'connection_id' => $connectionId,
-            ]
+            ],
         ]);
     }
 
@@ -173,16 +173,16 @@ class ClienteController extends Controller
     {
         // Try finding by local ID first, then CA ID
         $cliente = Cliente::find($clienteId);
-        if (!$cliente) {
+        if (! $cliente) {
             $cliente = Cliente::where('ca_id', $clienteId)->first();
         }
 
-        if (!$cliente) {
+        if (! $cliente) {
             return response()->json(['error' => 'Cliente não encontrado'], 404);
         }
 
         $query = \App\Models\Invoice::where('cliente_ca_id', $cliente->ca_id)
-                    ->orderBy('data_vencimento', 'asc');
+            ->orderBy('data_vencimento', 'asc');
 
         if ($request->has('start_date') && $request->has('end_date') && $request->start_date && $request->end_date) {
             $query->whereBetween('data_vencimento', [$request->start_date, $request->end_date]);
@@ -192,7 +192,7 @@ class ClienteController extends Controller
 
         return response()->json([
             'cliente' => $cliente,
-            'invoices' => $invoices
+            'invoices' => $invoices,
         ]);
     }
 
@@ -204,6 +204,7 @@ class ClienteController extends Controller
             'birthdate' => 'nullable|date',
         ]);
         $cliente->update($validated);
+
         return redirect()->back()->with('success', 'Dados de contato atualizados com sucesso.');
     }
 }

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Permission;
-use Inertia\Inertia;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class PermissionController extends Controller
 {
@@ -15,16 +15,17 @@ class PermissionController extends Controller
             ->whereNotNull('action')->where('action', '!=', '')
             ->orderBy('module')->orderBy('action')
             ->get();
+
         return Inertia::render('Settings/Permissions/Index', ['permissions' => $permissions]);
     }
-    
+
     public function create()
     {
         return Inertia::render('Settings/Permissions/Form', [
             'permission' => null,
         ]);
     }
-    
+
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -41,16 +42,17 @@ class PermissionController extends Controller
                 'description' => $data['description'] ?? null,
             ]
         );
+
         return redirect()->route('settings.permissions.index')->with('success', 'Permissão criada.');
     }
-    
+
     public function edit(Permission $permission)
     {
         return Inertia::render('Settings/Permissions/Form', [
             'permission' => $permission,
         ]);
     }
-    
+
     public function update(Request $request, Permission $permission)
     {
         $data = $request->validate([
@@ -73,12 +75,14 @@ class PermissionController extends Controller
         ]);
         $permission->code = strtolower(trim($permission->module)).'.'.strtolower(trim($permission->action));
         $permission->save();
+
         return redirect()->route('settings.permissions.index')->with('success', 'Permissão atualizada.');
     }
-    
+
     public function destroy(Permission $permission)
     {
         $permission->delete();
+
         return redirect()->route('settings.permissions.index')->with('success', 'Permissão excluída.');
     }
 }

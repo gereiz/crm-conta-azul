@@ -2,12 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Cliente;
+use Illuminate\Console\Command;
 
 class NormalizeClientPhones extends Command
 {
     protected $signature = 'clients:normalize-phones';
+
     protected $description = 'Normaliza telefones dos clientes (apenas dígitos, sem símbolos).';
 
     public function handle()

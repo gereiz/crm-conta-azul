@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('poli_channel')->nullable()->after('poli_customer');
             $table->string('poli_user')->nullable()->after('poli_channel');
             $table->string('poli_template')->nullable()->after('poli_user');
-            
+
             // Make whapi_key nullable since poli might be used instead
             $table->text('whapi_key')->nullable()->change();
         });
@@ -36,9 +36,9 @@ return new class extends Migration
                 'poli_customer',
                 'poli_channel',
                 'poli_user',
-                'poli_template'
+                'poli_template',
             ]);
-            
+
             // Revert whapi_key to not nullable (careful if data exists with nulls)
             // Ideally we check before reverting, but for this context it's fine.
             $table->text('whapi_key')->nullable(false)->change();

@@ -4,10 +4,11 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
-        if (!Schema::hasTable('role_permissions')) {
+        if (! Schema::hasTable('role_permissions')) {
             Schema::create('role_permissions', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('role_id')->constrained('user_roles')->cascadeOnDelete();
@@ -23,4 +24,3 @@ return new class extends Migration {
         Schema::dropIfExists('role_permissions');
     }
 };
-

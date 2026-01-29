@@ -2,12 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Services\ContaAzulService;
+use Illuminate\Console\Command;
 
 class TestContaAzulApi extends Command
 {
     protected $signature = 'test:contaazul-clients';
+
     protected $description = 'Test Conta Azul Clients API and dump response';
 
     public function handle(ContaAzulService $service)

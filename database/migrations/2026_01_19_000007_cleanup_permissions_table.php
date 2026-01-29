@@ -1,13 +1,14 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
-        if (!Schema::hasTable('permissions')) {
+        if (! Schema::hasTable('permissions')) {
             return;
         }
 
@@ -70,11 +71,12 @@ return new class extends Migration {
                     'action' => $u['action'],
                     'description' => $perm->description ?: $u['description'],
                 ]);
+
                 continue;
             }
 
             $pivotExists = DB::table('role_permissions')->where('permission_id', $perm->id)->exists();
-            if (!$pivotExists) {
+            if (! $pivotExists) {
                 DB::table('permissions')->where('id', $perm->id)->delete();
             } else {
                 if ($perm->code && strpos($perm->code, '.') !== false) {
@@ -88,7 +90,5 @@ return new class extends Migration {
         }
     }
 
-    public function down(): void
-    {
-    }
+    public function down(): void {}
 };

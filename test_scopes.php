@@ -4,10 +4,10 @@ use App\Models\ContaAzulConnection;
 use Illuminate\Contracts\Console\Kernel;
 
 // 1. Carrega o autoloader do Composer
-require __DIR__ . '/vendor/autoload.php';
+require __DIR__.'/vendor/autoload.php';
 
 // 2. Inicializa a aplicação Laravel (Bootstrap)
-$app = require_once __DIR__ . '/bootstrap/app.php';
+$app = require_once __DIR__.'/bootstrap/app.php';
 
 // 3. Boot no Kernel para carregar configurações, banco de dados e Facades
 $app->make(Kernel::class)->bootstrap();
@@ -23,14 +23,14 @@ try {
     $connection = ContaAzulConnection::first();
 } catch (\Exception $e) {
     echo "ERRO: Não foi possível conectar ao banco de dados.\n";
-    echo $e->getMessage() . "\n";
+    echo $e->getMessage()."\n";
     exit(1);
 }
 
 // Define credenciais (prioridade: Banco > Config > .env)
 $clientId = $connection ? trim($connection->ca_client_id) : config('services.contaazul.client_id');
-$redirectUri = ($connection && $connection->ca_redirect_uri) 
-    ? trim($connection->ca_redirect_uri) 
+$redirectUri = ($connection && $connection->ca_redirect_uri)
+    ? trim($connection->ca_redirect_uri)
     : (config('services.contaazul.redirect_uri') ?: env('CONTA_AZUL_REDIRECT_URI'));
 
 // Validação básica
@@ -45,7 +45,7 @@ if (empty($redirectUri)) {
 }
 
 echo "Configuração Carregada:\n";
-echo "- Client ID: " . substr($clientId, 0, 5) . "..." . substr($clientId, -3) . "\n";
+echo '- Client ID: '.substr($clientId, 0, 5).'...'.substr($clientId, -3)."\n";
 echo "- Redirect URI: {$redirectUri}\n";
 if ($connection) {
     echo "- Usando conexão do banco (ID: {$connection->id})\n";
@@ -57,7 +57,7 @@ echo "\n-------------------------------------------------------\n\n";
 // Gera um state fictício para teste
 $state = base64_encode(json_encode([
     'nonce' => bin2hex(random_bytes(8)),
-    'test_mode' => true
+    'test_mode' => true,
 ]));
 
 // Cenários de Teste de Escopo
@@ -79,12 +79,12 @@ foreach ($scenarios as $name => $scope) {
         'scope' => $scope,
         // 'prompt' => 'login consent' // Força tela de consentimento
     ];
-    
+
     $query = http_build_query($params);
     $url = "https://auth.contaazul.com/authorize?{$query}";
-    
+
     echo "CENÁRIO: {$name}\n";
     echo "Escopos: [{$scope}]\n";
     echo "URL: {$url}\n";
-    echo "\n" . str_repeat('-', 40) . "\n\n";
+    echo "\n".str_repeat('-', 40)."\n\n";
 }

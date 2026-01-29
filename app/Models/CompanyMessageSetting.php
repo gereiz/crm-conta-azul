@@ -21,4 +21,3 @@ class CompanyMessageSetting extends Model
         return $this->belongsTo(ContaAzulConnection::class, 'conta_azul_connection_id');
     }
 }
-

@@ -27,12 +27,11 @@ class SettingsController extends Controller
     protected $futureMessageService;
 
     public function __construct(
-        ContaAzulService $contaAzulService, 
-        ContaAzulAuthService $contaAzulAuthService, 
+        ContaAzulService $contaAzulService,
+        ContaAzulAuthService $contaAzulAuthService,
         ContaAzulApiService $contaAzulApiService,
         \App\Services\FutureMessageService $futureMessageService
-    )
-    {
+    ) {
         $this->contaAzulService = $contaAzulService;
         $this->contaAzulAuthService = $contaAzulAuthService;
         $this->contaAzulApiService = $contaAzulApiService;
@@ -48,16 +47,17 @@ class SettingsController extends Controller
             'contaazul:refresh-tokens' => 'Renovação de Tokens',
         ];
 
-        if (!array_key_exists($command, $allowedCommands)) {
+        if (! array_key_exists($command, $allowedCommands)) {
             return response()->json(['error' => 'Comando não permitido.'], 403);
         }
 
         try {
             \Illuminate\Support\Facades\Artisan::call($command);
             $output = \Illuminate\Support\Facades\Artisan::output();
+
             return response()->json(['success' => true, 'output' => $output]);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Erro ao executar comando: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'Erro ao executar comando: '.$e->getMessage()], 500);
         }
     }
 
@@ -87,6 +87,7 @@ class SettingsController extends Controller
     {
         $settings = SystemSetting::latest()->first();
         $enabled = $settings ? (bool) ($settings->contaazul_cron_enabled ?? true) : true;
+
         return response()->json(['enabled' => $enabled]);
     }
 
@@ -96,12 +97,13 @@ class SettingsController extends Controller
             return response()->json(['error' => 'Acesso negado'], 403);
         }
         $enabled = filter_var($request->input('enabled', true), FILTER_VALIDATE_BOOLEAN);
-        $settings = SystemSetting::latest()->first() ?? new SystemSetting();
+        $settings = SystemSetting::latest()->first() ?? new SystemSetting;
         $settings->system_name = $settings->system_name ?? 'IbitWeb';
         $settings->primary_color = $settings->primary_color ?? '#6366F1';
         $settings->secondary_color = $settings->secondary_color ?? '#22C55E';
         $settings->contaazul_cron_enabled = $enabled;
         $settings->save();
+
         return response()->json(['success' => true, 'enabled' => $enabled]);
     }
 
@@ -117,8 +119,9 @@ class SettingsController extends Controller
             });
         $pendingCount = $pendingQuery->count();
         $next = $pendingQuery->orderBy('send_time', 'asc')->first();
-        $nextExpectedRunAt = $next ? Carbon::parse($today . ' ' . $next->send_time)->toDateTimeString() : null;
+        $nextExpectedRunAt = $next ? Carbon::parse($today.' '.$next->send_time)->toDateTimeString() : null;
         $lastProcessedAt = MessageCron::whereNotNull('last_run_at')->max('last_run_at');
+
         return response()->json([
             'pending_count' => $pendingCount,
             'next_expected_run_at' => $nextExpectedRunAt,
@@ -142,6 +145,7 @@ class SettingsController extends Controller
             return response()->json(['success' => false, 'error' => 'Nenhuma automação atrasada para processar.']);
         }
         $service->processCron($cron, true);
+
         return response()->json(['success' => true, 'cron_id' => $cron->id]);
     }
 
@@ -160,6 +164,7 @@ class SettingsController extends Controller
             return response()->json(['success' => true, 'cleared_count' => 0]);
         }
         MessageCron::whereIn('id', $ids)->update(['last_run_at' => $now]);
+
         return response()->json(['success' => true, 'cleared_count' => $ids->count()]);
     }
 
@@ -303,7 +308,7 @@ class SettingsController extends Controller
             $connectionId = $request->input('connection_id');
             $mode = $request->input('mode', 'update'); // 'reset' or 'update'
             $target = $request->input('target', 'all'); // 'all' or 'invoices'
-            
+
             if (! $connectionId) {
                 return response()->json(['error' => 'Selecione uma empresa para sincronizar.'], 400);
             }
@@ -344,12 +349,12 @@ class SettingsController extends Controller
                     } elseif (is_array($response)) {
                         $clientsData = $response;
                     }
-                    
+
                     if (empty($clientsData)) {
                         $hasMore = false;
                         break;
                     }
-    
+
                     foreach ($clientsData as $caClient) {
                         // Filtra apenas clientes ativos e com perfil de cliente
                         $perfis = $caClient['perfis'] ?? [];
@@ -360,11 +365,11 @@ class SettingsController extends Controller
                         if (empty($caClient['ativo'])) {
                             continue;
                         }
-    
+
                         $cpfCnpj = $caClient['documento'] ?? ($caClient['cpf'] ?? ($caClient['cnpj'] ?? null));
                         $phone = $caClient['telefone'] ?? ($caClient['telefone_comercial'] ?? null);
                         $mobilePhone = $caClient['telefone_celular'] ?? null;
-                        
+
                         $city = null;
                         $state = null;
                         if (! empty($caClient['enderecos']) && is_array($caClient['enderecos'])) {
@@ -372,26 +377,26 @@ class SettingsController extends Controller
                             $city = $primaryAddress['cidade'] ?? null;
                             $state = $primaryAddress['estado'] ?? null;
                         }
-    
+
                         // Proteção anti-duplicação entre empresas:
                         // Se já existe um cliente IDÊNTICO (mesmo CPF/CNPJ) em outra conexão, não duplicar aqui.
                         // Também protege por e-mail+telefone quando CPF/CNPJ estiver ausente.
                         try {
                             $existsInOther = false;
-                            if (!empty($cpfCnpj)) {
+                            if (! empty($cpfCnpj)) {
                                 $existsInOther = \App\Models\Cliente::where('cpf_cnpj', $cpfCnpj)
                                     ->where('connection_id', '!=', $connection->id)
                                     ->exists();
                             } else {
                                 $email = $caClient['email'] ?? null;
                                 $normalizedPhone = preg_replace('/\D+/', '', (string) ($mobilePhone ?? $phone ?? ''));
-                                if (!empty($email) && !empty($normalizedPhone)) {
+                                if (! empty($email) && ! empty($normalizedPhone)) {
                                     $existsInOther = \App\Models\Cliente::where('connection_id', '!=', $connection->id)
-                                        ->where(function($q) use ($email, $normalizedPhone) {
+                                        ->where(function ($q) use ($email, $normalizedPhone) {
                                             $q->where('email', $email)
-                                              ->where(function($qq) use ($normalizedPhone) {
-                                                  $qq->whereRaw("REGEXP_REPLACE(COALESCE(mobile_phone, phone, ''), '[^0-9]', '') = ?", [$normalizedPhone]);
-                                              });
+                                                ->where(function ($qq) use ($normalizedPhone) {
+                                                    $qq->whereRaw("REGEXP_REPLACE(COALESCE(mobile_phone, phone, ''), '[^0-9]', '') = ?", [$normalizedPhone]);
+                                                });
                                         })->exists();
                                 }
                             }
@@ -402,12 +407,13 @@ class SettingsController extends Controller
                                     'email' => $caClient['email'] ?? null,
                                     'phone' => $mobilePhone ?? $phone,
                                 ]);
+
                                 continue;
                             }
                         } catch (\Exception $e) {
-                            Log::error("Falha na verificação de duplicidade de cliente: " . $e->getMessage());
+                            Log::error('Falha na verificação de duplicidade de cliente: '.$e->getMessage());
                         }
-    
+
                         Cliente::updateOrCreate(
                             ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
                             [
@@ -426,20 +432,20 @@ class SettingsController extends Controller
                         );
                         $syncedCount++;
                     }
-    
+
                     if (count($clientsData) < $size) {
                         $hasMore = false;
                     } else {
                         $page++;
                     }
-                    
+
                     // Safety break
                     if ($page > 500) {
                         $hasMore = false;
                     }
-                    
+
                     // Pequena pausa para evitar rate limit excessivo
-                    usleep(200000); 
+                    usleep(200000);
                 }
             }
 
@@ -454,14 +460,14 @@ class SettingsController extends Controller
                         ->filter()
                         ->values()
                         ->all();
-                    
-                    if (!empty($processedIds)) {
+
+                    if (! empty($processedIds)) {
                         $toDeleteQuery = \App\Models\Cliente::where('connection_id', $connection->id)
                             ->whereNotIn('ca_id', $processedIds);
-                        
+
                         // Proteção anti-erro: não remover clientes com faturas vinculadas
                         $toDeleteQuery->whereDoesntHave('invoices');
-                        
+
                         $toDeleteQuery->delete();
                     } else {
                         // Fallback seguro: se por algum motivo não houve IDs processados,
@@ -471,13 +477,13 @@ class SettingsController extends Controller
                             ->delete();
                     }
                 } catch (\Exception $e) {
-                    Log::error('Falha no pruning de clientes: ' . $e->getMessage());
+                    Log::error('Falha no pruning de clientes: '.$e->getMessage());
                 }
             }
 
             // Sincroniza faturas
             $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
-            
+
             // Atualiza timestamp da conexão
             $connection->last_sync_at = now();
             $connection->save();
@@ -486,7 +492,7 @@ class SettingsController extends Controller
             try {
                 $this->futureMessageService->calculateForConnection($connection);
             } catch (\Exception $e) {
-                Log::error('Erro ao calcular envios futuros após sync: ' . $e->getMessage());
+                Log::error('Erro ao calcular envios futuros após sync: '.$e->getMessage());
             }
 
             $clientesDbCount = \App\Models\Cliente::where('connection_id', $connection->id)->count();
@@ -502,19 +508,20 @@ class SettingsController extends Controller
                     'details' => [
                         'clientes_count' => $clientesDbCount,
                         'invoices_count' => $invoicesApiCount,
-                        'synced_count' => $syncedCount
-                    ]
+                        'synced_count' => $syncedCount,
+                    ],
                 ]);
             }
 
             $msg = $target === 'all'
                 ? "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso processados para a conexão {$connection->empresa_nome}."
                 : "Sincronização concluída! {$invoicesApiCount} faturas em atraso processadas para a conexão {$connection->empresa_nome}.";
+
             return redirect()->back()->with('success', $msg);
 
         } catch (\Exception $e) {
             Log::error('Erro na sincronização de clientes: '.$e->getMessage());
-            
+
             if ($request->wantsJson()) {
                 return response()->json(['success' => false, 'error' => 'Erro ao sincronizar: '.$e->getMessage()], 500);
             }
@@ -536,6 +543,7 @@ class SettingsController extends Controller
                 $token = $this->contaAzulAuthService->getValidToken($connection, true);
                 if (! $token) {
                     $summary[] = "Conexão {$connection->empresa_nome}: falha ao renovar token. Pulando.";
+
                     continue;
                 }
                 $page = 1;
@@ -607,17 +615,19 @@ class SettingsController extends Controller
                 $summary[] = "{$connection->empresa_nome}: {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso.";
                 $connection->last_sync_at = now();
                 $connection->save();
-                
+
                 // Recalcula envios futuros
                 try {
                     $this->futureMessageService->calculateForConnection($connection);
                 } catch (\Exception $e) {
-                    Log::error("Erro ao calcular envios futuros após sync geral (conn {$connection->id}): " . $e->getMessage());
+                    Log::error("Erro ao calcular envios futuros após sync geral (conn {$connection->id}): ".$e->getMessage());
                 }
             }
+
             return redirect()->back()->with('success', 'Sincronização concluída: '.implode(' | ', $summary));
         } catch (\Exception $e) {
             Log::error('Erro na sincronização geral: '.$e->getMessage());
+
             return redirect()->back()->with('error', 'Erro ao sincronizar todas: '.$e->getMessage());
         }
     }

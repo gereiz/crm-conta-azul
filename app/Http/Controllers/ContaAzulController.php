@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ContaAzulService;
-use App\Services\ContaAzulAuthService;
 use App\Models\ContaAzulConnection;
+use App\Services\ContaAzulAuthService;
+use App\Services\ContaAzulService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-
-use Inertia\Inertia;
 
 class ContaAzulController extends Controller
 {
     protected $contaAzulService;
+
     protected ContaAzulAuthService $authService;
 
     public function __construct(ContaAzulService $contaAzulService, ContaAzulAuthService $authService)
@@ -25,11 +24,13 @@ class ContaAzulController extends Controller
     {
         try {
             $url = $this->contaAzulService->getAuthUrl();
-            Log::info('Redirecionando para Conta Azul: ' . $url);
+            Log::info('Redirecionando para Conta Azul: '.$url);
+
             return redirect()->away($url);
         } catch (\Exception $e) {
-            Log::error('Erro ao conectar Conta Azul: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Erro na configuração: ' . $e->getMessage());
+            Log::error('Erro ao conectar Conta Azul: '.$e->getMessage());
+
+            return redirect()->back()->with('error', 'Erro na configuração: '.$e->getMessage());
         }
     }
 
@@ -41,16 +42,18 @@ class ContaAzulController extends Controller
             $error = $request->input('error');
             $desc = $request->input('error_description');
             Log::error("Erro no callback Conta Azul: $error - $desc");
+
             return redirect()->route('dashboard')->with('error', "Erro na autenticação Conta Azul: $desc");
         }
 
         $code = $request->input('code');
         $state = $request->input('state');
-        
+
         $savedState = session('contaazul_state');
 
-        if (!$code || !$state || $state !== $savedState) {
+        if (! $code || ! $state || $state !== $savedState) {
             Log::error('Callback Conta Azul inválido: Code ou State incorretos.');
+
             return redirect()->route('dashboard')->with('error', 'Falha na autenticação com Conta Azul (State inválido).');
         }
 
@@ -61,8 +64,10 @@ class ContaAzulController extends Controller
                 $tokenData = $this->authService->exchangeCode($connection, $code);
                 if ($tokenData && isset($tokenData['access_token'])) {
                     $this->authService->saveTokens($connection, $tokenData);
+
                     return redirect()->route('contaazul.connections.index')->with('success', 'Conectado com sucesso ao Conta Azul (multi).');
                 }
+
                 return redirect()->route('contaazul.connections.index')->with('error', 'Falha ao obter token do Conta Azul.');
             }
         }
@@ -71,6 +76,7 @@ class ContaAzulController extends Controller
 
         if ($tokenData && isset($tokenData['access_token'])) {
             $this->contaAzulService->saveToken($tokenData);
+
             return redirect()->route('dashboard')->with('success', 'Conectado com sucesso ao Conta Azul!');
         }
 

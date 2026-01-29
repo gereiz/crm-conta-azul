@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\UserRole;
 use App\Models\Permission;
 use App\Models\User;
+use App\Models\UserRole;
+use Illuminate\Database\Seeder;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
@@ -37,7 +37,7 @@ class RolesAndPermissionsSeeder extends Seeder
         foreach ($permissions as $p) {
             $code = strtolower("{$p['module']}.{$p['action']}");
             $perm = Permission::where('code', $code)->first();
-            if (!$perm) {
+            if (! $perm) {
                 $perm = Permission::create([
                     'code' => $code,
                     'module' => $p['module'],
@@ -55,7 +55,7 @@ class RolesAndPermissionsSeeder extends Seeder
         }
 
         $adminUser = User::where('role', 'admin')->first();
-        if ($adminUser && !$adminUser->role_id) {
+        if ($adminUser && ! $adminUser->role_id) {
             $adminUser->role_id = $adminRole->id;
             $adminUser->save();
         }

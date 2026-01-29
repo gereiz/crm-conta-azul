@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ContaAzulConnection;
-use App\Models\CompanyMessageSetting;
 use App\Models\CompanyCronRule;
+use App\Models\CompanyMessageSetting;
+use App\Models\ContaAzulConnection;
 use App\Services\ContaAzulService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -24,7 +24,7 @@ class EmpresaController extends Controller
         $size = $request->input('size', 10);
 
         $connections = ContaAzulConnection::query()
-            ->when($search, fn($q) => $q->where('empresa_nome', 'like', "%{$search}%"))
+            ->when($search, fn ($q) => $q->where('empresa_nome', 'like', "%{$search}%"))
             ->orderBy('empresa_nome')
             ->paginate($size)
             ->withQueryString();
@@ -39,7 +39,7 @@ class EmpresaController extends Controller
     {
         $connection = ContaAzulConnection::find($id);
 
-        if (!$connection) {
+        if (! $connection) {
             return redirect()->route('empresas.index')->with('error', 'Empresa não encontrada.');
         }
 
@@ -54,28 +54,28 @@ class EmpresaController extends Controller
         $messageSettings = [];
         foreach ($messageTypes as $t) {
             $found = $settings->firstWhere('message_type', $t['key']);
-            $messageSettings[$t['key']] = (bool)($found?->is_enabled ?? false);
+            $messageSettings[$t['key']] = (bool) ($found?->is_enabled ?? false);
         }
         // Flag global: ignorar verificação de "já enviado hoje"
         $ignoreFlag = $settings->firstWhere('message_type', 'ignore_sent_today');
-        $messageSettings['ignore_sent_today'] = (bool)($ignoreFlag?->is_enabled ?? false);
+        $messageSettings['ignore_sent_today'] = (bool) ($ignoreFlag?->is_enabled ?? false);
         // Flag global: limitar preview de links
         $limitPreviewFlag = $settings->firstWhere('message_type', 'limit_link_preview');
-        $messageSettings['limit_link_preview'] = (bool)($limitPreviewFlag?->is_enabled ?? false);
+        $messageSettings['limit_link_preview'] = (bool) ($limitPreviewFlag?->is_enabled ?? false);
         $disablePreviewFlag = $settings->firstWhere('message_type', 'disable_link_preview');
-        $messageSettings['disable_link_preview'] = (bool)($disablePreviewFlag?->is_enabled ?? false);
+        $messageSettings['disable_link_preview'] = (bool) ($disablePreviewFlag?->is_enabled ?? false);
 
         $specificRules = CompanyCronRule::where('conta_azul_connection_id', $connection->id)->get();
         $globalRules = CompanyCronRule::whereNull('conta_azul_connection_id')->get();
-        
+
         $cronRules = [];
         foreach ($messageTypes as $t) {
             $found = $specificRules->firstWhere('message_type', $t['key']);
             $isGlobal = false;
-            
-            if (!$found) {
+
+            if (! $found) {
                 $found = $globalRules->firstWhere('message_type', $t['key']);
-                $isGlobal = (bool)$found;
+                $isGlobal = (bool) $found;
             }
 
             $cronRules[$t['key']] = $found ? [
@@ -135,8 +135,8 @@ class EmpresaController extends Controller
             'day_of_month' => $data['day_of_month'] ?? null,
             'day_of_week' => $data['day_of_week'] ?? null,
             'interval_days' => $data['interval_days'] ?? null,
-            'exclude_weekends' => (bool)($data['exclude_weekends'] ?? false),
-            'is_active' => (bool)($data['is_active'] ?? true),
+            'exclude_weekends' => (bool) ($data['exclude_weekends'] ?? false),
+            'is_active' => (bool) ($data['is_active'] ?? true),
             'message_type' => $data['message_type'],
         ];
 

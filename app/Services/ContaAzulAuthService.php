@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Models\ContaAzulConnection;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class ContaAzulAuthService
 {
@@ -18,9 +18,9 @@ class ContaAzulAuthService
 
         $state = base64_encode(json_encode($statePayload));
         // Use session array key to allow multiple connection attempts or specific connection state
-        session(['contaazul_state_' . $connection->id => $state]);
+        session(['contaazul_state_'.$connection->id => $state]);
         // Fallback for generic controller if needed, but we should prefer specific
-        session(['contaazul_state' => $state]); 
+        session(['contaazul_state' => $state]);
 
         // Usando o escopo definido no arquivo de configuração (que vem do .env)
         // Isso permite que o usuário controle os escopos sem alterar o código.
@@ -45,37 +45,39 @@ class ContaAzulAuthService
             'prompt' => 'login consent select_account',
             'max_age' => 0,
         ];
-        
+
         $query = http_build_query($params);
 
         $url = "https://auth.contaazul.com/authorize?{$query}";
         Log::info("ContaAzul OAuth URL (conn {$connection->id}): {$url}");
+
         return $url;
     }
 
     public function exchangeCode(ContaAzulConnection $connection, string $code): ?array
     {
         $clientId = trim($connection->ca_client_id);
-        
+
         try {
             // Tenta obter o segredo do banco. Se a APP_KEY mudou, isso vai lançar exceção.
             // Para novas conexões, o segredo pode vir vazio se foi salvo incorretamente antes.
             $clientSecret = $connection->ca_client_secret;
             if (empty($clientSecret)) {
-                 throw new \Illuminate\Contracts\Encryption\DecryptException("Client Secret vazio no banco.");
+                throw new \Illuminate\Contracts\Encryption\DecryptException('Client Secret vazio no banco.');
             }
             $clientSecret = trim($clientSecret);
         } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
             Log::warning("Erro de descriptografia ou secret vazio na conexão {$connection->id}. Tentando fallback do .env.");
-            
+
             // Fallback: tenta pegar do .env
             $clientSecret = config('services.contaazul.client_secret');
-            
+
             if (empty($clientSecret)) {
                 // Última tentativa: se o usuário acabou de preencher o formulário de conexão,
                 // o request original pode ter o client_secret. Mas aqui estamos no serviço.
                 // Se falhar aqui, é fatal.
                 Log::error("Client Secret não encontrado no .env e falha de descriptografia no banco para conexão {$connection->id}.");
+
                 return ['error' => 'decrypt_error'];
             }
 
@@ -87,10 +89,10 @@ class ContaAzulAuthService
                 $connection->save();
                 Log::info("Client Secret da conexão {$connection->id} corrigido automaticamente usando valor do .env.");
             } catch (\Exception $saveError) {
-                Log::error("Falha ao tentar corrigir Client Secret no banco: " . $saveError->getMessage());
+                Log::error('Falha ao tentar corrigir Client Secret no banco: '.$saveError->getMessage());
             }
         }
-        
+
         // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
         $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
         if (empty($redirectUri)) {
@@ -102,7 +104,7 @@ class ContaAzulAuthService
         $response = Http::withOptions([
             'verify' => false,
         ])->withHeaders([
-            'Authorization' => "Basic {$credentials}"
+            'Authorization' => "Basic {$credentials}",
         ])->asForm()->post('https://auth.contaazul.com/oauth2/token', [
             'grant_type' => 'authorization_code',
             'code' => $code,
@@ -110,7 +112,8 @@ class ContaAzulAuthService
         ]);
 
         if ($response->failed()) {
-            Log::error('Erro ao obter token Conta Azul (multi): ' . $response->body());
+            Log::error('Erro ao obter token Conta Azul (multi): '.$response->body());
+
             return null;
         }
 
@@ -124,16 +127,16 @@ class ContaAzulAuthService
             $clientSecret = $connection->ca_client_secret;
         } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
             Log::warning("Erro de descriptografia ao renovar token (conn {$connection->id}). Tentando recuperar.");
-            
+
             // Tenta recuperar Client Secret do .env se falhar
             $clientSecret = config('services.contaazul.client_secret');
-            
+
             // Se o refresh token estiver corrompido, não há o que fazer além de retornar null
             // O getValidToken vai lidar com isso forçando nova autenticação
             if (empty($clientSecret)) {
                 return null;
             }
-            
+
             // Se conseguimos o secret, mas o refresh token falhou, retornamos null
             try {
                 $refreshToken = $connection->refresh_token;
@@ -142,7 +145,7 @@ class ContaAzulAuthService
             }
         }
 
-        if (!$refreshToken) {
+        if (! $refreshToken) {
             return null;
         }
 
@@ -151,14 +154,15 @@ class ContaAzulAuthService
         $response = Http::withOptions([
             'verify' => false,
         ])->withHeaders([
-            'Authorization' => "Basic {$credentials}"
+            'Authorization' => "Basic {$credentials}",
         ])->asForm()->post('https://auth.contaazul.com/oauth2/token', [
             'grant_type' => 'refresh_token',
             'refresh_token' => $refreshToken,
         ]);
 
         if ($response->failed()) {
-            Log::error("Erro ao atualizar token Conta Azul (connection {$connection->id}): " . $response->body());
+            Log::error("Erro ao atualizar token Conta Azul (connection {$connection->id}): ".$response->body());
+
             return null;
         }
 
@@ -188,7 +192,7 @@ class ContaAzulAuthService
         }
 
         if (
-            !$accessToken ||
+            ! $accessToken ||
             $forceRefresh ||
             ($expiresAt && $expiresAt->lt(Carbon::now()->addMinutes(5)))
         ) {

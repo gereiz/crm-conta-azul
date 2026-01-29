@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MessageCron;
 use App\Models\ContaAzulConnection;
-use App\Models\WhatsappTemplate;
+use App\Models\MessageCron;
 use App\Models\WhatsappNumber;
+use App\Models\WhatsappTemplate;
 use App\Services\MessageCronService;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 
 class MessageCronController extends Controller
 {
@@ -24,13 +24,14 @@ class MessageCronController extends Controller
     public function index()
     {
         $crons = MessageCron::with(['messageTemplate', 'whatsappNumber'])->latest()->get();
+
         return Inertia::render('Settings/Crons/Index', [
             'crons' => $crons,
             'can' => [
                 'create' => Auth::user()->can('create', MessageCron::class),
                 'update' => Auth::user()->can('create', MessageCron::class), // Policy is same for create/update
                 'delete' => Auth::user()->can('create', MessageCron::class), // Policy is same for create/delete
-            ]
+            ],
         ]);
     }
 
@@ -39,6 +40,7 @@ class MessageCronController extends Controller
         $templates = WhatsappTemplate::orderBy('name')->get();
         $whatsappNumbers = WhatsappNumber::where('status', 'active')->orderBy('description')->get();
         $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
+
         return Inertia::render('Settings/Crons/Form', [
             'templates' => $templates,
             'whatsappNumbers' => $whatsappNumbers,
@@ -84,6 +86,7 @@ class MessageCronController extends Controller
         $templates = WhatsappTemplate::orderBy('name')->get();
         $whatsappNumbers = WhatsappNumber::where('status', 'active')->orderBy('description')->get();
         $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
+
         return Inertia::render('Settings/Crons/Form', [
             'cron' => $cron,
             'templates' => $templates,
@@ -126,6 +129,7 @@ class MessageCronController extends Controller
     public function destroy(MessageCron $cron)
     {
         $cron->delete();
+
         return redirect()->back()->with('success', 'Automação removida com sucesso!');
     }
 
@@ -153,7 +157,7 @@ class MessageCronController extends Controller
         ];
 
         $message = "Execução finalizada. Enviadas: {$stats['sent']}, Erros: {$stats['errors']}, Ignoradas: {$stats['skipped']}.";
-        
+
         return redirect()->back()->with('success', $message)->with('cron_report', $report);
     }
 }

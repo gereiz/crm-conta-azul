@@ -15,8 +15,7 @@ class PhoneSanitizerService
      *    ou corrigir duplicação.
      *    Nota: O usuário solicitou explicitamente remover o 9º dígito.
      *    Exemplo: 5533998013895 -> 553398013895
-     * 
-     * @param string|null $phone
+     *
      * @return string|null Retorna null se o número for inválido/vazio
      */
     public static function sanitize(?string $phone): ?string
@@ -36,15 +35,15 @@ class PhoneSanitizerService
         }
 
         // 3. DDI: se já possuir DDI (>=12 dígitos), mantém; caso contrário, aplica 55 como padrão
-        if (strlen($digits) < 12 && !str_starts_with($digits, '55')) {
-            $digits = '55' . $digits;
+        if (strlen($digits) < 12 && ! str_starts_with($digits, '55')) {
+            $digits = '55'.$digits;
         }
 
         // 4. Lógica do 9º dígito
         // Regra Geral: MANTER o 9º dígito (padrão nacional/internacional atual).
-        // Exceção (Solicitação Usuário): Remover 9º dígito APENAS para DDDs de MG (30-39).
-        // Motivo: Relato de falha de envio para MG com 9 dígitos via Whapi.
-        
+        // Exceção (Solicitação Usuário): Remover 9º dígito para DDDs 3X, 7X e 8X.
+        // Motivo: Relato de falha de envio para regiões específicas via Whapi.
+
         if (strlen($digits) === 13 && str_starts_with($digits, '55')) {
             // Indices: 01 (55), 23 (DDD), 4 (9)
             $ddd = substr($digits, 2, 2);
@@ -52,11 +51,10 @@ class PhoneSanitizerService
 
             // Verifica se é um celular (começa com 9 após o DDD)
             if ($firstDigit === '9') {
-                // Verifica se o DDD começa com '3' (Região MG: 31, 32, 33, 34, 35, 37, 38)
-                // Usando str_starts_with ou range
-                if (str_starts_with($ddd, '3')) {
+                // Remover para DDDs iniciados em 3, 7 ou 8
+                if (in_array($ddd[0], ['3', '7', '8'])) {
                     // Remove o 9º dígito (índice 4)
-                    $digits = substr($digits, 0, 4) . substr($digits, 5);
+                    $digits = substr($digits, 0, 4).substr($digits, 5);
                 }
             }
         }
@@ -68,25 +66,29 @@ class PhoneSanitizerService
     /**
      * Verifica se o número sanitizado é um telefone fixo.
      * Considera apenas números do Brasil (DDI 55).
-     * 
-     * @param string|null $sanitizedPhone
-     * @return bool
      */
     public static function isLandline(?string $sanitizedPhone): bool
     {
-        if (empty($sanitizedPhone)) return false;
+        if (empty($sanitizedPhone)) {
+            return false;
+        }
 
         // Apenas para Brasil
-        if (!str_starts_with($sanitizedPhone, '55')) return false;
+        if (! str_starts_with($sanitizedPhone, '55')) {
+            return false;
+        }
 
         // Móvel com 9º dígito tem 13 dígitos (55 + DDD + 9 + XXXX-XXXX)
-        if (strlen($sanitizedPhone) === 13) return false;
+        if (strlen($sanitizedPhone) === 13) {
+            return false;
+        }
 
         // Se tem 12 dígitos (55 + DDD + XXXX-XXXX)
         if (strlen($sanitizedPhone) === 12) {
             // O primeiro dígito do número está no índice 4
             // Fixos começam com 2, 3, 4 ou 5
             $firstDigit = $sanitizedPhone[4];
+
             return in_array($firstDigit, ['2', '3', '4', '5']);
         }
 

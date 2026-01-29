@@ -27,7 +27,7 @@ class MessageCron extends Model
         'disable_link_preview',
         'last_run_at',
         'run_when_delayed',
-        'created_by'
+        'created_by',
     ];
 
     protected $casts = [

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Services\ContaAzulService;
+use Illuminate\Console\Command;
 
 class SyncInvoices extends Command
 {
@@ -32,7 +32,8 @@ class SyncInvoices extends Command
             $count = $service->syncOverdueInvoices();
             $this->info("Sincronização concluída com sucesso! {$count} faturas processadas.");
         } catch (\Exception $e) {
-            $this->error('Erro durante a sincronização: ' . $e->getMessage());
+            $this->error('Erro durante a sincronização: '.$e->getMessage());
+
             return Command::FAILURE;
         }
 

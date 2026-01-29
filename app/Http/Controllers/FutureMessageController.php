@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\FutureMessageSchedule;
 use App\Models\ContaAzulConnection;
+use App\Models\FutureMessageSchedule;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Carbon\Carbon;
 
 class FutureMessageController extends Controller
 {
@@ -46,7 +46,7 @@ class FutureMessageController extends Controller
                 'connection_id' => $connectionId,
                 'type' => $type,
                 'date' => $date,
-            ]
+            ],
         ]);
     }
 }

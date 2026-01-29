@@ -11,8 +11,9 @@ class WhatsappTemplateController extends Controller
     public function index()
     {
         $templates = WhatsappTemplate::latest()->get();
+
         return Inertia::render('Settings/Templates/Index', [
-            'templates' => $templates
+            'templates' => $templates,
         ]);
     }
 
@@ -21,7 +22,7 @@ class WhatsappTemplateController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'content' => 'required|string',
-            'is_default' => 'boolean'
+            'is_default' => 'boolean',
         ]);
 
         if ($validated['is_default'] ?? false) {
@@ -38,7 +39,7 @@ class WhatsappTemplateController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'content' => 'required|string',
-            'is_default' => 'boolean'
+            'is_default' => 'boolean',
         ]);
 
         if ($validated['is_default'] ?? false) {
@@ -55,6 +56,7 @@ class WhatsappTemplateController extends Controller
     public function destroy(WhatsappTemplate $template)
     {
         $template->delete();
+
         return redirect()->back()->with('success', 'Modelo excluído com sucesso!');
     }
 }

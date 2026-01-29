@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('message_cron_logs', function (Blueprint $table) {
-            if (!Schema::hasColumn('message_cron_logs', 'invoice_count')) {
+            if (! Schema::hasColumn('message_cron_logs', 'invoice_count')) {
                 $table->unsignedInteger('invoice_count')->nullable()->after('error_message');
             }
         });

@@ -2,15 +2,16 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         if (Schema::hasTable('permissions')) {
             Schema::table('permissions', function (Blueprint $table) {
-                if (!Schema::hasColumn('permissions', 'code')) {
+                if (! Schema::hasColumn('permissions', 'code')) {
                     $table->string('code')->nullable()->after('id');
                 } else {
                     $table->string('code')->nullable()->change();
@@ -22,7 +23,7 @@ return new class extends Migration {
                 ->whereNotNull('module')
                 ->whereNotNull('action')
                 ->update([
-                    'code' => DB::raw("LOWER(CONCAT(TRIM(module), '.', TRIM(action)))")
+                    'code' => DB::raw("LOWER(CONCAT(TRIM(module), '.', TRIM(action)))"),
                 ]);
         }
     }
