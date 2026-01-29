@@ -109,7 +109,8 @@ class SettingsController extends Controller
 
     public function delayedCronStatus()
     {
-        $now = Carbon::now();
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $now = Carbon::now($tz);
         $today = $now->toDateString();
         $pendingQuery = MessageCron::where('is_active', true)
             ->where('run_when_delayed', true)
@@ -119,19 +120,20 @@ class SettingsController extends Controller
             });
         $pendingCount = $pendingQuery->count();
         $next = $pendingQuery->orderBy('send_time', 'asc')->first();
-        $nextExpectedRunAt = $next ? Carbon::parse($today.' '.$next->send_time)->toDateTimeString() : null;
+        $nextExpectedRunAt = $next ? Carbon::parse($today.' '.$next->send_time, $tz)->toDateTimeString() : null;
         $lastProcessedAt = MessageCron::whereNotNull('last_run_at')->max('last_run_at');
 
         return response()->json([
             'pending_count' => $pendingCount,
             'next_expected_run_at' => $nextExpectedRunAt,
-            'last_processed_at' => $lastProcessedAt ? Carbon::parse($lastProcessedAt)->toDateTimeString() : null,
+            'last_processed_at' => $lastProcessedAt ? Carbon::parse($lastProcessedAt, $tz)->toDateTimeString() : null,
         ]);
     }
 
     public function processNextDelayedCron(MessageCronService $service)
     {
-        $now = Carbon::now();
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $now = Carbon::now($tz);
         $today = $now->toDateString();
         $cron = MessageCron::where('is_active', true)
             ->where('run_when_delayed', true)
@@ -151,7 +153,8 @@ class SettingsController extends Controller
 
     public function clearDelayedCrons()
     {
-        $now = Carbon::now();
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $now = Carbon::now($tz);
         $today = $now->toDateString();
         $query = MessageCron::where('is_active', true)
             ->where('run_when_delayed', true)
