@@ -16,6 +16,7 @@ const form = useForm({
     secondary_color: props.settings?.secondary_color ?? '#22C55E',
     logo: null,
     favicon: null,
+    evolution_api_base_url: props.settings?.evolution_api_base_url ?? '',
 });
 
 const cronEnabled = ref(null);
@@ -125,6 +126,13 @@ onMounted(() => {
                                     <img :src="`/storage/${props.settings.favicon_path}`" alt="Favicon" class="h-8 w-8 rounded" />
                                 </div>
                             </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                URL da Evolution API
+                            </label>
+                            <TextInput v-model="form.evolution_api_base_url" class="w-full" placeholder="https://api.seu-vps.com" />
                         </div>
 
                         <div class="flex justify-end">

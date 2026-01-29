@@ -24,10 +24,23 @@ class WhatsAppController extends Controller
             'ddi' => 'required|string|max:5',
             'ddd' => 'required|string|max:5',
             'phone' => 'required|string|max:20',
-            'whapi_key' => 'required|string',
+            'provider' => 'required|in:whapi,evolution',
+            'provider_token' => 'nullable|string',
+            'provider_instance' => 'nullable|string',
             'is_default' => 'boolean',
             'status' => 'required|in:active,inactive',
         ]);
+
+        if ($validated['provider'] === 'evolution') {
+            $request->validate([
+                'provider_token' => 'required|string',
+                'provider_instance' => 'required|string',
+            ]);
+        } else {
+            if (! $request->input('provider_token') && $request->input('whapi_key')) {
+                $validated['provider_token'] = $request->input('whapi_key');
+            }
+        }
 
         if ($validated['is_default'] ?? false) {
             // Remove default from other numbers
@@ -46,10 +59,23 @@ class WhatsAppController extends Controller
             'ddi' => 'required|string|max:5',
             'ddd' => 'required|string|max:5',
             'phone' => 'required|string|max:20',
-            'whapi_key' => 'nullable|string',
+            'provider' => 'required|in:whapi,evolution',
+            'provider_token' => 'nullable|string',
+            'provider_instance' => 'nullable|string',
             'is_default' => 'boolean',
             'status' => 'required|in:active,inactive',
         ]);
+
+        if ($validated['provider'] === 'evolution') {
+            $request->validate([
+                'provider_token' => 'required|string',
+                'provider_instance' => 'required|string',
+            ]);
+        } else {
+            if (! $request->input('provider_token') && $request->input('whapi_key')) {
+                $validated['provider_token'] = $request->input('whapi_key');
+            }
+        }
 
         if ($validated['is_default'] ?? false) {
             // Remove default from other numbers excluding current

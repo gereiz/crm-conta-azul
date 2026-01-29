@@ -4,6 +4,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
 import axios from 'axios';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
+import Modal from '@/Components/Modal.vue';
 
 const props = defineProps({
     stats: Object,
@@ -12,6 +13,7 @@ const props = defineProps({
     shouldSync: Boolean,
     connections: Array,
     selectedConnectionId: Number,
+    evolutionNumbers: Array,
 });
 
 const page = usePage();
@@ -23,6 +25,15 @@ const isAdmin = computed(() => (page.props.auth?.user?.role ?? '') === 'admin');
 const whapiStatus = ref(null);
 const checkingWhapi = ref(false);
 const syncingFinancials = ref(false);
+const evolutionStatus = ref(null);
+const checkingEvolution = ref(false);
+const evolutionError = ref(null);
+const evolutionDetails = ref(null);
+const qrLoading = ref(false);
+const qrError = ref(null);
+const qrImage = ref(null);
+const qrText = ref(null);
+const showQrModal = ref(false);
 
 // Use local state for stats to allow dynamic updates
 const localStats = ref({
@@ -38,6 +49,7 @@ const selectedConnectionId = ref(props.selectedConnectionId || (props.connection
 const selectedConnection = computed(() => {
     return props.connections?.find(c => c.id === selectedConnectionId.value) || null;
 });
+const selectedEvolutionNumberId = ref(props.evolutionNumbers?.[0]?.id ?? null);
 const syncNotice = ref({ visible: false, type: 'info', message: '' });
 const syncNoticeClass = computed(() => {
     if (!syncNotice.value.visible) return '';
@@ -48,14 +60,14 @@ const syncNoticeClass = computed(() => {
 
 const whapiStatusClass = computed(() => {
     if (whapiStatus.value === 'Operacional') return 'bg-green-500';
-    if (whapiStatus.value === 'Fora de Operação') return 'bg-red-500';
+    if (whapiStatus.value === 'Inoperante') return 'bg-red-500';
     if (checkingWhapi.value) return 'bg-yellow-500 animate-pulse';
     return 'bg-gray-300';
 });
 
 const whapiBadgeClass = computed(() => {
     if (whapiStatus.value === 'Operacional') return 'text-green-600 bg-green-100 dark:bg-green-900 dark:text-green-300';
-    if (whapiStatus.value === 'Fora de Operação') return 'text-red-600 bg-red-100 dark:bg-red-900 dark:text-red-300';
+    if (whapiStatus.value === 'Inoperante') return 'text-red-600 bg-red-100 dark:bg-red-900 dark:text-red-300';
     if (checkingWhapi.value) return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-300';
     return 'text-gray-600 bg-gray-100 dark:bg-gray-700 dark:text-gray-300';
 });
@@ -68,14 +80,78 @@ const checkWhapiStatus = async () => {
         if (response.data.status === 'operational') {
             whapiStatus.value = 'Operacional';
         } else {
-            whapiStatus.value = 'Fora de Operação';
+            whapiStatus.value = 'Inoperante';
         }
     } catch (error) {
         console.error('Erro ao verificar status Whapi:', error);
-        whapiStatus.value = 'Fora de Operação';
+        whapiStatus.value = 'Inoperante';
     } finally {
         checkingWhapi.value = false;
     }
+};
+
+const evolutionStatusClass = computed(() => {
+    if (evolutionStatus.value === 'Operacional') return 'bg-green-500';
+    if (evolutionStatus.value === 'Inoperante') return 'bg-red-500';
+    if (checkingEvolution.value) return 'bg-yellow-500 animate-pulse';
+    return 'bg-gray-300';
+});
+
+const evolutionBadgeClass = computed(() => {
+    if (evolutionStatus.value === 'Operacional') return 'text-green-600 bg-green-100 dark:bg-green-900 dark:text-green-300';
+    if (evolutionStatus.value === 'Inoperante') return 'text-red-600 bg-red-100 dark:bg-red-900 dark:text-red-300';
+    if (checkingEvolution.value) return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-300';
+    return 'text-gray-600 bg-gray-100 dark:bg-gray-700 dark:text-gray-300';
+});
+
+const checkEvolutionStatus = async () => {
+    checkingEvolution.value = true;
+    evolutionStatus.value = null;
+    evolutionError.value = null;
+    evolutionDetails.value = null;
+    try {
+        const response = await axios.get(route('dashboard.check-evolution', { whatsapp_number_id: selectedEvolutionNumberId.value }));
+        if (response.data.status === 'operational') {
+            evolutionStatus.value = 'Operacional';
+            evolutionDetails.value = response.data.details || null;
+        } else {
+            evolutionStatus.value = 'Inoperante';
+            evolutionError.value = response.data.error || 'Desconectado';
+            evolutionDetails.value = response.data.details || null;
+        }
+    } catch (error) {
+        evolutionStatus.value = 'Inoperante';
+        evolutionError.value = 'Erro ao verificar Evolution';
+    } finally {
+        checkingEvolution.value = false;
+    }
+};
+
+const fetchEvolutionQr = async () => {
+    qrLoading.value = true;
+    qrError.value = null;
+    qrImage.value = null;
+    qrText.value = null;
+    try {
+        const response = await axios.get(route('dashboard.evolution-qr', { whatsapp_number_id: selectedEvolutionNumberId.value }));
+        if (response.data.success && response.data.qr) {
+            const qr = response.data.qr;
+            if (qr.data_url) {
+                qrImage.value = qr.data_url;
+            } else if (qr.qr_text) {
+                qrText.value = qr.qr_text;
+            } else {
+                qrError.value = 'QR não disponível';
+            }
+        } else {
+            qrError.value = response.data.error || 'QR não disponível';
+        }
+    } catch (error) {
+        qrError.value = 'Erro ao obter QR Evolution';
+    } finally {
+        qrLoading.value = false;
+    }
+    showQrModal.value = !qrError.value && (!!qrImage.value || !!qrText.value);
 };
 
 const syncFinancials = async () => {
@@ -223,6 +299,7 @@ const fetchStats = async () => {
 };
 onMounted(() => {
     checkWhapiStatus();
+    checkEvolutionStatus();
     // Não sincronizar automaticamente; dados serão atualizados via cron e leitura do banco
     fetchStats();
     fetchNumberTypeChart();
@@ -512,7 +589,7 @@ const donutTotal = computed(() => {
                             <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                 <div class="flex items-center">
                                     <div class="w-2 h-2 rounded-full mr-3" :class="whapiStatusClass"></div>
-                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Serviço Whapi</span>
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Whapi</span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span v-if="whapiStatus || checkingWhapi" class="text-xs font-semibold px-2 py-1 rounded-full" :class="whapiBadgeClass">
@@ -525,6 +602,46 @@ const donutTotal = computed(() => {
                                     >
                                         {{ checkingWhapi ? '...' : 'Testar' }}
                                     </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full mr-3" :class="evolutionStatusClass"></div>
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Evolution</span>
+                                </div>
+                                <div class="flex items-center gap-2 ml-1">
+                                    <select v-if="(props.evolutionNumbers || []).length > 0" v-model="selectedEvolutionNumberId" :disabled="checkingEvolution" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                                        <option v-for="n in props.evolutionNumbers" :key="n.id" :value="n.id">
+                                            {{ n.description || ('#'+n.id) }} ({{ n.provider_instance || 'instância' }})
+                                        </option>
+                                    </select>
+                                    <span v-if="evolutionStatus || checkingEvolution" class="text-xs font-semibold px-2 py-1 rounded-full" :class="evolutionBadgeClass">
+                                        {{ checkingEvolution ? 'Verificando...' : evolutionStatus }}
+                                    </span>
+                                    <button 
+                                        @click="checkEvolutionStatus" 
+                                        :disabled="checkingEvolution"
+                                        class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                    >
+                                        {{ checkingEvolution ? '...' : 'Testar' }}
+                                    </button>
+                                    <button 
+                                        @click="fetchEvolutionQr" 
+                                        v-if="evolutionStatus !== 'Operacional'"
+                                        :disabled="qrLoading || checkingEvolution"
+                                        class="text-xs bg-purple-500 hover:bg-purple-600 text-white px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                    >
+                                        {{ qrLoading ? '...' : 'QR' }}
+                                    </button>
+                                </div>
+                            </div>
+                            <div v-if="evolutionError || (evolutionDetails && evolutionDetails.instance)" class="px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+                                <div v-if="evolutionError" class="text-xs text-red-600 dark:text-red-400 font-semibold">{{ evolutionError }}</div>
+                                <div v-if="evolutionDetails && evolutionDetails.instance" class="text-[11px] text-gray-600 dark:text-gray-400">
+                                    Instância: {{ evolutionDetails.instance }}
+                                </div>
+                                <div v-if="evolutionDetails && evolutionDetails.number" class="text-[11px] text-gray-600 dark:text-gray-400">
+                                    Número: {{ evolutionDetails.number }}
                                 </div>
                             </div>
                         </div>
@@ -588,4 +705,15 @@ const donutTotal = computed(() => {
             </div>
         </div>
     </AuthenticatedLayout>
+    <Modal :show="showQrModal" maxWidth="md" @close="showQrModal = false">
+        <div class="p-6">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-3">Conectar Evolution</h3>
+            <div v-if="qrError" class="text-sm text-red-600 dark:text-red-400 mb-3">{{ qrError }}</div>
+            <img v-if="qrImage" :src="qrImage" alt="QR Evolution" class="w-60 h-60 mx-auto rounded" />
+            <div v-else-if="qrText" class="text-xs text-gray-700 dark:text-gray-300 break-all p-3 bg-gray-50 dark:bg-gray-700 rounded">{{ qrText }}</div>
+            <div class="mt-4 flex justify-end">
+                <SecondaryButton @click="showQrModal = false">Fechar</SecondaryButton>
+            </div>
+        </div>
+    </Modal>
 </template>

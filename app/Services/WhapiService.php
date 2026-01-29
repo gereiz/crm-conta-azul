@@ -2,12 +2,13 @@
 
 namespace App\Services;
 
+use App\Contracts\WhatsAppProviderInterface;
 use App\Models\WhatsappNumber;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
-class WhapiService
+class WhapiService implements WhatsAppProviderInterface
 {
     protected $baseUrl = 'https://gate.whapi.cloud';
 
@@ -18,9 +19,8 @@ class WhapiService
         }
 
         try {
-            // Tenta endpoint de configurações do canal (mais robusto e disponível para todos os tipos)
             $response = Http::withHeaders([
-                'Authorization' => "Bearer {$whatsapp->whapi_key}",
+                'Authorization' => 'Bearer '.($whatsapp->provider_token ?? $whatsapp->whapi_key),
                 'Accept' => 'application/json',
             ])->timeout(10)->get("{$this->baseUrl}/settings");
 
@@ -51,6 +51,11 @@ class WhapiService
         }
     }
 
+    public function checkConnection(WhatsappNumber $whatsapp)
+    {
+        return $this->getConnectionStatus($whatsapp);
+    }
+
     public function isConnected(WhatsappNumber $whatsapp)
     {
         $status = $this->getConnectionStatus($whatsapp);
@@ -68,34 +73,29 @@ class WhapiService
             return ['success' => false, 'message' => 'WhatsApp não configurado ou inativo.'];
         }
 
-        // Normalização BR (somente dígitos, sem '+', prefixa 55 se ausente, remove zeros iniciais)
         $to = preg_replace('/\D/', '', $to ?? '');
         $to = ltrim($to, '0');
 
-        // Se o número tiver 10 ou 11 dígitos, assumimos que é BR sem DDI
         if (in_array(strlen($to), [10, 11])) {
             $to = '55'.$to;
         }
-        // Se já tiver 12 ou 13 dígitos e começar com 55, mantemos (já tem DDI)
-        // Números internacionais devem vir com DDI completo, então confiamos se não cair na regra acima
 
         $endpoint = "{$this->baseUrl}/messages/text";
 
-        // Tenta validar o número na Whapi para obter o ID correto (corrige 9º dígito em regiões específicas)
         $validId = $this->validateNumber($whatsapp, $to);
         if ($validId) {
             $to = $validId;
         }
 
         $response = Http::withHeaders([
-            'Authorization' => "Bearer {$whatsapp->whapi_key}",
+            'Authorization' => 'Bearer '.($whatsapp->provider_token ?? $whatsapp->whapi_key),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
         ])->post($endpoint, [
             'to' => $to,
             'body' => $message,
             'typing_time' => 0,
-            'no_link_preview' => true, // Parâmetro correto conforme documentação Whapi
+            'no_link_preview' => true,
         ]);
 
         if ($response->successful()) {
@@ -127,15 +127,9 @@ class WhapiService
 
     public function checkHealth()
     {
-        // Documentação: https://whapi.readme.io/reference/checkhealth
         $endpoint = "{$this->baseUrl}/health";
 
         try {
-            // Tenta obter o primeiro WhatsApp ativo para usar o token (embora /health geralmente seja público ou requeira qualquer token válido)
-            // A documentação não especifica auth para health, mas geralmente é bom ter.
-            // No entanto, se não houver WhatsApp, podemos tentar sem auth ou retornar erro.
-            // Vamos assumir que precisamos de um token se houver um configurado.
-
             $whatsapp = WhatsappNumber::where('status', 'active')->first();
 
             $request = Http::withHeaders([
@@ -143,19 +137,13 @@ class WhapiService
             ]);
 
             if ($whatsapp) {
-                $request->withToken($whatsapp->whapi_key);
+                $request->withToken($whatsapp->provider_token ?? $whatsapp->whapi_key);
             }
 
             $response = $request->get($endpoint);
 
             if ($response->successful()) {
                 $data = $response->json();
-                // Verifica se o status é operacional.
-                // A doc diz que retorna "status": "operational" (ou algo similar, vamos assumir sucesso do request como operacional por enquanto,
-                // ou verificar o campo 'status' se presente na resposta real).
-                // Exemplo doc: {"status": "operational", ...} (hipotético, ajustar conforme retorno real se necessário)
-
-                // Se a resposta for 200 OK, assumimos operacional
                 return ['status' => 'operational', 'details' => $data];
             }
 
@@ -171,7 +159,7 @@ class WhapiService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => "Bearer {$whatsapp->whapi_key}",
+                'Authorization' => 'Bearer '.($whatsapp->provider_token ?? $whatsapp->whapi_key),
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
             ])->post("{$this->baseUrl}/contacts", [
@@ -182,9 +170,8 @@ class WhapiService
 
             if ($response->successful()) {
                 $data = $response->json();
-                // Retorna o wa_id correto se o número for válido
                 if (! empty($data['contacts'][0]['status']) && $data['contacts'][0]['status'] === 'valid') {
-                    return $data['contacts'][0]['wa_id']; // Ex: 553399657810@s.whatsapp.net
+                    return $data['contacts'][0]['wa_id'];
                 }
             }
         } catch (\Exception $e) {

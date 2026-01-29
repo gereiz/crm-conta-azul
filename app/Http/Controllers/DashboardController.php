@@ -10,6 +10,7 @@ use App\Models\WhatsappNumber;
 use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
 use App\Services\ContaAzulService;
+use App\Services\EvolutionWhatsAppService;
 use App\Services\WhapiService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -26,12 +27,15 @@ class DashboardController extends Controller
 
     protected $contaAzulApiService;
 
-    public function __construct(ContaAzulService $contaAzulService, WhapiService $whapiService, ContaAzulAuthService $contaAzulAuthService, ContaAzulApiService $contaAzulApiService)
+    protected $evolutionService;
+
+    public function __construct(ContaAzulService $contaAzulService, WhapiService $whapiService, ContaAzulAuthService $contaAzulAuthService, ContaAzulApiService $contaAzulApiService, EvolutionWhatsAppService $evolutionService)
     {
         $this->contaAzulService = $contaAzulService;
         $this->whapiService = $whapiService;
         $this->contaAzulAuthService = $contaAzulAuthService;
         $this->contaAzulApiService = $contaAzulApiService;
+        $this->evolutionService = $evolutionService;
     }
 
     public function checkWhapiHealth()
@@ -39,6 +43,73 @@ class DashboardController extends Controller
         $health = $this->whapiService->checkHealth();
 
         return response()->json($health);
+    }
+
+    public function checkEvolutionHealth(Request $request)
+    {
+        try {
+            $numberId = $request->input('whatsapp_number_id');
+            $query = WhatsappNumber::where('provider', 'evolution')->where('status', 'active');
+            if ($numberId) {
+                $whatsapp = $query->where('id', $numberId)->first();
+            } else {
+                $whatsapp = $query->first();
+            }
+
+            if (! $whatsapp) {
+                return response()->json(['status' => 'down', 'error' => 'Nenhum número Evolution ativo configurado.']);
+            }
+
+            $result = $this->evolutionService->checkConnection($whatsapp);
+            if (($result['connected'] ?? false) === true) {
+                return response()->json([
+                    'status' => 'operational',
+                    'details' => array_merge($result, [
+                        'number' => $whatsapp->description,
+                        'instance' => $whatsapp->provider_instance,
+                    ]),
+                ]);
+            }
+
+            return response()->json([
+                'status' => 'down',
+                'error' => $result['error'] ?? 'Desconectado',
+                'details' => array_merge($result, [
+                    'number' => $whatsapp->description,
+                    'instance' => $whatsapp->provider_instance,
+                ]),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erro ao verificar saúde Evolution: '.$e->getMessage());
+
+            return response()->json(['status' => 'down', 'error' => $e->getMessage()]);
+        }
+    }
+
+    public function evolutionQr(Request $request)
+    {
+        try {
+            $numberId = $request->input('whatsapp_number_id');
+            $query = WhatsappNumber::where('provider', 'evolution')->where('status', 'active');
+            if ($numberId) {
+                $whatsapp = $query->where('id', $numberId)->first();
+            } else {
+                $whatsapp = $query->first();
+            }
+            if (! $whatsapp) {
+                return response()->json(['success' => false, 'error' => 'Nenhum número Evolution ativo configurado.'], 404);
+            }
+            $qr = $this->evolutionService->getQrCode($whatsapp);
+            if (($qr['success'] ?? false) === true) {
+                return response()->json(['success' => true, 'qr' => $qr]);
+            }
+
+            return response()->json(['success' => false, 'error' => $qr['error'] ?? 'QR não disponível'], 400);
+        } catch (\Exception $e) {
+            Log::error('Erro ao obter QR Evolution: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
     }
 
     public function syncFinancials(Request $request)
@@ -266,12 +337,15 @@ class DashboardController extends Controller
         $chartRequest = new Request(['period' => 7]);
         $initialChartData = $this->chartData($chartRequest)->getData()->chartData;
 
+        $evolutionNumbers = WhatsappNumber::where('provider', 'evolution')->orderBy('description')->get(['id', 'description', 'provider_instance', 'status']);
+
         return Inertia::render('Dashboard', [
             'stats' => $stats,
             'shouldSync' => $shouldSync,
             'connections' => $connections,
             'selectedConnectionId' => $selectedConnectionId,
             'chartData' => $initialChartData,
+            'evolutionNumbers' => $evolutionNumbers,
         ]);
     }
 

@@ -39,6 +39,12 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/dashboard/check-whapi', [DashboardController::class, 'checkWhapiHealth'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard.check-whapi');
+Route::get('/dashboard/check-evolution', [DashboardController::class, 'checkEvolutionHealth'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.check-evolution');
+Route::get('/dashboard/evolution-qr', [DashboardController::class, 'evolutionQr'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.evolution-qr');
 
 Route::get('/dashboard/sync-financials', [DashboardController::class, 'syncFinancials'])
     ->middleware(['auth', 'verified'])

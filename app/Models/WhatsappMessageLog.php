@@ -10,12 +10,14 @@ class WhatsappMessageLog extends Model
     use HasFactory;
 
     protected $fillable = [
+        'whatsapp_number_id',
         'connection_id',
         'cliente_id',
         'client_name',
         'phone_original',
         'phone_sanitized',
         'message_type',
+        'provider',
         'message_template_id',
         'total_boletos',
         'boleto_ids',
@@ -46,6 +48,11 @@ class WhatsappMessageLog extends Model
     public function template()
     {
         return $this->belongsTo(WhatsappTemplate::class, 'message_template_id');
+    }
+
+    public function whatsappNumber()
+    {
+        return $this->belongsTo(WhatsappNumber::class);
     }
 
     public function user()

@@ -22,15 +22,11 @@ const form = useForm({
     ddi: '55',
     ddd: '',
     phone: '',
-    whapi_key: '',
+    provider: 'whapi',
+    provider_token: '',
+    provider_instance: '',
     is_default: false,
     status: 'active',
-    use_poli: false,
-    poli_key: '',
-    poli_customer: '',
-    poli_channel: '',
-    poli_user: '',
-    poli_template: '',
 });
 
 const formatPhone = (value) => {
@@ -69,20 +65,16 @@ const openModal = (number = null) => {
         form.ddi = number.ddi;
         form.ddd = number.ddd;
         form.phone = formatPhone(number.phone);
-        form.whapi_key = number.whapi_key || '';
+        form.provider = number.provider || 'whapi';
+        form.provider_token = number.provider_token || number.whapi_key || '';
+        form.provider_instance = number.provider_instance || '';
         form.is_default = Boolean(number.is_default);
         form.status = number.status;
-        form.use_poli = Boolean(number.use_poli);
-        form.poli_key = number.poli_key || '';
-        form.poli_customer = number.poli_customer || '';
-        form.poli_channel = number.poli_channel || '';
-        form.poli_user = number.poli_user || '';
-        form.poli_template = number.poli_template || '';
     } else {
         form.reset();
         form.ddi = '55';
         form.status = 'active';
-        form.use_poli = false;
+        form.provider = 'whapi';
     }
     isModalOpen.value = true;
 };
@@ -155,8 +147,8 @@ const deleteNumber = (id) => {
                                         +{{ number.ddi }} ({{ number.ddd }}) {{ formatPhone(number.phone) }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span v-if="number.use_poli" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                            Poli
+                                        <span v-if="number.provider === 'evolution'" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                            Evolution
                                         </span>
                                         <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
                                             Whapi
@@ -248,14 +240,42 @@ const deleteNumber = (id) => {
                     </div>
 
                 <div>
-                        <InputLabel for="whapi_key" value="Whapi Key" />
+                        <InputLabel for="provider" value="Provedor *" />
+                        <select id="provider" v-model="form.provider" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-primary-500 dark:focus:border-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 rounded-md shadow-sm" required>
+                            <option value="whapi">Whapi</option>
+                            <option value="evolution">Evolution</option>
+                        </select>
+                        <InputError class="mt-2" :message="form.errors.provider" />
+                    </div>
+
+                    <div v-if="form.provider === 'whapi'">
+                        <InputLabel for="provider_token" value="Token (Whapi)" />
                         <TextInput
-                            id="whapi_key"
+                            id="provider_token"
                             type="text"
                             class="mt-1 block w-full"
-                            v-model="form.whapi_key"
+                            v-model="form.provider_token"
                         />
-                        <InputError class="mt-2" :message="form.errors.whapi_key" />
+                        <InputError class="mt-2" :message="form.errors.provider_token" />
+                    </div>
+
+                    <div v-if="form.provider === 'evolution'">
+                        <InputLabel for="provider_token_evo" value="API Key (Evolution)" />
+                        <TextInput
+                            id="provider_token_evo"
+                            type="text"
+                            class="mt-1 block w-full"
+                            v-model="form.provider_token"
+                        />
+                        <InputError class="mt-2" :message="form.errors.provider_token" />
+                        <InputLabel for="provider_instance" value="Instância (Evolution)" class="mt-4" />
+                        <TextInput
+                            id="provider_instance"
+                            type="text"
+                            class="mt-1 block w-full"
+                            v-model="form.provider_instance"
+                        />
+                        <InputError class="mt-2" :message="form.errors.provider_instance" />
                     </div>
 
                     <div class="space-y-2">

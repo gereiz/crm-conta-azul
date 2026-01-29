@@ -23,7 +23,7 @@ class WhatsappReportController extends Controller
         $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
         $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
 
-        $query = WhatsappMessageLog::with(['connection', 'template', 'cliente', 'user'])
+        $query = WhatsappMessageLog::with(['connection', 'template', 'cliente', 'user', 'whatsappNumber'])
             ->orderBy('sent_at', 'desc');
 
         if ($connectionId) {
@@ -68,16 +68,19 @@ class WhatsappReportController extends Controller
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Headers
-        $headers = ['Empresa', 'Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
+        $headers = ['Empresa', 'Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Provider', 'Número WhatsApp', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
         $sheet->fromArray([$headers], null, 'A1');
 
         // Data
+        $number = $log->whatsappNumber;
+        $numberDisplay = $number ? trim(($number->ddi ?? '').' '.($number->ddd ?? '').' '.($number->phone ?? '')) : 'N/A';
         $rowData = [
             $log->connection->empresa_nome ?? 'N/A',
             $log->client_name,
             $log->phone_original,
             $log->phone_sanitized,
+            $log->provider ?? 'N/A',
+            $numberDisplay,
             $log->message_type,
             $log->template->name ?? 'N/A',
             $log->total_boletos,
@@ -88,7 +91,7 @@ class WhatsappReportController extends Controller
         ];
         $sheet->fromArray([$rowData], null, 'A2');
 
-        foreach (range('A', 'K') as $columnID) {
+        foreach (range('A', 'M') as $columnID) {
             $sheet->getColumnDimension($columnID)->setAutoSize(true);
         }
 
@@ -132,15 +135,19 @@ class WhatsappReportController extends Controller
             $first = false;
             $sheet->setTitle(Str::substr(Str::slug($companyName), 0, 31));
 
-            $headers = ['Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
+            $headers = ['Cliente', 'Telefone Original', 'Telefone Sanitizado', 'Provider', 'Número WhatsApp', 'Tipo', 'Template', 'Boletos', 'Status', 'Erro', 'Enviado Em', 'Conteúdo'];
             $sheet->fromArray([$headers], null, 'A1');
 
             $row = 2;
             foreach ($groupLogs as $log) {
+                $num = $log->whatsappNumber;
+                $numDisplay = $num ? trim(($num->ddi ?? '').' '.($num->ddd ?? '').' '.($num->phone ?? '')) : 'N/A';
                 $rowData = [
                     $log->client_name,
                     $log->phone_original,
                     $log->phone_sanitized,
+                    $log->provider ?? 'N/A',
+                    $numDisplay,
                     $log->message_type,
                     $log->template->name ?? 'N/A',
                     $log->total_boletos,
@@ -153,7 +160,7 @@ class WhatsappReportController extends Controller
                 $row++;
             }
 
-            foreach (range('A', 'J') as $columnID) {
+            foreach (range('A', 'L') as $columnID) {
                 $sheet->getColumnDimension($columnID)->setAutoSize(true);
             }
         }

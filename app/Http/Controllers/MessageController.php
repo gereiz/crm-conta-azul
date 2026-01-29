@@ -9,20 +9,20 @@ use App\Models\WhatsappMessageLog;
 use App\Models\WhatsappNumber;
 use App\Services\BillingRestrictionService;
 use App\Services\PhoneSanitizerService;
-use App\Services\WhapiService;
+use App\Services\WhatsAppProviderResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class MessageController extends Controller
 {
-    protected $whapiService;
+    protected $providerResolver;
 
     protected $restrictionService;
 
-    public function __construct(WhapiService $whapiService, BillingRestrictionService $restrictionService)
+    public function __construct(WhatsAppProviderResolver $providerResolver, BillingRestrictionService $restrictionService)
     {
-        $this->whapiService = $whapiService;
+        $this->providerResolver = $providerResolver;
         $this->restrictionService = $restrictionService;
     }
 
@@ -41,7 +41,8 @@ class MessageController extends Controller
 
         // Validação estrita do número remetente
         $whatsappNumber = WhatsappNumber::find($request->whatsapp_id);
-        $connectionStatus = $this->whapiService->getConnectionStatus($whatsappNumber);
+        $provider = $this->providerResolver->resolve($whatsappNumber);
+        $connectionStatus = $provider->checkConnection($whatsappNumber);
 
         if (! $connectionStatus['connected']) {
             // Retorna erro específico para abrir o modal no frontend
@@ -196,7 +197,7 @@ class MessageController extends Controller
             $messageContent = $this->limitPreviewLinks($messageContent);
         }
 
-        $result = $this->whapiService->sendMessage(
+        $result = $provider->sendMessage(
             $request->whatsapp_id,
             $sanitizedPhone,
             $messageContent
@@ -204,15 +205,17 @@ class MessageController extends Controller
 
         $logContent = $messageContent;
         if (($result['success'] ?? false) && isset($result['meta'])) {
-            $st = $result['meta']['whapi_status'] ?? null;
+            $st = $result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null);
             $mid = $result['meta']['message_id'] ?? null;
             if ($st || $mid) {
-                $logContent .= "\n[delivery={$st}; id={$mid}]";
+                $providerName = $result['meta']['provider'] ?? ($whatsappNumber->provider ?? 'whapi');
+                $logContent .= "\n[provider={$providerName}; delivery={$st}; id={$mid}]";
             }
         }
 
         // Registrar Log Detalhado
         WhatsappMessageLog::create([
+            'whatsapp_number_id' => $whatsappNumber->id,
             'connection_id' => $connId,
             'user_id' => Auth::id(),
             'cliente_id' => $cliente?->id,
@@ -220,6 +223,7 @@ class MessageController extends Controller
             'phone_original' => $originalPhone,
             'phone_sanitized' => $sanitizedPhone,
             'message_type' => 'manual',
+            'provider' => $whatsappNumber->provider ?? null,
             'total_boletos' => $invoices->count(),
             'boleto_ids' => $invoices->pluck('id')->toArray(),
             'status' => $result['success'] ? 'success' : 'error',

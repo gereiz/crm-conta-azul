@@ -47,6 +47,15 @@ const filterByConnection = () => {
 const applySearch = () => {
     filterByConnection();
 };
+
+const formatWhatsAppNumber = (n) => {
+    if (!n) return '-';
+    const ddi = n.ddi || '';
+    const ddd = n.ddd || '';
+    const phone = n.phone || '';
+    const parts = [ddi, ddd, phone].filter(Boolean);
+    return parts.join(' ');
+};
 </script>
 
 <template>
@@ -104,6 +113,9 @@ const applySearch = () => {
                                             Telefone (Sanitizado)
                                         </th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            WhatsApp
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Template
                                         </th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -140,6 +152,14 @@ const applySearch = () => {
                                             <div class="flex flex-col">
                                                 <span class="font-mono">{{ report.phone_sanitized || '-' }}</span>
                                                 <span class="text-xs text-gray-400" v-if="report.phone_original !== report.phone_sanitized">Orig: {{ report.phone_original }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="flex flex-col">
+                                                <span class="text-xs">{{ report.provider || '-' }}</span>
+                                                <span class="text-xs text-gray-500">
+                                                    {{ report.whatsappNumber?.description || formatWhatsAppNumber(report.whatsappNumber) }}
+                                                </span>
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">

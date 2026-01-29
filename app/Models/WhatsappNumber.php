@@ -11,19 +11,15 @@ class WhatsappNumber extends Model
         'ddi',
         'ddd',
         'phone',
+        'provider',
+        'provider_token',
+        'provider_instance',
         'whapi_key',
         'is_default',
         'status',
-        'use_poli',
-        'poli_key',
-        'poli_customer',
-        'poli_channel',
-        'poli_user',
-        'poli_template',
     ];
 
     protected $casts = [
         'is_default' => 'boolean',
-        'use_poli' => 'boolean',
     ];
 }

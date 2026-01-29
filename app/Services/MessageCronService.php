@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 
 class MessageCronService
 {
-    protected $whapiService;
+    protected $providerResolver;
 
     protected $restrictionService;
 
@@ -24,9 +24,9 @@ class MessageCronService
 
     protected int $batchDelaySeconds = 300;
 
-    public function __construct(WhapiService $whapiService, BillingRestrictionService $restrictionService)
+    public function __construct(WhatsAppProviderResolver $providerResolver, BillingRestrictionService $restrictionService)
     {
-        $this->whapiService = $whapiService;
+        $this->providerResolver = $providerResolver;
         $this->restrictionService = $restrictionService;
     }
 
@@ -140,7 +140,10 @@ class MessageCronService
         }
         $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
 
-        return $this->whapiService->isConnected($whatsapp);
+        $provider = $this->providerResolver->resolve($whatsapp);
+        $status = $provider->checkConnection($whatsapp);
+
+        return (bool) ($status['connected'] ?? false);
     }
 
     protected function applyPerNumberBatchGate(MessageCron $cron, int $total)
@@ -357,6 +360,7 @@ class MessageCronService
                     ->exists();
                 if ($alreadyEverSent) {
                     \App\Models\WhatsappMessageLog::create([
+                        'whatsapp_number_id' => $cron->whatsapp_number_id,
                         'connection_id' => $invoice->connection_id ?? $cron->connection_id,
                         'message_cron_id' => $cron->id,
                         'cliente_id' => $invoice->cliente_id,
@@ -364,6 +368,7 @@ class MessageCronService
                         'phone_original' => $invoice->cliente->mobile_phone ?? $invoice->cliente->phone,
                         'phone_sanitized' => \App\Services\PhoneSanitizerService::sanitize($invoice->cliente->mobile_phone ?? $invoice->cliente->phone),
                         'message_type' => $cron->type,
+                        'provider' => optional($cron->whatsappNumber)->provider,
                         'message_template_id' => $cron->message_template_id,
                         'total_boletos' => 1,
                         'boleto_ids' => [$invoice->id],
@@ -460,6 +465,7 @@ class MessageCronService
                 ->exists();
             if ($alreadySent) {
                 WhatsappMessageLog::create([
+                    'whatsapp_number_id' => $cron->whatsapp_number_id,
                     'connection_id' => $connId,
                     'message_cron_id' => $cron->id,
                     'cliente_id' => $invoice->cliente_id,
@@ -467,6 +473,7 @@ class MessageCronService
                     'phone_original' => $originalPhone,
                     'phone_sanitized' => $sanitizedPhone,
                     'message_type' => $cron->type,
+                    'provider' => optional($cron->whatsappNumber)->provider,
                     'message_template_id' => $cron->message_template_id,
                     'total_boletos' => 1,
                     'boleto_ids' => [$invoice->id],
@@ -490,6 +497,7 @@ class MessageCronService
         // Verifica restrições dinâmicas (Globais e Específicas) cadastradas no banco
         if ($this->restrictionService->isBlocked((int) ($invoice->connection_id ?? $cron->connection_id), $context)) {
             WhatsappMessageLog::create([
+                'whatsapp_number_id' => $cron->whatsapp_number_id,
                 'connection_id' => $invoice->connection_id,
                 'message_cron_id' => $cron->id,
                 'cliente_id' => $invoice->cliente_id,
@@ -497,6 +505,7 @@ class MessageCronService
                 'phone_original' => $originalPhone,
                 'phone_sanitized' => $sanitizedPhone,
                 'message_type' => $cron->type,
+                'provider' => optional($cron->whatsappNumber)->provider,
                 'message_template_id' => $cron->message_template_id,
                 'total_boletos' => 1,
                 'boleto_ids' => [$invoice->id],
@@ -536,17 +545,21 @@ class MessageCronService
             $message = $this->limitPreviewLinks($message);
         }
 
-        $result = $this->whapiService->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $message);
+        $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
+        $provider = $this->providerResolver->resolve($whatsapp);
+        $result = $provider->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $message);
         $logContent = $message;
         if (($result['success'] ?? false) && isset($result['meta'])) {
-            $st = $result['meta']['whapi_status'] ?? null;
+            $st = $result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null);
             $mid = $result['meta']['message_id'] ?? null;
             if ($st || $mid) {
-                $logContent .= "\n[delivery={$st}; id={$mid}]";
+                $providerName = $result['meta']['provider'] ?? ($whatsapp->provider ?? 'whapi');
+                $logContent .= "\n[provider={$providerName}; delivery={$st}; id={$mid}]";
             }
         }
 
         WhatsappMessageLog::create([
+            'whatsapp_number_id' => $cron->whatsapp_number_id,
             'connection_id' => $connId,
             'message_cron_id' => $cron->id,
             'cliente_id' => $invoice->cliente_id,
@@ -554,6 +567,7 @@ class MessageCronService
             'phone_original' => $originalPhone,
             'phone_sanitized' => $sanitizedPhone,
             'message_type' => $cron->type,
+            'provider' => $whatsapp->provider ?? null,
             'message_template_id' => $cron->message_template_id,
             'total_boletos' => 1,
             'boleto_ids' => [$invoice->id],
@@ -605,17 +619,21 @@ class MessageCronService
         $content = $this->replaceVariables($cron->messageTemplate->content, null, $client);
 
         try {
-            $result = $this->whapiService->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
+            $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
+            $provider = $this->providerResolver->resolve($whatsapp);
+            $result = $provider->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
             $logContent = $content;
             if (($result['success'] ?? false) && isset($result['meta'])) {
-                $st = $result['meta']['whapi_status'] ?? null;
+                $st = $result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null);
                 $mid = $result['meta']['message_id'] ?? null;
                 if ($st || $mid) {
-                    $logContent .= "\n[delivery={$st}; id={$mid}]";
+                    $providerName = $result['meta']['provider'] ?? ($whatsapp->provider ?? 'whapi');
+                    $logContent .= "\n[provider={$providerName}; delivery={$st}; id={$mid}]";
                 }
             }
 
             WhatsappMessageLog::create([
+                'whatsapp_number_id' => $cron->whatsapp_number_id,
                 'connection_id' => $connId,
                 'message_cron_id' => $cron->id,
                 'cliente_id' => $client->id,
@@ -623,6 +641,7 @@ class MessageCronService
                 'phone_original' => $originalPhone,
                 'phone_sanitized' => $sanitizedPhone,
                 'message_type' => $cron->type,
+                'provider' => $whatsapp->provider ?? null,
                 'message_template_id' => $cron->message_template_id,
                 'status' => $result['success'] ? 'success' : 'error',
                 'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
@@ -719,6 +738,7 @@ class MessageCronService
     protected function logError($cron, $cliente, $phone, $msg, $invoiceCount = null)
     {
         WhatsappMessageLog::create([
+            'whatsapp_number_id' => $cron->whatsapp_number_id,
             'connection_id' => $cron->connection_id,
             'message_cron_id' => $cron->id,
             'cliente_id' => $cliente ? $cliente->id : null,
@@ -726,6 +746,7 @@ class MessageCronService
             'phone_original' => $phone ?? 'N/A',
             'phone_sanitized' => PhoneSanitizerService::sanitize($phone),
             'message_type' => $cron->type,
+            'provider' => optional($cron->whatsappNumber)->provider,
             'message_template_id' => $cron->message_template_id,
             'total_boletos' => $invoiceCount ?? 0,
             'status' => 'error',
@@ -748,6 +769,7 @@ class MessageCronService
             $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
 
             WhatsappMessageLog::create([
+                'whatsapp_number_id' => $cron->whatsapp_number_id,
                 'connection_id' => $cron->connection_id ?? ($cliente->connection_id ?? null),
                 'message_cron_id' => $cron->id,
                 'cliente_id' => $cliente->id,
@@ -755,6 +777,7 @@ class MessageCronService
                 'phone_original' => $originalPhone,
                 'phone_sanitized' => $sanitizedPhone,
                 'message_type' => $cron->type,
+                'provider' => optional($cron->whatsappNumber)->provider,
                 'message_template_id' => $cron->message_template_id,
                 'total_boletos' => is_countable($invoices) ? count($invoices) : null,
                 'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
@@ -799,6 +822,7 @@ class MessageCronService
             $originalPhone = $cliente->mobile_phone ?? $cliente->phone;
             $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
             WhatsappMessageLog::create([
+                'whatsapp_number_id' => $cron->whatsapp_number_id,
                 'connection_id' => $cron->connection_id ?? ($cliente->connection_id ?? null),
                 'message_cron_id' => $cron->id,
                 'cliente_id' => $cliente->id,
@@ -806,6 +830,7 @@ class MessageCronService
                 'phone_original' => $originalPhone,
                 'phone_sanitized' => $sanitizedPhone,
                 'message_type' => $cron->type,
+                'provider' => optional($cron->whatsappNumber)->provider,
                 'message_template_id' => $cron->message_template_id,
                 'total_boletos' => is_countable($invoices) ? count($invoices) : null,
                 'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
@@ -853,6 +878,7 @@ class MessageCronService
                 ->exists();
             if ($alreadySent) {
                 WhatsappMessageLog::create([
+                    'whatsapp_number_id' => $cron->whatsapp_number_id,
                     'connection_id' => $connId,
                     'message_cron_id' => $cron->id,
                     'cliente_id' => $cliente->id,
@@ -860,6 +886,7 @@ class MessageCronService
                     'phone_original' => $originalPhone,
                     'phone_sanitized' => $sanitizedPhone,
                     'message_type' => $cron->type,
+                    'provider' => optional($cron->whatsappNumber)->provider,
                     'message_template_id' => $cron->message_template_id,
                     'total_boletos' => is_countable($invoices) ? count($invoices) : null,
                     'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
@@ -881,6 +908,7 @@ class MessageCronService
         ];
         if ($connId && $this->restrictionService->isBlocked((int) $connId, $context)) {
             WhatsappMessageLog::create([
+                'whatsapp_number_id' => $cron->whatsapp_number_id,
                 'connection_id' => $connId,
                 'message_cron_id' => $cron->id,
                 'cliente_id' => $cliente->id,
@@ -888,6 +916,7 @@ class MessageCronService
                 'phone_original' => $originalPhone,
                 'phone_sanitized' => $sanitizedPhone,
                 'message_type' => $cron->type,
+                'provider' => optional($cron->whatsappNumber)->provider,
                 'message_template_id' => $cron->message_template_id,
                 'total_boletos' => is_countable($invoices) ? count($invoices) : null,
                 'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
@@ -985,9 +1014,12 @@ class MessageCronService
         } elseif ($this->shouldLimitPreview($cron, $cron->connection_id ?? ($cliente->connection_id ?? null))) {
             $content = $this->limitPreviewLinks($content);
         }
-        $result = $this->whapiService->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
+        $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
+        $provider = $this->providerResolver->resolve($whatsapp);
+        $result = $provider->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
 
         WhatsappMessageLog::create([
+            'whatsapp_number_id' => $cron->whatsapp_number_id,
             'connection_id' => $connId,
             'message_cron_id' => $cron->id,
             'cliente_id' => $cliente->id,
@@ -995,6 +1027,7 @@ class MessageCronService
             'phone_original' => $originalPhone,
             'phone_sanitized' => $sanitizedPhone,
             'message_type' => $cron->type,
+            'provider' => $whatsapp->provider ?? null,
             'message_template_id' => $cron->message_template_id,
             'total_boletos' => is_countable($invoices) ? count($invoices) : null,
             'boleto_ids' => collect($invoices)->pluck('id')->toArray(),

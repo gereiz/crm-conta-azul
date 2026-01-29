@@ -179,12 +179,14 @@ class SettingsController extends Controller
             'secondary_color' => 'nullable|string|max:20',
             'logo' => 'nullable|image|max:2048',
             'favicon' => 'nullable|image|max:1024',
+            'evolution_api_base_url' => 'nullable|url',
         ]);
 
         $settings = SystemSetting::latest()->first() ?? new SystemSetting;
         $settings->system_name = $request->input('system_name');
         $settings->primary_color = $request->input('primary_color', '#6366F1');
         $settings->secondary_color = $request->input('secondary_color', '#22C55E');
+        $settings->evolution_api_base_url = $request->input('evolution_api_base_url') ? rtrim($request->input('evolution_api_base_url'), '/') : null;
 
         if ($request->hasFile('logo')) {
             $file = $request->file('logo');
