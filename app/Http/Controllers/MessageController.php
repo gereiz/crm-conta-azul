@@ -202,6 +202,15 @@ class MessageController extends Controller
             $messageContent
         );
 
+        $logContent = $messageContent;
+        if (($result['success'] ?? false) && isset($result['meta'])) {
+            $st = $result['meta']['whapi_status'] ?? null;
+            $mid = $result['meta']['message_id'] ?? null;
+            if ($st || $mid) {
+                $logContent .= "\n[delivery={$st}; id={$mid}]";
+            }
+        }
+
         // Registrar Log Detalhado
         WhatsappMessageLog::create([
             'connection_id' => $connId,
@@ -215,7 +224,7 @@ class MessageController extends Controller
             'boleto_ids' => $invoices->pluck('id')->toArray(),
             'status' => $result['success'] ? 'success' : 'error',
             'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
-            'content' => $messageContent,
+            'content' => $logContent,
             'sent_at' => now(),
         ]);
 

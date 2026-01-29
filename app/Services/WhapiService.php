@@ -99,7 +99,18 @@ class WhapiService
         ]);
 
         if ($response->successful()) {
-            return ['success' => true, 'data' => $response->json()];
+            $json = $response->json();
+            $msg = null;
+            if (isset($json['messages']) && is_array($json['messages']) && count($json['messages']) > 0) {
+                $msg = $json['messages'][0];
+            }
+            $meta = [
+                'whapi_status' => $msg['status'] ?? ($json['status'] ?? null),
+                'message_id' => $msg['id'] ?? null,
+                'chat_id' => $msg['chat_id'] ?? null,
+            ];
+
+            return ['success' => true, 'data' => $json, 'meta' => $meta];
         } else {
             $errorBody = $response->json();
             $errorMessage = $errorBody['error']['message'] ?? $response->body();
@@ -166,7 +177,7 @@ class WhapiService
             ])->post("{$this->baseUrl}/contacts", [
                 'blocking' => 'wait',
                 'contacts' => [$number],
-                'force_check' => false,
+                'force_check' => true,
             ]);
 
             if ($response->successful()) {

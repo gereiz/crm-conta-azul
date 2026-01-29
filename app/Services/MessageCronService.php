@@ -537,6 +537,14 @@ class MessageCronService
         }
 
         $result = $this->whapiService->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $message);
+        $logContent = $message;
+        if (($result['success'] ?? false) && isset($result['meta'])) {
+            $st = $result['meta']['whapi_status'] ?? null;
+            $mid = $result['meta']['message_id'] ?? null;
+            if ($st || $mid) {
+                $logContent .= "\n[delivery={$st}; id={$mid}]";
+            }
+        }
 
         WhatsappMessageLog::create([
             'connection_id' => $connId,
@@ -551,7 +559,7 @@ class MessageCronService
             'boleto_ids' => [$invoice->id],
             'status' => $result['success'] ? 'success' : 'error',
             'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
-            'content' => $message,
+            'content' => $logContent,
             'batch_id' => $batchId,
             'sent_at' => now(),
         ]);
@@ -598,6 +606,14 @@ class MessageCronService
 
         try {
             $result = $this->whapiService->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
+            $logContent = $content;
+            if (($result['success'] ?? false) && isset($result['meta'])) {
+                $st = $result['meta']['whapi_status'] ?? null;
+                $mid = $result['meta']['message_id'] ?? null;
+                if ($st || $mid) {
+                    $logContent .= "\n[delivery={$st}; id={$mid}]";
+                }
+            }
 
             WhatsappMessageLog::create([
                 'connection_id' => $connId,
@@ -610,7 +626,7 @@ class MessageCronService
                 'message_template_id' => $cron->message_template_id,
                 'status' => $result['success'] ? 'success' : 'error',
                 'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
-                'content' => $content,
+                'content' => $logContent,
                 'batch_id' => $batchId,
                 'sent_at' => now(),
             ]);
