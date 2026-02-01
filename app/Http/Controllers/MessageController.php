@@ -10,6 +10,7 @@ use App\Models\WhatsappNumber;
 use App\Services\BillingRestrictionService;
 use App\Services\PhoneSanitizerService;
 use App\Services\WhatsAppProviderResolver;
+use App\Services\HumanizedWhatsAppOrchestrator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,13 +18,15 @@ use Illuminate\Support\Facades\Auth;
 class MessageController extends Controller
 {
     protected $providerResolver;
+    protected $orchestrator;
 
     protected $restrictionService;
 
-    public function __construct(WhatsAppProviderResolver $providerResolver, BillingRestrictionService $restrictionService)
+    public function __construct(WhatsAppProviderResolver $providerResolver, BillingRestrictionService $restrictionService, HumanizedWhatsAppOrchestrator $orchestrator)
     {
         $this->providerResolver = $providerResolver;
         $this->restrictionService = $restrictionService;
+        $this->orchestrator = $orchestrator;
     }
 
     public function send(Request $request)
@@ -197,10 +200,11 @@ class MessageController extends Controller
             $messageContent = $this->limitPreviewLinks($messageContent);
         }
 
-        $result = $provider->sendMessage(
-            $request->whatsapp_id,
+        $result = $this->orchestrator->sendOne(
+            (int) $request->whatsapp_id,
             $sanitizedPhone,
-            $messageContent
+            $messageContent,
+            ['batch_id' => (string) \Illuminate\Support\Str::uuid()]
         );
 
         $logContent = $messageContent;
@@ -226,13 +230,16 @@ class MessageController extends Controller
             'provider' => $whatsappNumber->provider ?? null,
             'total_boletos' => $invoices->count(),
             'boleto_ids' => $invoices->pluck('id')->toArray(),
-            'status' => $result['success'] ? 'success' : 'error',
-            'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
+            'status' => ($result['queued'] ?? false) ? 'skipped' : ($result['success'] ? 'success' : 'error'),
+            'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $logContent,
+            'batch_id' => $result['meta']['batch_id'] ?? null,
             'sent_at' => now(),
         ]);
 
-        if ($result['success']) {
+        if (($result['queued'] ?? false)) {
+            return redirect()->back()->with('success', $result['message'] ?? 'Mensagem enfileirada para envio em janela segura.');
+        } elseif ($result['success']) {
             return redirect()->back()->with('success', 'Mensagem enviada com sucesso!');
         } else {
             return redirect()->back()->with('error', $result['message']);

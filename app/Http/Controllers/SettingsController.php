@@ -10,6 +10,9 @@ use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
 use App\Services\ContaAzulService;
 use App\Services\MessageCronService;
+use App\Models\WhatsappNumber;
+use App\Models\WhatsappMessageLog;
+use App\Models\WhatsappSendState;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -81,6 +84,97 @@ class SettingsController extends Controller
             'logo' => $settings->logo_path ?? null,
             'favicon' => $settings->favicon_path ?? null,
         ]);
+    }
+
+    public function orchestrator()
+    {
+        $settings = SystemSetting::latest()->first();
+
+        return Inertia::render('Settings/Orchestrator', [
+            'settings' => $settings,
+        ]);
+    }
+
+    public function orchestratorSave(Request $request)
+    {
+        $data = $request->validate([
+            'orchestrator_delay_min_seconds' => 'required|integer|min:1',
+            'orchestrator_delay_max_seconds' => 'required|integer|min:1|gte:orchestrator_delay_min_seconds',
+            'orchestrator_batch_size' => 'required|integer|min:1|max:200',
+            'orchestrator_batch_interval_min_seconds' => 'required|integer|min:60',
+            'orchestrator_batch_interval_max_seconds' => 'required|integer|min:60|gte:orchestrator_batch_interval_min_seconds',
+            'orchestrator_hourly_limit_per_number' => 'required|integer|min:1|max:1000',
+            'orchestrator_safe_start_hour' => 'required|string|regex:/^\\d{2}:\\d{2}$/',
+            'orchestrator_safe_end_hour' => 'required|string|regex:/^\\d{2}:\\d{2}$/',
+            'orchestrator_concurrent_cooldown_minutes' => 'required|integer|min:1|max:120',
+            'orchestrator_pause_on_error_minutes' => 'required|integer|min:1|max:180',
+            'orchestrator_warmup_day1_limit' => 'required|integer|min:1|max:500',
+            'orchestrator_warmup_day2_limit' => 'required|integer|min:1|max:500',
+            'orchestrator_warmup_day3_limit' => 'required|integer|min:1|max:500',
+        ]);
+
+        $settings = SystemSetting::latest()->first() ?? new SystemSetting;
+        foreach ($data as $k => $v) {
+            $settings->{$k} = $v;
+        }
+        $settings->save();
+
+        return redirect()->back()->with('success', 'Parâmetros do Orquestrador atualizados com sucesso.');
+    }
+
+    public function orchestratorStatus()
+    {
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $now = \Carbon\Carbon::now($tz);
+        $numbers = WhatsappNumber::orderBy('description')->get(['id', 'description', 'provider', 'provider_instance', 'status']);
+        $items = [];
+        foreach ($numbers as $n) {
+            $state = WhatsappSendState::firstOrCreate(['whatsapp_number_id' => $n->id], []);
+            $queueCount = WhatsappMessageLog::where('whatsapp_number_id', $n->id)
+                ->where('status', 'skipped')
+                ->where('error_message', 'like', '%Enfileirado%')
+                ->whereDate('sent_at', $now->toDateString())
+                ->count();
+            $hourlyRemaining = null;
+            if ($state->hourly_window_start) {
+                $until = \Carbon\Carbon::parse($state->hourly_window_start, $tz)->addHour();
+                $hourlyRemaining = max(0, $until->diffInSeconds($now, false) * -1);
+            }
+            $nextAvailable = null;
+            if ($state->paused_until && \Carbon\Carbon::parse($state->paused_until, $tz)->gt($now)) {
+                $nextAvailable = \Carbon\Carbon::parse($state->paused_until, $tz)->toDateTimeString();
+            }
+            $items[] = [
+                'id' => $n->id,
+                'description' => $n->description,
+                'provider' => $n->provider,
+                'instance' => $n->provider_instance,
+                'status' => $n->status,
+                'in_progress' => (bool) ($state->in_progress ?? false),
+                'paused_until' => $state->paused_until ? \Carbon\Carbon::parse($state->paused_until, $tz)->toDateTimeString() : null,
+                'hourly_count' => (int) ($state->hourly_count ?? 0),
+                'hourly_remaining_seconds' => $hourlyRemaining,
+                'daily_count' => (int) ($state->daily_count ?? 0),
+                'queue_count' => $queueCount,
+                'next_available_at' => $nextAvailable,
+            ];
+        }
+
+        return response()->json(['items' => $items, 'now' => $now->toDateTimeString()]);
+    }
+
+    public function orchestratorResume(Request $request)
+    {
+        $id = (int) $request->input('whatsapp_number_id');
+        if (! $id) {
+            return response()->json(['success' => false, 'error' => 'whatsapp_number_id obrigatório'], 422);
+        }
+        $state = WhatsappSendState::firstOrCreate(['whatsapp_number_id' => $id], []);
+        $state->paused_until = null;
+        $state->in_progress = false;
+        $state->save();
+
+        return response()->json(['success' => true]);
     }
 
     public function contaAzulCronStatus()

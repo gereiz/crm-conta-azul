@@ -177,6 +177,9 @@ watch(() => page.props.system_settings, (newSettings) => {
                     <Link :href="route('settings.permissions.index')" :class="route().current('settings.permissions.*') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
                         <span>Permissões</span>
                     </Link>
+                    <Link :href="route('settings.orchestrator.index')" :class="route().current('settings.orchestrator.*') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
+                        <span>Orquestrador</span>
+                    </Link>
                     <Link :href="route('settings.system.index')" :class="route().current('settings.system.*') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
                         <span>Configurações do Sistema</span>
                     </Link>

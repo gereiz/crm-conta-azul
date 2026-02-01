@@ -15,9 +15,13 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
 
     public function __construct()
     {
-        $settings = SystemSetting::latest()->first();
-        if ($settings && $settings->evolution_api_base_url) {
-            $this->baseUrl = rtrim($settings->evolution_api_base_url, '/');
+        try {
+            $settings = SystemSetting::latest()->first();
+            if ($settings && $settings->evolution_api_base_url) {
+                $this->baseUrl = rtrim($settings->evolution_api_base_url, '/');
+            }
+        } catch (\Throwable $e) {
+            // Ignora erros de conexão durante comandos artisan/migrações
         }
         $this->baseUrls = array_unique([
             $this->baseUrl,

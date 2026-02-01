@@ -13,21 +13,24 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Services\HumanizedWhatsAppOrchestrator;
 
 class MessageCronService
 {
     protected $providerResolver;
 
     protected $restrictionService;
+    protected HumanizedWhatsAppOrchestrator $orchestrator;
 
     protected int $batchSize = 30;
 
     protected int $batchDelaySeconds = 300;
 
-    public function __construct(WhatsAppProviderResolver $providerResolver, BillingRestrictionService $restrictionService)
+    public function __construct(WhatsAppProviderResolver $providerResolver, BillingRestrictionService $restrictionService, HumanizedWhatsAppOrchestrator $orchestrator)
     {
         $this->providerResolver = $providerResolver;
         $this->restrictionService = $restrictionService;
+        $this->orchestrator = $orchestrator;
     }
 
     public function processCron(MessageCron $cron, bool $forceRun = false)
@@ -246,7 +249,7 @@ class MessageCronService
                 }
             }
             if ($chunkIndex < ($chunks->count() - 1)) {
-                sleep($this->batchDelaySeconds);
+                sleep(random_int(300, 420));
             }
         }
 
@@ -546,8 +549,7 @@ class MessageCronService
         }
 
         $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
-        $provider = $this->providerResolver->resolve($whatsapp);
-        $result = $provider->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $message);
+        $result = $this->orchestrator->sendOne($cron->whatsapp_number_id, $sanitizedPhone, $message, ['batch_id' => $batchId]);
         $logContent = $message;
         if (($result['success'] ?? false) && isset($result['meta'])) {
             $st = $result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null);
@@ -571,8 +573,8 @@ class MessageCronService
             'message_template_id' => $cron->message_template_id,
             'total_boletos' => 1,
             'boleto_ids' => [$invoice->id],
-            'status' => $result['success'] ? 'success' : 'error',
-            'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
+            'status' => ($result['queued'] ?? false) ? 'skipped' : ($result['success'] ? 'success' : 'error'),
+            'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $logContent,
             'batch_id' => $batchId,
             'sent_at' => now(),
@@ -620,8 +622,7 @@ class MessageCronService
 
         try {
             $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
-            $provider = $this->providerResolver->resolve($whatsapp);
-            $result = $provider->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
+            $result = $this->orchestrator->sendOne($cron->whatsapp_number_id, $sanitizedPhone, $content, ['batch_id' => $batchId]);
             $logContent = $content;
             if (($result['success'] ?? false) && isset($result['meta'])) {
                 $st = $result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null);
@@ -643,8 +644,8 @@ class MessageCronService
                 'message_type' => $cron->type,
                 'provider' => $whatsapp->provider ?? null,
                 'message_template_id' => $cron->message_template_id,
-                'status' => $result['success'] ? 'success' : 'error',
-                'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
+                'status' => ($result['queued'] ?? false) ? 'skipped' : ($result['success'] ? 'success' : 'error'),
+                'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
                 'content' => $logContent,
                 'batch_id' => $batchId,
                 'sent_at' => now(),
@@ -1015,8 +1016,7 @@ class MessageCronService
             $content = $this->limitPreviewLinks($content);
         }
         $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
-        $provider = $this->providerResolver->resolve($whatsapp);
-        $result = $provider->sendMessage($cron->whatsapp_number_id, $sanitizedPhone, $content);
+        $result = $this->orchestrator->sendOne($cron->whatsapp_number_id, $sanitizedPhone, $content, ['batch_id' => $batchId]);
 
         WhatsappMessageLog::create([
             'whatsapp_number_id' => $cron->whatsapp_number_id,
@@ -1031,8 +1031,8 @@ class MessageCronService
             'message_template_id' => $cron->message_template_id,
             'total_boletos' => is_countable($invoices) ? count($invoices) : null,
             'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
-            'status' => $result['success'] ? 'success' : 'error',
-            'error_message' => $result['success'] ? null : ($result['message'] ?? 'Erro desconhecido'),
+            'status' => ($result['queued'] ?? false) ? 'skipped' : ($result['success'] ? 'success' : 'error'),
+            'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $content,
             'batch_id' => $batchId,
             'sent_at' => now(),

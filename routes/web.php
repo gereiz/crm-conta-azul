@@ -97,6 +97,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/cron/delayed/process', [SettingsController::class, 'processNextDelayedCron'])->name('cron.delayed.process');
         Route::post('/cron/delayed/clear', [SettingsController::class, 'clearDelayedCrons'])->name('cron.delayed.clear');
 
+        // Orquestrador
+        Route::get('/orchestrator', [SettingsController::class, 'orchestrator'])->name('orchestrator.index');
+        Route::post('/orchestrator', [SettingsController::class, 'orchestratorSave'])->name('orchestrator.save');
+        Route::get('/orchestrator/status', [SettingsController::class, 'orchestratorStatus'])->name('orchestrator.status');
+        Route::post('/orchestrator/resume', [SettingsController::class, 'orchestratorResume'])->name('orchestrator.resume');
+
         // Mensagens Padrão
         Route::resource('templates', WhatsappTemplateController::class);
 
