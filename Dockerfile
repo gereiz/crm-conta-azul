@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libjpeg62-turbo-dev \
     default-mysql-client \
     cron \
+    tzdata \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
@@ -34,9 +35,17 @@ WORKDIR /var/www/html
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+ 
+# Configurar timezone do container
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Copiar arquivos do projeto
 COPY . .
+ 
+# Script de execução do scheduler com logging
+COPY docker/schedule-run.sh /usr/local/bin/schedule-run.sh
+RUN chmod +x /usr/local/bin/schedule-run.sh
 
 # Instalar dependências do PHP
 # Usamos --no-scripts para evitar erros de boot sem variáveis de ambiente/banco
@@ -50,8 +59,8 @@ RUN npm install && npm run build
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Configurar Cron para o Scheduler do Laravel
-RUN echo "* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>&1" > /etc/cron.d/laravel-scheduler \
+# Configurar Cron para o Scheduler do Laravel (com logging em storage/logs/laravel.log)
+RUN echo "* * * * * cd /var/www/html && /usr/local/bin/schedule-run.sh" > /etc/cron.d/laravel-scheduler \
     && chmod 0644 /etc/cron.d/laravel-scheduler \
     && crontab /etc/cron.d/laravel-scheduler
 
