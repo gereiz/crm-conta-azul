@@ -24,6 +24,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        try {
+            $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+            date_default_timezone_set($tz);
+        } catch (\Throwable $e) {
+        }
         if ($this->app->environment('local') || $this->app->environment('production')) {
             URL::forceScheme('https');
         }
