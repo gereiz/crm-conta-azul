@@ -163,8 +163,8 @@ class FutureMessageService
             $status = 'blocked'; // Ou ignored?
         }
 
-        // Verifica se já foi enviado HOJE (se sendDate for hoje)
-        if ($sendDate->isToday()) {
+        // Regra "Já enviado hoje" aplica-se APENAS para cobrança
+        if ($cron->type === 'billing' && $sendDate->isToday()) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $cliente->id)
                 ->whereDate('sent_at', Carbon::today())

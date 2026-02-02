@@ -10,6 +10,7 @@ const props = defineProps({
     selectedStartDate: String,
     selectedEndDate: String,
     search: String,
+    selectedType: String,
 });
 
 const formatDate = (dateString) => {
@@ -31,6 +32,7 @@ const selectedConnectionId = ref(props.selectedConnectionId || '');
 const startDate = ref(props.selectedStartDate || '');
 const endDate = ref(props.selectedEndDate || '');
 const searchQuery = ref(props.search || '');
+const selectedType = ref(props.selectedType || '');
 
 const filterByConnection = () => {
     const params = {};
@@ -40,6 +42,7 @@ const filterByConnection = () => {
     if (startDate.value) params.start_date = startDate.value;
     if (endDate.value) params.end_date = endDate.value;
     if (searchQuery.value) params.search = searchQuery.value;
+    if (selectedType.value) params.type = selectedType.value;
     
     router.get(route('whatsapp.reports.index'), params, { preserveScroll: true, replace: true });
 };
@@ -86,6 +89,12 @@ const formatWhatsAppNumber = (n) => {
                     <select v-if="connections && connections.length" v-model="selectedConnectionId" @change="filterByConnection" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
                         <option value="">Todas as Empresas</option>
                         <option v-for="c in connections" :key="c.id" :value="c.id">{{ c.empresa_nome }}</option>
+                    </select>
+                    <select v-model="selectedType" @change="filterByConnection" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                        <option value="">Todos os Tipos</option>
+                        <option value="billing">Cobrança</option>
+                        <option value="boleto">Emissão</option>
+                        <option value="due_date">Vencimento</option>
                     </select>
                 </div>
             </div>

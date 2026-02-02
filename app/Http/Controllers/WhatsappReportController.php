@@ -19,6 +19,7 @@ class WhatsappReportController extends Controller
         $startDate = request()->input('start_date');
         $endDate = request()->input('end_date');
         $search = request()->input('search');
+        $type = request()->input('type'); // billing | boleto | due_date
 
         $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
         $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
@@ -41,6 +42,9 @@ class WhatsappReportController extends Controller
                     ->orWhere('phone_sanitized', 'like', "%{$search}%");
             });
         }
+        if ($type && in_array($type, ['billing', 'boleto', 'due_date'])) {
+            $query->where('message_type', $type);
+        }
 
         $reports = $query->paginate(20)->withQueryString();
 
@@ -53,6 +57,7 @@ class WhatsappReportController extends Controller
             'selectedStartDate' => $startDate,
             'selectedEndDate' => $endDate,
             'search' => $search,
+            'selectedType' => $type,
         ]);
     }
 
