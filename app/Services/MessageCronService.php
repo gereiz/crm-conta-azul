@@ -464,6 +464,7 @@ class MessageCronService
         if ($cron->type === 'billing' && ! $ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $invoice->cliente_id)
+                ->where('status', 'success')
                 ->whereDate('sent_at', Carbon::today())
                 ->exists();
             if ($alreadySent) {
@@ -875,6 +876,7 @@ class MessageCronService
         if ($cron->type === 'billing' && ! $ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $cliente->id)
+                ->where('status', 'success')
                 ->whereDate('sent_at', Carbon::today())
                 ->exists();
             if ($alreadySent) {
