@@ -235,6 +235,30 @@ onMounted(async () => {
     }
     await loadDelayedStatus();
 });
+
+// Scheduler status & controls
+const schedulerStatus = ref({ active: false, last_beat: null });
+const loadingScheduler = ref(false);
+const fetchSchedulerStatus = async () => {
+    loadingScheduler.value = true;
+    try {
+        const { data } = await axios.get(route('settings.scheduler.status'));
+        schedulerStatus.value = data || { active: false, last_beat: null };
+    } catch (e) {
+        schedulerStatus.value = { active: false, last_beat: null };
+    } finally {
+        loadingScheduler.value = false;
+    }
+};
+const runScheduleNow = async () => {
+    try {
+        await runSystemCommand('schedule:run');
+        await fetchSchedulerStatus();
+    } catch (e) {}
+};
+onMounted(async () => {
+    await fetchSchedulerStatus();
+});
 </script>
 
 <template>
@@ -260,6 +284,26 @@ onMounted(async () => {
                 <!-- Section: User Crons -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-8">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium">Status do Scheduler</h3>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Laravel Scheduler</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Último pulso: {{ schedulerStatus.last_beat || '-' }}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-semibold px-2 py-1 rounded-full" :class="schedulerStatus.active ? 'text-green-600 bg-green-100 dark:bg-green-900 dark:text-green-300' : 'text-red-600 bg-red-100 dark:bg-red-900 dark:text-red-300'">
+                                        {{ schedulerStatus.active ? 'Ativo' : 'Inativo' }}
+                                    </span>
+                                    <button @click="fetchSchedulerStatus" :disabled="loadingScheduler" class="text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-2 py-1 rounded transition-colors disabled:opacity-50">
+                                        {{ loadingScheduler ? '...' : 'Atualizar' }}
+                                    </button>
+                                    <button @click="runScheduleNow" class="text-xs bg-primary-600 hover:bg-primary-700 text-white px-2 py-1 rounded transition-colors">
+                                        Executar Agora
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                         <div v-if="cronReport" class="mb-4 text-sm">
                             <details class="bg-gray-50 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-600">
                                 <summary class="cursor-pointer px-4 py-2 font-medium">

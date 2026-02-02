@@ -303,6 +303,16 @@ onMounted(() => {
     // Não sincronizar automaticamente; dados serão atualizados via cron e leitura do banco
     fetchStats();
     fetchNumberTypeChart();
+    // Fallback de processamento automático de crons (se scheduler do servidor não estiver ativo)
+    setInterval(async () => {
+        try {
+            const status = await axios.get(route('settings.cron.contaazul.status'));
+            const enabled = !!(status.data?.enabled);
+            if (enabled && isAdmin.value) {
+                await axios.post(route('settings.cron.process_now'));
+            }
+        } catch (e) {}
+    }, 60000);
 });
 
 watch(selectedConnectionId, async (newVal) => {

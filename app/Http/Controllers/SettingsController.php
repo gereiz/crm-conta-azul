@@ -48,6 +48,7 @@ class SettingsController extends Controller
             'message:calculate-future' => 'Cálculo de Envios Futuros',
             'contaazul:sync-stale' => 'Sincronização de Dados Obsoletos',
             'contaazul:refresh-tokens' => 'Renovação de Tokens',
+            'schedule:run' => 'Executar Scheduler Agora',
         ];
 
         if (! array_key_exists($command, $allowedCommands)) {
@@ -197,12 +198,49 @@ class SettingsController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function orchestratorClearQueue(Request $request)
+    {
+        $id = (int) $request->input('whatsapp_number_id');
+        if (! $id) {
+            return response()->json(['success' => false, 'error' => 'whatsapp_number_id obrigatório'], 422);
+        }
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $today = \Carbon\Carbon::today($tz);
+        $count = WhatsappMessageLog::where('whatsapp_number_id', $id)
+            ->where('status', 'skipped')
+            ->where('error_message', 'like', '%Enfileirado%')
+            ->whereDate('sent_at', $today)
+            ->delete();
+
+        return response()->json(['success' => true, 'cleared' => $count]);
+    }
+
     public function contaAzulCronStatus()
     {
         $settings = SystemSetting::latest()->first();
         $enabled = $settings ? (bool) ($settings->contaazul_cron_enabled ?? true) : true;
 
         return response()->json(['enabled' => $enabled]);
+    }
+
+    public function schedulerStatus()
+    {
+        $heartbeat = \Illuminate\Support\Facades\Cache::get('scheduler_heartbeat');
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $active = false;
+        $last = null;
+        if ($heartbeat) {
+            try {
+                $last = \Carbon\Carbon::parse($heartbeat, $tz);
+                $active = $last->gt(\Carbon\Carbon::now($tz)->subMinutes(2));
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return response()->json([
+            'active' => $active,
+            'last_beat' => $heartbeat,
+        ]);
     }
 
     public function contaAzulCronToggle(Request $request)
@@ -283,6 +321,27 @@ class SettingsController extends Controller
         MessageCron::whereIn('id', $ids)->update(['last_run_at' => $now]);
 
         return response()->json(['success' => true, 'cleared_count' => $ids->count()]);
+    }
+
+    public function processCronsNow(MessageCronService $service)
+    {
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $now = \Carbon\Carbon::now($tz);
+        $currentTime = $now->format('H:i');
+        $crons = \App\Models\MessageCron::where('is_active', true)
+            ->where(function ($q) use ($currentTime) {
+                $q->where('send_time', $currentTime)
+                    ->orWhere('send_time', ltrim($currentTime, '0'));
+            })
+            ->with(['messageTemplate', 'whatsappNumber'])
+            ->get();
+        $processed = [];
+        foreach ($crons as $cron) {
+            $service->processCron($cron);
+            $processed[] = $cron->id;
+        }
+
+        return response()->json(['success' => true, 'processed' => $processed, 'time' => $currentTime]);
     }
 
     public function systemSave(Request $request)

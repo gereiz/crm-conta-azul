@@ -96,6 +96,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/cron/delayed/status', [SettingsController::class, 'delayedCronStatus'])->name('cron.delayed.status');
         Route::post('/cron/delayed/process', [SettingsController::class, 'processNextDelayedCron'])->name('cron.delayed.process');
         Route::post('/cron/delayed/clear', [SettingsController::class, 'clearDelayedCrons'])->name('cron.delayed.clear');
+        Route::post('/cron/process-now', [SettingsController::class, 'processCronsNow'])->name('cron.process_now');
+        Route::get('/scheduler/status', [SettingsController::class, 'schedulerStatus'])->name('scheduler.status');
 
         // Orquestrador
         Route::get('/orchestrator', [SettingsController::class, 'orchestrator'])->name('orchestrator.index');
@@ -103,6 +105,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/orchestrator/status', [SettingsController::class, 'orchestratorStatus'])->name('orchestrator.status');
         Route::post('/orchestrator/resume', [SettingsController::class, 'orchestratorResume'])->name('orchestrator.resume');
         Route::post('/orchestrator/force-resume', [SettingsController::class, 'orchestratorForceResume'])->name('orchestrator.force_resume');
+        Route::post('/orchestrator/clear-queue', [SettingsController::class, 'orchestratorClearQueue'])->name('orchestrator.clear_queue');
 
         // Mensagens Padrão
         Route::resource('templates', WhatsappTemplateController::class);

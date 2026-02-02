@@ -63,6 +63,14 @@ const forceResumeNumber = async (id) => {
     } catch (e) {}
 };
 
+const clearQueue = async (id) => {
+    try {
+        if (!confirm('Zerar a fila de hoje para este número?')) return;
+        await axios.post(route('settings.orchestrator.clear_queue'), { whatsapp_number_id: id });
+        await fetchStatus();
+    } catch (e) {}
+};
+
 onMounted(() => {
     fetchStatus();
     setInterval(fetchStatus, 5000);
@@ -123,6 +131,7 @@ onMounted(() => {
                                                 <div class="flex gap-2">
                                                     <SecondaryButton @click="resumeNumber(it.id)" :disabled="loadingStatus">Retomar</SecondaryButton>
                                                     <SecondaryButton @click="forceResumeNumber(it.id)" :disabled="loadingStatus" class="bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800">Retomar Agora</SecondaryButton>
+                                                    <SecondaryButton @click="clearQueue(it.id)" :disabled="loadingStatus" class="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800">Zerar Fila</SecondaryButton>
                                                 </div>
                                             </td>
                                         </tr>
