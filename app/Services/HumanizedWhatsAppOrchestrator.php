@@ -85,16 +85,18 @@ class HumanizedWhatsAppOrchestrator
     protected function canStart(int $numberId): array
     {
         $state = $this->getState($numberId);
-        $now = Carbon::now();
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $now = Carbon::now($tz);
 
         if ($state->paused_until && Carbon::parse($state->paused_until)->gt($now)) {
             return ['ok' => false, 'reason' => 'paused', 'until' => $state->paused_until];
         }
 
         if (! $this->inSafeWindow()) {
-            $until = Carbon::today()->setTime(8, 0);
+            $startParts = explode(':', $this->safeStart);
+            $until = Carbon::today($tz)->setTime((int) ($startParts[0] ?? 8), (int) ($startParts[1] ?? 0));
             if ($until->lt($now)) {
-                $until = Carbon::tomorrow()->setTime(8, 0);
+                $until = Carbon::tomorrow($tz)->setTime((int) ($startParts[0] ?? 8), (int) ($startParts[1] ?? 0));
             }
 
             return ['ok' => false, 'reason' => 'safe_hours', 'until' => $until];
@@ -107,20 +109,21 @@ class HumanizedWhatsAppOrchestrator
             $state->save();
         }
         if ($state->hourly_count >= $this->hourlyLimit) {
-            $until = Carbon::parse($state->hourly_window_start)->addHour();
+            $until = Carbon::parse($state->hourly_window_start, $tz)->addHour();
 
             return ['ok' => false, 'reason' => 'rate_limit', 'until' => $until];
         }
 
         // Limite de aquecimento diário
-        if (! $state->daily_date || Carbon::parse($state->daily_date)->ne(Carbon::today())) {
-            $state->daily_date = Carbon::today();
+        if (! $state->daily_date || Carbon::parse($state->daily_date)->ne(Carbon::today($tz))) {
+            $state->daily_date = Carbon::today($tz);
             $state->daily_count = 0;
             $state->save();
         }
         $warmupLimit = $this->allowedByWarmup($state);
         if ($state->daily_count >= $warmupLimit) {
-            $until = Carbon::tomorrow()->setTime(8, 0);
+            $startParts = explode(':', $this->safeStart);
+            $until = Carbon::tomorrow($tz)->setTime((int) ($startParts[0] ?? 8), (int) ($startParts[1] ?? 0));
 
             return ['ok' => false, 'reason' => 'warmup_daily_cap', 'until' => $until];
         }
@@ -237,10 +240,12 @@ class HumanizedWhatsAppOrchestrator
 
     protected function reasonMessage(string $reason, $until): string
     {
-        $untilStr = $until ? Carbon::parse($until)->format('H:i') : null;
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $untilStr = $until ? Carbon::parse($until, $tz)->format('H:i') : null;
+        $window = "{$this->safeStart}–{$this->safeEnd}";
         return match ($reason) {
             'paused' => "Envios pausados temporariamente até {$untilStr}.",
-            'safe_hours' => "Fora do horário seguro (08:00–20:00). Enfileirado para {$untilStr}.",
+            'safe_hours' => "Fora do horário seguro ({$window}). Enfileirado para {$untilStr}.",
             'rate_limit' => "Limite horário atingido. Retoma às {$untilStr}.",
             'warmup_daily_cap' => "Limite diário de aquecimento atingido. Retoma às {$untilStr}.",
             'concurrent' => "Outro envio está em andamento. Próxima janela às {$untilStr}.",

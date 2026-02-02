@@ -20,6 +20,7 @@ class WhatsappReportController extends Controller
         $endDate = request()->input('end_date');
         $search = request()->input('search');
         $type = request()->input('type'); // billing | boleto | due_date
+        $status = request()->input('status');
 
         $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
         $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
@@ -45,6 +46,11 @@ class WhatsappReportController extends Controller
         if ($type && in_array($type, ['billing', 'boleto', 'due_date'])) {
             $query->where('message_type', $type);
         }
+        $baseForStatuses = clone $query;
+        $statuses = $baseForStatuses->select('status')->distinct()->pluck('status')->filter()->values();
+        if ($status && in_array($status, $statuses->all())) {
+            $query->where('status', $status);
+        }
 
         $reports = $query->paginate(20)->withQueryString();
 
@@ -58,6 +64,8 @@ class WhatsappReportController extends Controller
             'selectedEndDate' => $endDate,
             'search' => $search,
             'selectedType' => $type,
+            'statuses' => $statuses,
+            'selectedStatus' => $status,
         ]);
     }
 

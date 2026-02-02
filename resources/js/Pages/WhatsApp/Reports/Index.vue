@@ -11,6 +11,8 @@ const props = defineProps({
     selectedEndDate: String,
     search: String,
     selectedType: String,
+    statuses: Array,
+    selectedStatus: String,
 });
 
 const formatDate = (dateString) => {
@@ -33,6 +35,7 @@ const startDate = ref(props.selectedStartDate || '');
 const endDate = ref(props.selectedEndDate || '');
 const searchQuery = ref(props.search || '');
 const selectedType = ref(props.selectedType || '');
+const selectedStatus = ref(props.selectedStatus || '');
 
 const filterByConnection = () => {
     const params = {};
@@ -43,6 +46,7 @@ const filterByConnection = () => {
     if (endDate.value) params.end_date = endDate.value;
     if (searchQuery.value) params.search = searchQuery.value;
     if (selectedType.value) params.type = selectedType.value;
+    if (selectedStatus.value) params.status = selectedStatus.value;
     
     router.get(route('whatsapp.reports.index'), params, { preserveScroll: true, replace: true });
 };
@@ -95,6 +99,10 @@ const formatWhatsAppNumber = (n) => {
                         <option value="billing">Cobrança</option>
                         <option value="boleto">Emissão</option>
                         <option value="due_date">Vencimento</option>
+                    </select>
+                    <select v-model="selectedStatus" @change="filterByConnection" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                        <option value="">Todos os Status</option>
+                        <option v-for="s in (statuses || [])" :key="s" :value="s">{{ s }}</option>
                     </select>
                 </div>
             </div>
