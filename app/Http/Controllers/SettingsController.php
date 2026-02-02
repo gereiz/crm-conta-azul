@@ -177,6 +177,26 @@ class SettingsController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function orchestratorForceResume(Request $request)
+    {
+        $id = (int) $request->input('whatsapp_number_id');
+        if (! $id) {
+            return response()->json(['success' => false, 'error' => 'whatsapp_number_id obrigatório'], 422);
+        }
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $settings = SystemSetting::latest()->first();
+        $cooldown = (int) ($settings->orchestrator_concurrent_cooldown_minutes ?? 15);
+        $state = WhatsappSendState::firstOrCreate(['whatsapp_number_id' => $id], []);
+        $state->paused_until = null;
+        $state->in_progress = false;
+        $state->hourly_window_start = \Carbon\Carbon::now($tz)->subHour()->subMinute();
+        $state->hourly_count = 0;
+        $state->last_finished_at = \Carbon\Carbon::now($tz)->subMinutes($cooldown)->subMinute();
+        $state->save();
+
+        return response()->json(['success' => true]);
+    }
+
     public function contaAzulCronStatus()
     {
         $settings = SystemSetting::latest()->first();

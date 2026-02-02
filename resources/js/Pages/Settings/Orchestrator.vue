@@ -56,6 +56,13 @@ const resumeNumber = async (id) => {
     } catch (e) {}
 };
 
+const forceResumeNumber = async (id) => {
+    try {
+        await axios.post(route('settings.orchestrator.force_resume'), { whatsapp_number_id: id });
+        await fetchStatus();
+    } catch (e) {}
+};
+
 onMounted(() => {
     fetchStatus();
     setInterval(fetchStatus, 5000);
@@ -113,7 +120,10 @@ onMounted(() => {
                                             <td class="px-3 py-2">{{ it.queue_count }}</td>
                                             <td class="px-3 py-2">{{ it.next_available_at || '-' }}</td>
                                             <td class="px-3 py-2">
-                                                <SecondaryButton @click="resumeNumber(it.id)" :disabled="loadingStatus">Retomar</SecondaryButton>
+                                                <div class="flex gap-2">
+                                                    <SecondaryButton @click="resumeNumber(it.id)" :disabled="loadingStatus">Retomar</SecondaryButton>
+                                                    <SecondaryButton @click="forceResumeNumber(it.id)" :disabled="loadingStatus" class="bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800">Retomar Agora</SecondaryButton>
+                                                </div>
                                             </td>
                                         </tr>
                                     </tbody>

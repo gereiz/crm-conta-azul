@@ -102,6 +102,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/orchestrator', [SettingsController::class, 'orchestratorSave'])->name('orchestrator.save');
         Route::get('/orchestrator/status', [SettingsController::class, 'orchestratorStatus'])->name('orchestrator.status');
         Route::post('/orchestrator/resume', [SettingsController::class, 'orchestratorResume'])->name('orchestrator.resume');
+        Route::post('/orchestrator/force-resume', [SettingsController::class, 'orchestratorForceResume'])->name('orchestrator.force_resume');
 
         // Mensagens Padrão
         Route::resource('templates', WhatsappTemplateController::class);
