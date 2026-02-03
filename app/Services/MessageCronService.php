@@ -358,10 +358,12 @@ class MessageCronService
 
                     continue;
                 }
-                $alreadyEverSent = \App\Models\WhatsappMessageLog::where('message_type', 'boleto')
-                    ->whereJsonContains('boleto_ids', $invoice->id)
+                $alreadySentTodaySameType = \App\Models\WhatsappMessageLog::where('cliente_id', $invoice->cliente_id)
+                    ->where('message_type', $cron->type)
+                    ->where('status', 'success')
+                    ->whereDate('sent_at', Carbon::today())
                     ->exists();
-                if ($alreadyEverSent) {
+                if ($alreadySentTodaySameType) {
                     \App\Models\WhatsappMessageLog::create([
                         'whatsapp_number_id' => $cron->whatsapp_number_id,
                         'connection_id' => $invoice->connection_id ?? $cron->connection_id,
@@ -376,7 +378,7 @@ class MessageCronService
                         'total_boletos' => 1,
                         'boleto_ids' => [$invoice->id],
                         'status' => 'skipped',
-                        'error_message' => 'Já enviado anteriormente',
+                        'error_message' => 'Já enviado hoje',
                         'batch_id' => $batchId,
                         'sent_at' => now(),
                     ]);
