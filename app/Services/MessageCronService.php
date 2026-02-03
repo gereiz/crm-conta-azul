@@ -461,7 +461,7 @@ class MessageCronService
         $originalPhone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
 
-        if ($cron->type === 'billing' && ! $ignoreSentToday) {
+        if (in_array($cron->type, ['billing', 'due_date', 'boleto']) && ! $ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $invoice->cliente_id)
                 ->where('status', 'success')
@@ -873,7 +873,7 @@ class MessageCronService
                 ->where('message_type', 'ignore_sent_today')
                 ->value('is_enabled');
         }
-        if ($cron->type === 'billing' && ! $ignoreSentToday) {
+        if (in_array($cron->type, ['billing', 'due_date', 'boleto']) && ! $ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
                 ->where('cliente_id', $cliente->id)
                 ->where('status', 'success')
