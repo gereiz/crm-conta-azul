@@ -6,6 +6,10 @@ cd /var/www/html
 LOG="storage/logs/laravel.log"
 mkdir -p storage/logs
 touch "$LOG"
+# Garantir propriedade e permissões para o processo web (www-data)
+chown -R www-data:www-data storage/logs
+chmod -R 775 storage/logs
+chmod 664 "$LOG"
 
 PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 

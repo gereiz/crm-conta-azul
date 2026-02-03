@@ -60,7 +60,7 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
 # Configurar Cron para o Scheduler do Laravel (com logging em storage/logs/laravel.log)
-RUN echo "* * * * * cd /var/www/html && /usr/local/bin/schedule-run.sh" > /etc/cron.d/laravel-scheduler \
+RUN echo "* * * * * www-data cd /var/www/html && /usr/local/bin/schedule-run.sh" > /etc/cron.d/laravel-scheduler \
     && chmod 0644 /etc/cron.d/laravel-scheduler \
     && crontab /etc/cron.d/laravel-scheduler
 
