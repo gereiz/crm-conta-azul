@@ -189,6 +189,14 @@ watch(holidayYear, () => {
 onMounted(() => {
     loadHolidays();
 });
+
+const formatDateBr = (s) => {
+    if (!s || typeof s !== 'string') return '';
+    const parts = s.split('-');
+    if (parts.length !== 3) return s;
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+};
 </script>
 
 <template>
@@ -328,7 +336,7 @@ onMounted(() => {
                                             </tr>
                                             <tr v-for="h in holidays" :key="h.id">
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                                                    {{ new Date(h.date).toLocaleDateString() }}
+                                                    {{ formatDateBr(h.date) }}
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                                                     {{ h.name }}
