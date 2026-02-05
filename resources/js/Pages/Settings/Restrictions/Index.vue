@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -150,6 +150,45 @@ watch(() => editForm.connection_id, () => {
     clientSuggestions.value = [];
     invoiceSuggestions.value = [];
 });
+
+// Feriados Nacionais
+const holidayYear = ref(new Date().getFullYear());
+const holidays = ref([]);
+const holidayForm = useForm({
+    date: '',
+    name: '',
+});
+const loadingHolidays = ref(false);
+const loadHolidays = async () => {
+    loadingHolidays.value = true;
+    try {
+        const res = await axios.get(route('settings.restrictions.holidays.index'), { params: { year: holidayYear.value } });
+        holidays.value = res.data?.items || [];
+    } catch {
+        holidays.value = [];
+    } finally {
+        loadingHolidays.value = false;
+    }
+};
+const addHoliday = async () => {
+    if (!holidayForm.date || !holidayForm.name) return;
+    await axios.post(route('settings.restrictions.holidays.store'), holidayForm);
+    holidayForm.reset();
+    holidayForm.date = '';
+    holidayForm.name = '';
+    await loadHolidays();
+};
+const deleteHoliday = async (id) => {
+    if (!confirm('Excluir este feriado?')) return;
+    await axios.delete(route('settings.restrictions.holidays.destroy', id));
+    await loadHolidays();
+};
+watch(holidayYear, () => {
+    loadHolidays();
+});
+onMounted(() => {
+    loadHolidays();
+});
 </script>
 
 <template>
@@ -164,7 +203,7 @@ watch(() => editForm.connection_id, () => {
         <div class="py-12">
             <div class="mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6">
+                    <div class="p-6 max-h-[40vh] overflow-y-auto">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Regras</h3>
                             <PrimaryButton @click="openCreate">Nova Regra</PrimaryButton>
@@ -238,6 +277,69 @@ watch(() => editForm.connection_id, () => {
                                 >
                                     Próxima
                                 </SecondaryButton>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card: Feriados Nacionais -->
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mt-6">
+                    <div class="p-6 max-h-[40vh] overflow-y-auto">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Feriados Nacionais</h3>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm text-gray-700 dark:text-gray-300">Ano</label>
+                                <input type="number" v-model="holidayYear" class="w-24 border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="flex items-end gap-3">
+                                    <div class="flex-1">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data</label>
+                                        <input type="date" v-model="holidayForm.date" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm" />
+                                    </div>
+                                    <div class="flex-1">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome</label>
+                                        <TextInput v-model="holidayForm.name" placeholder="Ex.: Tiradentes" class="w-full" />
+                                    </div>
+                                    <PrimaryButton @click="addHoliday">Adicionar</PrimaryButton>
+                                </div>
+                                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Os feriados cadastrados impedem a cobrança neste dia.</p>
+                            </div>
+
+                            <div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead class="bg-gray-50 dark:bg-gray-700">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Data</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
+                                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                            <tr v-if="loadingHolidays">
+                                                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400" colspan="3">Carregando...</td>
+                                            </tr>
+                                            <tr v-else-if="!holidays.length">
+                                                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400" colspan="3">Nenhum feriado para este ano.</td>
+                                            </tr>
+                                            <tr v-for="h in holidays" :key="h.id">
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                                    {{ new Date(h.date).toLocaleDateString() }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                                    {{ h.name }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <button @click="deleteHoliday(h.id)" class="text-red-600 dark:text-red-400 hover:text-red-800">Excluir</button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>

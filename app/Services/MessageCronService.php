@@ -179,6 +179,17 @@ class MessageCronService
 
     protected function processBilling(MessageCron $cron, string $batchId)
     {
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $today = Carbon::today($tz);
+        if ($this->isBrazilNationalHoliday($today)) {
+            Log::info('Cron billing - feriado nacional, cobrança suspensa hoje', [
+                'cron_id' => $cron->id,
+                'connection_id' => $cron->connection_id,
+                'date' => $today->toDateString(),
+            ]);
+            return ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => 0];
+        }
+
         $daysLate = (int) ($cron->days_after_due ?? 0);
         // Semântica: "maior que X dias de atraso" => vencimento <= hoje - (X + 1) dias
         // Ex.: X=0 => ontem (>=1 dia); X=1 => anteontem (>=2 dias)
@@ -960,6 +971,46 @@ class MessageCronService
             }
         }
 
+        // Regras adicionais de cobrança:
+        // - Se vencimento caiu em sábado/domingo: só cobrar a partir de terça-feira
+        // - Se feriado nacional: cobrar no mínimo 2 dias depois
+        if ($earliest) {
+            $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+            $today = Carbon::today($tz);
+            $allowedStart = (clone $earliest);
+            $reason = null;
+            if ($earliest->isSaturday() || $earliest->isSunday()) {
+                // Próxima terça-feira
+                $allowedStart = (clone $earliest)->next(Carbon::TUESDAY);
+                $reason = 'Vencimento em fim de semana; cobrança permitida a partir de terça-feira';
+            } elseif ($this->isBrazilNationalHoliday($earliest)) {
+                $allowedStart = (clone $earliest)->addDays(2);
+                $reason = 'Vencimento em feriado nacional; cobrança somente 2 dias depois';
+            }
+            if ($reason && $today->lt($allowedStart)) {
+                WhatsappMessageLog::create([
+                    'whatsapp_number_id' => $cron->whatsapp_number_id,
+                    'connection_id' => $cron->connection_id ?? ($cliente->connection_id ?? null),
+                    'message_cron_id' => $cron->id,
+                    'cliente_id' => $cliente->id,
+                    'client_name' => $cliente->name,
+                    'phone_original' => $originalPhone,
+                    'phone_sanitized' => $sanitizedPhone,
+                    'message_type' => $cron->type,
+                    'provider' => optional($cron->whatsappNumber)->provider,
+                    'message_template_id' => $cron->message_template_id,
+                    'total_boletos' => is_countable($invoices) ? count($invoices) : null,
+                    'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
+                    'status' => 'skipped',
+                    'error_message' => $reason,
+                    'batch_id' => $batchId,
+                    'sent_at' => now(),
+                ]);
+
+                return 'skipped';
+            }
+        }
+
         $totalValue = collect($invoices)->sum(function ($inv) {
             return (float) ($inv->saldo_devedor ?? $inv->nao_pago ?? 0);
         });
@@ -1104,5 +1155,10 @@ class MessageCronService
     protected function disablePreviewLinks(string $text): string
     {
         return preg_replace('/\bhxxps:\/\//i', 'https://', $text);
+    }
+
+    protected function isBrazilNationalHoliday(Carbon $date): bool
+    {
+        return \App\Models\NationalHoliday::whereDate('date', $date->toDateString())->exists();
     }
 }
