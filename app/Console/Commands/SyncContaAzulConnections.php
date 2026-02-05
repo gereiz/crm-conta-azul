@@ -59,15 +59,16 @@ class SyncContaAzulConnections extends Command
                 ]);
 
                 $syncedInvoices = $this->api->syncOverdueInvoices($connection);
+                $syncedClosed = $this->api->syncRecentlyClosedInvoices($connection);
 
                 $connection->last_sync_at = Carbon::now();
                 $connection->save();
 
-                $this->info("Empresa {$connection->empresa_nome}: {$syncedInvoices} faturas sincronizadas.");
+                $this->info("Empresa {$connection->empresa_nome}: {$syncedInvoices} abertas/atrasadas e {$syncedClosed} pagas/canceladas atualizadas.");
 
                 $log->update([
                     'finished_at' => Carbon::now(),
-                    'items_processed' => (int) $syncedInvoices,
+                    'items_processed' => (int) ($syncedInvoices + $syncedClosed),
                     'message' => 'Execução automática diária',
                 ]);
             } catch (\Exception $e) {

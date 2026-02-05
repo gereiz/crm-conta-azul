@@ -139,6 +139,7 @@ class ClienteController extends Controller
             $query->where('connection_id', $connectionId);
         }
 
+        $query->where('saldo_devedor', '>', 0);
         $invoices = $query->orderBy('data_vencimento', 'asc')->paginate(20)->withQueryString();
 
         $whatsappNumbers = WhatsappNumber::where('status', 'active')->get();

@@ -328,4 +328,66 @@ class ContaAzulApiService
 
         return count($allInvoices);
     }
+
+    public function syncRecentlyClosedInvoices(ContaAzulConnection $connection): int
+    {
+        $startDate = \Carbon\Carbon::now()->subDays(180)->format('Y-m-d');
+        $endDate = \Carbon\Carbon::now()->addDay()->format('Y-m-d');
+        $size = 500;
+        $statuses = ['PAID', 'CANCELLED'];
+        $updated = 0;
+
+        $clientMap = \App\Models\Cliente::where('connection_id', $connection->id)
+            ->pluck('id', 'ca_id')
+            ->toArray();
+
+        foreach ($statuses as $status) {
+            $hasMore = true;
+            $page = 1;
+            while ($hasMore) {
+                $data = $this->getAllOverdueInvoices($connection, $page, $size, $startDate, $endDate, $status);
+                $items = $data['itens'] ?? [];
+                if (empty($items)) {
+                    $hasMore = false;
+                } else {
+                    foreach ($items as $item) {
+                        $caId = $item['id'] ?? null;
+                        if (! $caId) {
+                            continue;
+                        }
+                        $clienteCaId = $item['cliente']['id'] ?? null;
+                        $clienteLocalId = $clienteCaId ? ($clientMap[$clienteCaId] ?? null) : null;
+                        $valorOriginal = isset($item['total']) ? (float) $item['total'] : 0.0;
+                        $valorPago = isset($item['pago']) ? (float) $item['pago'] : null;
+                        $naoPago = isset($item['nao_pago']) ? (float) $item['nao_pago'] : null;
+                        $saldoDevedor = $naoPago ?? ($valorPago !== null ? max(0.0, $valorOriginal - $valorPago) : 0.0);
+
+                        \App\Models\Invoice::updateOrCreate(
+                            ['connection_id' => $connection->id, 'ca_id' => $caId],
+                            [
+                                'connection_id' => $connection->id,
+                                'status' => $item['status'] ?? $status,
+                                'valor_original' => $valorOriginal,
+                                'saldo_devedor' => $saldoDevedor,
+                                'descricao' => $item['descricao'] ?? null,
+                                'data_vencimento' => $item['data_vencimento'] ?? null,
+                                'data_emissao' => $item['data_emissao'] ?? null,
+                                'cliente_id' => $clienteLocalId,
+                                'cliente_ca_id' => $clienteCaId,
+                                'cliente_nome' => $item['cliente']['nome'] ?? null,
+                            ]
+                        );
+                        $updated++;
+                    }
+                    if (count($items) < $size) {
+                        $hasMore = false;
+                    } else {
+                        $page++;
+                    }
+                }
+            }
+        }
+
+        return $updated;
+    }
 }

@@ -206,9 +206,7 @@ class MessageCronService
         if ($periodStart) {
             $query->where('data_vencimento', '>=', $periodStart);
         }
-        $query->where(function ($q) {
-            $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
-        });
+        $query->where('saldo_devedor', '>', 0);
         // Preferir boletos: aceita quando payment_type contém 'BOLETO' OU quando há link_boleto presente
         $query->where(function ($q) {
             $q->where(function ($qq) {

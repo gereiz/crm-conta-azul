@@ -661,6 +661,7 @@ class SettingsController extends Controller
 
             // Sincroniza faturas
             $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
+            $closedCount = $this->contaAzulApiService->syncRecentlyClosedInvoices($connection);
 
             // Atualiza timestamp da conexão
             $connection->last_sync_at = now();
@@ -681,19 +682,20 @@ class SettingsController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => $target === 'all'
-                        ? "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso."
-                        : "Sincronização concluída! {$invoicesApiCount} faturas em atraso.",
+                        ? "Sincronização concluída! {$clientesDbCount} clientes, {$invoicesApiCount} faturas em atraso e {$closedCount} atualizações de pagas/canceladas."
+                        : "Sincronização concluída! {$invoicesApiCount} faturas em atraso e {$closedCount} atualizações de pagas/canceladas.",
                     'details' => [
                         'clientes_count' => $clientesDbCount,
                         'invoices_count' => $invoicesApiCount,
                         'synced_count' => $syncedCount,
+                        'closed_updates' => $closedCount,
                     ],
                 ]);
             }
 
             $msg = $target === 'all'
-                ? "Sincronização concluída! {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso processados para a conexão {$connection->empresa_nome}."
-                : "Sincronização concluída! {$invoicesApiCount} faturas em atraso processadas para a conexão {$connection->empresa_nome}.";
+                ? "Sincronização concluída! {$clientesDbCount} clientes, {$invoicesApiCount} faturas em atraso e {$closedCount} pagas/canceladas atualizadas para a conexão {$connection->empresa_nome}."
+                : "Sincronização concluída! {$invoicesApiCount} faturas em atraso e {$closedCount} pagas/canceladas atualizadas para a conexão {$connection->empresa_nome}.";
 
             return redirect()->back()->with('success', $msg);
 
