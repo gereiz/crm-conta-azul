@@ -114,14 +114,15 @@ Route::middleware('auth')->group(function () {
         Route::post('crons/{cron}/run', [\App\Http\Controllers\MessageCronController::class, 'runNow'])->name('crons.run');
         Route::resource('crons', \App\Http\Controllers\MessageCronController::class);
 
+        // Feriados Nacionais (DEFINIR ANTES do resource para evitar colisão com {restriction})
+        Route::get('restrictions/holidays', [\App\Http\Controllers\NationalHolidayController::class, 'index'])->name('restrictions.holidays.index');
+        Route::post('restrictions/holidays', [\App\Http\Controllers\NationalHolidayController::class, 'store'])->name('restrictions.holidays.store');
+        Route::delete('restrictions/holidays/{holiday}', [\App\Http\Controllers\NationalHolidayController::class, 'destroy'])->name('restrictions.holidays.destroy');
+
         Route::resource('restrictions', BillingRestrictionController::class)->middleware('can:viewAny,App\Models\BillingRestriction');
         Route::post('restrictions/{restriction}/toggle', [BillingRestrictionController::class, 'toggle'])->name('restrictions.toggle');
         Route::get('restrictions/autocomplete/clients', [BillingRestrictionController::class, 'autocompleteClients'])->name('restrictions.autocomplete.clients');
         Route::get('restrictions/autocomplete/invoices', [BillingRestrictionController::class, 'autocompleteInvoices'])->name('restrictions.autocomplete.invoices');
-        // Feriados Nacionais
-        Route::get('restrictions/holidays', [\App\Http\Controllers\NationalHolidayController::class, 'index'])->name('restrictions.holidays.index');
-        Route::post('restrictions/holidays', [\App\Http\Controllers\NationalHolidayController::class, 'store'])->name('restrictions.holidays.store');
-        Route::delete('restrictions/holidays/{holiday}', [\App\Http\Controllers\NationalHolidayController::class, 'destroy'])->name('restrictions.holidays.destroy');
 
         Route::resource('roles', RoleController::class)->middleware('permission:roles.manage');
         Route::resource('permissions', PermissionController::class)->middleware('permission:permissions.manage');
