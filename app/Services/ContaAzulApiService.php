@@ -308,6 +308,14 @@ class ContaAzulApiService
                     'cliente_nome' => $item['cliente']['nome'] ?? null,
                 ]
             );
+
+            // Se o saldo for 0 ou status fechado, remover para não aparecer como em aberto
+            $statusNow = $item['status'] ?? null;
+            if ($this->isClosedStatus($statusNow) || $saldoDevedor <= 0) {
+                \App\Models\Invoice::where('connection_id', $connection->id)
+                    ->where('ca_id', $caId)
+                    ->delete();
+            }
         }
 
         // 4. Soft Pruning: remove apenas faturas ABERTAS/EM ATRASO que não vieram na lista atual
@@ -335,7 +343,7 @@ class ContaAzulApiService
         $startDate = \Carbon\Carbon::now()->subDays(180)->format('Y-m-d');
         $endDate = \Carbon\Carbon::now()->addDay()->format('Y-m-d');
         $size = 500;
-        $statuses = ['PAID', 'CANCELLED'];
+        $statuses = ['PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO'];
         $updated = 0;
 
         $clientMap = \App\Models\Cliente::where('connection_id', $connection->id)
@@ -381,6 +389,14 @@ class ContaAzulApiService
                         );
                         $updated++;
 
+                        // Se status fechado ou saldo zerado, remover da base para não aparecer nos filtros
+                        $statusNow = ($item['status'] ?? $status);
+                        if ($this->isClosedStatus($statusNow) || $saldoDevedor <= 0) {
+                            \App\Models\Invoice::where('connection_id', $connection->id)
+                                ->where('ca_id', $caId)
+                                ->delete();
+                        }
+
                         // Se for CANCELADA, tentar localizar uma substituta (novo boleto) com mesma referência/cliente
                         $isCancelled = (($item['status'] ?? $status) === 'CANCELLED') || (($item['status'] ?? $status) === 'CANCELADO');
                         if ($isCancelled && $clienteCaId) {
@@ -424,5 +440,16 @@ class ContaAzulApiService
         }
 
         return null;
+    }
+
+    protected function isClosedStatus(?string $status): bool
+    {
+        if (! $status) {
+            return false;
+        }
+        $s = strtoupper($status);
+        $closed = ['PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO'];
+
+        return in_array($s, $closed, true);
     }
 }
