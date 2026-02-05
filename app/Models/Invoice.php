@@ -17,6 +17,7 @@ class Invoice extends Model
         'valor_original',
         'saldo_devedor',
         'descricao',
+        'reference_code',
         'data_vencimento',
         'data_emissao',
         'link_boleto',

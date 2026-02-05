@@ -228,9 +228,9 @@ class ContaAzulApiService
             ->toArray();
 
         // 2. Preload Existing Invoices to avoid unnecessary details fetching
-        // Map: ca_id => ['link_boleto', 'status']
+        // Map: ca_id => ['link_boleto', 'status', 'reference_code']
         $existingInvoices = \App\Models\Invoice::where('connection_id', $connection->id)
-            ->get(['ca_id', 'link_boleto', 'status'])
+            ->get(['ca_id', 'link_boleto', 'status', 'reference_code'])
             ->keyBy('ca_id')
             ->toArray();
 
@@ -299,6 +299,7 @@ class ContaAzulApiService
                     'valor_original' => $valorOriginal,
                     'saldo_devedor' => $saldoDevedor,
                     'descricao' => $item['descricao'] ?? null,
+                    'reference_code' => $item['codigo_referencia'] ?? ($existing['reference_code'] ?? null),
                     'data_vencimento' => $item['data_vencimento'] ?? null,
                     'data_emissao' => $item['data_emissao'] ?? null,
                     'link_boleto' => $invoiceDetails['url'],
@@ -370,6 +371,7 @@ class ContaAzulApiService
                                 'valor_original' => $valorOriginal,
                                 'saldo_devedor' => $saldoDevedor,
                                 'descricao' => $item['descricao'] ?? null,
+                                'reference_code' => $item['codigo_referencia'] ?? null,
                                 'data_vencimento' => $item['data_vencimento'] ?? null,
                                 'data_emissao' => $item['data_emissao'] ?? null,
                                 'cliente_id' => $clienteLocalId,
@@ -378,6 +380,26 @@ class ContaAzulApiService
                             ]
                         );
                         $updated++;
+
+                        // Se for CANCELADA, tentar localizar uma substituta (novo boleto) com mesma referência/cliente
+                        $isCancelled = (($item['status'] ?? $status) === 'CANCELLED') || (($item['status'] ?? $status) === 'CANCELADO');
+                        if ($isCancelled && $clienteCaId) {
+                            $ref = $item['codigo_referencia'] ?? $this->extractReferenceCode(($item['descricao'] ?? ''));
+                            $replacementQuery = \App\Models\Invoice::where('connection_id', $connection->id)
+                                ->where('cliente_ca_id', $clienteCaId)
+                                ->whereIn('status', ['OVERDUE', 'ATRASADO', 'PENDING', 'ABERTO']);
+                            if ($ref) {
+                                $replacementQuery->where('reference_code', $ref);
+                            } else {
+                                // Fallback: tentar por valor original aproximado
+                                $replacementQuery->where('valor_original', $valorOriginal);
+                            }
+                            $replacement = $replacementQuery->orderByDesc('data_emissao')->first();
+                            if ($replacement) {
+                                // Não precisamos fazer nada extra aqui; a seleção de cobrança usa apenas registros com saldo_devedor>0 e exclui cancelados
+                                // Garantimos que a substituta estará presente na base e a cancelada não será cobrada.
+                            }
+                        }
                     }
                     if (count($items) < $size) {
                         $hasMore = false;
@@ -389,5 +411,18 @@ class ContaAzulApiService
         }
 
         return $updated;
+    }
+
+    protected function extractReferenceCode(?string $text): ?string
+    {
+        if (! $text) {
+            return null;
+        }
+        // Procura sequências numéricas de 3+ dígitos (ex.: "Venda 1172")
+        if (preg_match('/(\d{3,})/', $text, $m)) {
+            return $m[1];
+        }
+
+        return null;
     }
 }

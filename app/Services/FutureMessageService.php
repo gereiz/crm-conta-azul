@@ -326,9 +326,8 @@ class FutureMessageService
 
         $query = Invoice::where('connection_id', $cron->connection_id)
             ->where('data_vencimento', '<', $dueDateLimit)
-            ->where(function ($q) {
-                $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
-            });
+            ->where('saldo_devedor', '>', 0)
+            ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO']);
 
         if ($periodStart) {
             $query->where('data_vencimento', '>=', $periodStart);

@@ -206,7 +206,8 @@ class MessageCronService
         if ($periodStart) {
             $query->where('data_vencimento', '>=', $periodStart);
         }
-        $query->where('saldo_devedor', '>', 0);
+        $query->where('saldo_devedor', '>', 0)
+            ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO']);
         // Preferir boletos: aceita quando payment_type contém 'BOLETO' OU quando há link_boleto presente
         $query->where(function ($q) {
             $q->where(function ($qq) {
