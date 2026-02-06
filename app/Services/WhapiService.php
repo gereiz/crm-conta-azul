@@ -75,10 +75,7 @@ class WhapiService implements WhatsAppProviderInterface
 
         $to = preg_replace('/\D/', '', $to ?? '');
         $to = ltrim($to, '0');
-
-        if (in_array(strlen($to), [10, 11])) {
-            $to = '55'.$to;
-        }
+        $to = $this->normalizeDestination($to);
 
         $endpoint = "{$this->baseUrl}/messages/text";
 
@@ -179,5 +176,35 @@ class WhapiService implements WhatsAppProviderInterface
         }
 
         return null;
+    }
+
+    protected function normalizeDestination(string $digits): string
+    {
+        if (empty($digits)) {
+            return '55';
+        }
+        $len = strlen($digits);
+        if ($len >= 12) {
+            return $digits;
+        }
+        if ($len === 11 && ! str_starts_with($digits, '55')) {
+            $oneDigit = ['1','7'];
+            $twoDigit = [
+                '20','27',
+                '30','31','32','33','34','36','39',
+                '40','41','43','44','45','46','47','48','49',
+                '51','52','53','54','56','57','58',
+                '60','61','62','63','64','65','66',
+                '81','82','84','86',
+                '90','91','92','93','94','95','98','99',
+            ];
+            if (in_array($digits[0], $oneDigit, true) || in_array(substr($digits, 0, 2), $twoDigit, true)) {
+                return $digits;
+            }
+        }
+        if (! str_starts_with($digits, '55')) {
+            return '55'.$digits;
+        }
+        return $digits;
     }
 }
