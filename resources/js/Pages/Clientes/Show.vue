@@ -81,20 +81,24 @@ watch(messageType, (newVal) => {
 });
 
 const formatPhoneForWhatsapp = (phone) => {
-    let digits = (phone || '').toString().replace(/\D/g, '');
-    
+    const original = (phone || '').toString();
+    let digits = original.replace(/\D/g, '');
+    const hasPlus = original.trim().startsWith('+');
+
     // Remove leading zero
     if (digits.startsWith('0')) digits = digits.substring(1);
 
-    // DDI: se já tiver DDI (>=12 dígitos), mantém; senão, aplica 55
-    if (digits.length < 12 && !digits.startsWith('55')) {
+    // Se usuário informou DDI (tem + ou comprimento > 11), mantém
+    if (hasPlus || digits.length > 11) {
+        return digits || '55';
+    }
+
+    // Caso típico BR: 10/11 dígitos sem DDI ⇒ prefixa 55
+    if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) {
         digits = '55' + digits;
     }
-    
-    // Default
-    if (!digits) digits = '55';
-    
-    return digits;
+
+    return digits || '55';
 };
 
 const form = useForm({

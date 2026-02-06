@@ -9,26 +9,29 @@ const displayValue = ref('');
 
 const formatToMask = (value) => {
     if (!value) return '';
-    let digits = value.toString().replace(/\D/g, '');
+    const raw = value.toString();
+    const hasPlus = raw.trim().startsWith('+');
+    let digits = raw.replace(/\D/g, '');
     if (digits.length > 15) digits = digits.slice(0, 15);
-    
+
     if (digits.length === 0) return '';
-    
-    if (digits.length <= 2) {
-        return '+' + digits;
+
+    // Formatação BR quando DDI=55 e há ao menos DDD + número
+    if (digits.startsWith('55') && digits.length >= 12) {
+        const cc = '+55';
+        const ddd = digits.slice(2, 4);
+        const rest = digits.slice(4);
+        if (rest.length >= 9) {
+            return `${cc} (${ddd}) ${rest.slice(0, 5)}-${rest.slice(5, 9)}`;
+        }
+        if (rest.length >= 8) {
+            return `${cc} (${ddd}) ${rest.slice(0, 4)}-${rest.slice(4, 8)}`;
+        }
+        return `${cc} (${ddd}) ${rest}`;
     }
-    if (digits.length <= 4) {
-        return '+' + digits.slice(0, 2) + ' (' + digits.slice(2);
-    }
-    if (digits.length <= 8) {
-        return '+' + digits.slice(0, 2) + ' (' + digits.slice(2, 4) + ') ' + digits.slice(4);
-    }
-    if (digits.length <= 12) {
-        // Landline or incomplete mobile
-        return '+' + digits.slice(0, 2) + ' (' + digits.slice(2, 4) + ') ' + digits.slice(4, 8) + '-' + digits.slice(8);
-    }
-    // Mobile (13+ digits)
-    return '+' + digits.slice(0, 2) + ' (' + digits.slice(2, 4) + ') ' + digits.slice(4, 9) + '-' + digits.slice(9);
+
+    // Internacional genérico: apenas E.164 visual (+ e dígitos), sem DDD/traços
+    return (hasPlus ? '+' : '') + digits;
 };
 
 const updateDisplay = (val) => {
@@ -41,13 +44,15 @@ watch(() => props.modelValue, (newVal) => {
 
 const handleInput = (event) => {
     let val = event.target.value;
+    const hasPlus = val.trim().startsWith('+');
     let digits = val.replace(/\D/g, '');
-    
+
     // Limit to 15 digits
     if (digits.length > 15) digits = digits.slice(0, 15);
-    
-    emit('update:modelValue', digits);
-    displayValue.value = formatToMask(digits);
+
+    const out = hasPlus ? ('+' + digits) : digits;
+    emit('update:modelValue', out);
+    displayValue.value = formatToMask(out);
 };
 
 defineExpose({ focus: () => input.value.focus() });
@@ -59,6 +64,6 @@ defineExpose({ focus: () => input.value.focus() });
         class="rounded-xl border-gray-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:focus:border-primary-500 dark:focus:ring-primary-500"
         :value="displayValue"
         @input="handleInput"
-        placeholder="(XX) XXXXX-XXXX"
+        placeholder="+DDI número (E.164) ou +55 (DD) XXXXX-XXXX"
     />
 </template>
