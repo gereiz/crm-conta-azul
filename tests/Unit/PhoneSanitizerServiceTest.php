@@ -41,4 +41,32 @@ class PhoneSanitizerServiceTest extends TestCase
         $sanitized = PhoneSanitizerService::sanitize($input);
         $this->assertSame('557199998888', $sanitized);
     }
+
+    public function test_keep_international_number_with_plus(): void
+    {
+        $input = '+18573129041';
+        $sanitized = PhoneSanitizerService::sanitize($input);
+        $this->assertSame('18573129041', $sanitized);
+    }
+
+    public function test_keep_international_number_without_plus_but_long_enough(): void
+    {
+        $input = '3511913253623';
+        $sanitized = PhoneSanitizerService::sanitize($input);
+        $this->assertSame('3511913253623', $sanitized);
+    }
+
+    public function test_keep_europe_two_digit_ddi_spain(): void
+    {
+        $input = '34123456789'; // +34 (Espanha) + 9 dígitos
+        $sanitized = PhoneSanitizerService::sanitize($input);
+        $this->assertSame('34123456789', $sanitized);
+    }
+
+    public function test_keep_europe_two_digit_ddi_uk(): void
+    {
+        $input = '44123456789'; // +44 (Reino Unido) + 9 dígitos
+        $sanitized = PhoneSanitizerService::sanitize($input);
+        $this->assertSame('44123456789', $sanitized);
+    }
 }

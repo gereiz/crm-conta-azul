@@ -24,6 +24,8 @@ class PhoneSanitizerService
             return null;
         }
 
+        $hasPlus = preg_match('/^\s*\+/', (string) $phone) === 1;
+
         // 1. Remove tudo que não é dígito
         $digits = preg_replace('/\D/', '', $phone);
 
@@ -34,9 +36,42 @@ class PhoneSanitizerService
             return null;
         }
 
-        // 3. DDI: se já possuir DDI (>=12 dígitos), mantém; caso contrário, aplica 55 como padrão
-        if (strlen($digits) < 12 && ! str_starts_with($digits, '55')) {
-            $digits = '55'.$digits;
+        // 3. DDI:
+        // - Se usuário informou '+' originalmente, respeitar país informado (não prefixar 55).
+        // - Se comprimento >= 12, considerar que já possui DDI.
+        // - Se comprimento == 11: manter se for NANP (começa com '1'); caso contrário, prefixar 55 (BR típico sem DDI).
+        // - Se comprimento <= 10: prefixar 55.
+        if (! str_starts_with($digits, '55')) {
+            if ($hasPlus) {
+                // Mantém DDI informado
+            } elseif (strlen($digits) >= 12) {
+                // Já possui DDI (ex.: 351..., 44..., etc.)
+            } elseif (strlen($digits) === 11) {
+                // Expandido: tratar como internacional se iniciar com códigos válidos de 1–2 dígitos
+                $oneDigit = ['1','7']; // NANP, Rússia/Kazakhstan
+                $twoDigit = [
+                    '20','27', // África (Egito, África do Sul)
+                    // Europa
+                    '30','31','32','33','34','36','39',
+                    '40','41','43','44','45','46','47','48','49',
+                    // Américas
+                    '51','52','53','54','56','57','58',
+                    // Ásia/Oceania
+                    '60','61','62','63','64','65','66',
+                    // Extremos
+                    '81','82','84','86',
+                    // Oriente Médio
+                    '90','91','92','93','94','95','98','99',
+                ];
+                $startsInternational =
+                    in_array($digits[0], $oneDigit, true) ||
+                    in_array(substr($digits, 0, 2), $twoDigit, true);
+                if (! $startsInternational) {
+                    $digits = '55'.$digits;
+                }
+            } else {
+                $digits = '55'.$digits;
+            }
         }
 
         // 4. Lógica do 9º dígito
