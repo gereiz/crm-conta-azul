@@ -88,13 +88,28 @@ const formatPhoneForWhatsapp = (phone) => {
     // Remove leading zero
     if (digits.startsWith('0')) digits = digits.substring(1);
 
-    // Se usuário informou DDI (tem + ou comprimento > 11), mantém
-    if (hasPlus || digits.length > 11) {
+    // Se o usuário digitou com '+', não forçar 55
+    if (hasPlus) {
         return digits || '55';
     }
 
-    // Caso típico BR: 10/11 dígitos sem DDI ⇒ prefixa 55
-    if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) {
+    // Já possui DDI (>=12 dígitos)
+    if (digits.length >= 12) {
+        return digits;
+    }
+
+    // 11 dígitos: preservar se parecer internacional (ex.: inicia com 1/NANP ou códigos comuns de 2 dígitos)
+    if (digits.length === 11 && !digits.startsWith('55')) {
+        const oneDigit = ['1', '7'];
+        const twoDigit = ['20','27','30','31','32','33','34','36','39','40','41','43','44','45','46','47','48','49','51','52','53','54','56','57','58','60','61','62','63','64','65','66','81','82','84','86','90','91','92','93','94','95','98','99'];
+        const startsInternational = oneDigit.includes(digits[0]) || twoDigit.includes(digits.slice(0,2));
+        if (startsInternational) {
+            return digits;
+        }
+    }
+
+    // Caso típico BR: prefixa 55
+    if (!digits.startsWith('55')) {
         digits = '55' + digits;
     }
 

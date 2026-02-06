@@ -10,7 +10,8 @@ const displayValue = ref('');
 const formatToMask = (value) => {
     if (!value) return '';
     const raw = value.toString();
-    const hasPlus = raw.trim().startsWith('+');
+    const trimmed = raw.trim();
+    const hasPlus = trimmed.startsWith('+');
     let digits = raw.replace(/\D/g, '');
     if (digits.length > 15) digits = digits.slice(0, 15);
 
@@ -44,7 +45,8 @@ watch(() => props.modelValue, (newVal) => {
 
 const handleInput = (event) => {
     let val = event.target.value;
-    const hasPlus = val.trim().startsWith('+');
+    const trimmed = val.trim();
+    const hasPlus = trimmed.startsWith('+');
     let digits = val.replace(/\D/g, '');
 
     // Limit to 15 digits
