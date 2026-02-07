@@ -116,6 +116,7 @@ class ClienteController extends Controller
         $connectionId = $request->input('connection_id');
 
         $query = \App\Models\Invoice::with('cliente');
+        $today = \Carbon\Carbon::today()->format('Y-m-d');
 
         if ($startDate && $endDate) {
             $query->whereBetween('data_vencimento', [$startDate, $endDate]);
@@ -139,7 +140,14 @@ class ClienteController extends Controller
             $query->where('connection_id', $connectionId);
         }
 
-        $query->where('saldo_devedor', '>', 0);
+        // Somente faturas vencidas (data < hoje) e/ou status de atraso
+        $query->where('saldo_devedor', '>', 0)
+            ->where(function ($q) use ($today) {
+                $q->where('data_vencimento', '<', $today)
+                    ->orWhereIn('status', ['OVERDUE', 'ATRASADO']);
+            })
+            ->whereNotIn('status', ['PENDING', 'ABERTO']);
+
         $invoices = $query->orderBy('data_vencimento', 'asc')->paginate(20)->withQueryString();
 
         $whatsappNumbers = WhatsappNumber::where('status', 'active')->get();
