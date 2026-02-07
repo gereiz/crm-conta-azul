@@ -306,8 +306,9 @@ class FutureMessageService
     protected function scheduleBilling(MessageCron $cron, Carbon $targetDate)
     {
         // Regra complexa de cobrança (dias após vencimento)
-        $daysLate = $cron->days_after_due ?? 0;
+        $daysLate = max(0, (int) ($cron->days_after_due ?? 0));
         $dueDateLimit = $targetDate->copy()->subDays($daysLate)->format('Y-m-d');
+        $todayDate = \Carbon\Carbon::today()->format('Y-m-d');
 
         // Billing service original também usa periodStart (period_value/unit) para limitar quão antigo buscar
         $periodStart = null;
@@ -326,8 +327,9 @@ class FutureMessageService
 
         $query = Invoice::where('connection_id', $cron->connection_id)
             ->where('data_vencimento', '<', $dueDateLimit)
+            ->where('data_vencimento', '<', $todayDate)
             ->where('saldo_devedor', '>', 0)
-            ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO']);
+            ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'PENDING', 'ABERTO']);
 
         if ($periodStart) {
             $query->where('data_vencimento', '>=', $periodStart);

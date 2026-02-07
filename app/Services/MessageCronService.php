@@ -190,14 +190,17 @@ class MessageCronService
             return ['sent' => 0, 'errors' => 0, 'skipped' => 0, 'total' => 0];
         }
 
-        $daysLate = (int) ($cron->days_after_due ?? 0);
+        $daysLate = max(0, (int) ($cron->days_after_due ?? 0));
         // Semântica: "maior que X dias de atraso" => vencimento <= hoje - (X + 1) dias
         // Ex.: X=0 => ontem (>=1 dia); X=1 => anteontem (>=2 dias)
         $strictThresholdDays = $daysLate + 1;
         $dueDateLimit = Carbon::now()->subDays($strictThresholdDays)->format('Y-m-d');
+        $todayDate = Carbon::today()->format('Y-m-d');
         $periodStart = $this->getPeriodStartDate($cron);
 
-        $query = Invoice::where('data_vencimento', '<=', $dueDateLimit);
+        $query = Invoice::where('data_vencimento', '<=', $dueDateLimit)
+            ->where('data_vencimento', '<', $todayDate)
+            ->whereNotIn('status', ['PENDING', 'ABERTO']);
 
         if (! empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
