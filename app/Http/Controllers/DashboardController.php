@@ -384,8 +384,18 @@ class DashboardController extends Controller
         } else {
             $connected = $this->contaAzulService->getValidToken() !== null;
         }
-        $overdueCount = \App\Models\Invoice::when($connectionId, fn ($q) => $q->where('connection_id', $connectionId))->count();
-        $overdueValue = \App\Models\Invoice::when($connectionId, fn ($q) => $q->where('connection_id', $connectionId))->sum('saldo_devedor');
+        $today = \Carbon\Carbon::today()->format('Y-m-d');
+        $base = \App\Models\Invoice::query()
+            ->when($connectionId, fn ($q) => $q->where('connection_id', $connectionId))
+            ->where('saldo_devedor', '>', 0)
+            ->where('data_vencimento', '<', $today)
+            ->whereNotIn('status', [
+                'PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO',
+                'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO',
+                'PENDING', 'ABERTO',
+            ]);
+        $overdueCount = (int) $base->count();
+        $overdueValue = (float) $base->sum('saldo_devedor');
 
         return response()->json([
             'success' => true,
