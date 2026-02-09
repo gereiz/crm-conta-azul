@@ -324,71 +324,54 @@ watch(selectedConnectionId, async (newVal) => {
     }
 });
 const donutNumbers = computed(() => {
-    const datasets = numberTypeChartData.value?.datasets || [];
+    const ds = numberTypeChartData.value?.datasets || [];
+    const numbers = Array.from(new Set(ds.map(d => (d.label || '').split(' | ')[0]).filter(Boolean)));
+    return numbers;
+});
+const numberTypeLabels = computed(() => numberTypeChartData.value?.labels || []);
+const numberTypeDatasets = computed(() => numberTypeChartData.value?.datasets || []);
+const messageTypes = computed(() => {
+    const ds = numberTypeDatasets.value;
+    return Array.from(new Set(ds.map(d => (d.label || '').split(' | ')[1] || 'default')));
+});
+const typeColorMap = computed(() => {
     const map = new Map();
-    for (const ds of datasets) {
-        const label = ds.label || '';
-        const parts = label.split(' | ');
-        const numberLabel = parts[0] || 'Número';
-        const typeLabel = parts[1] || 'default';
-        const total = (ds.data || []).reduce((sum, v) => sum + Number(v || 0), 0);
-        const color = ds.backgroundColor || '#6366F1';
-        if (!map.has(numberLabel)) {
-            map.set(numberLabel, { label: numberLabel, total: 0, segments: [] });
-        }
-        const obj = map.get(numberLabel);
-        obj.total += total;
-        const existing = obj.segments.find(s => s.label === typeLabel);
-        if (existing) {
-            existing.value += total;
-        } else {
-            obj.segments.push({ label: typeLabel, value: total, color });
-        }
+    for (const d of numberTypeDatasets.value) {
+        const type = (d.label || '').split(' | ')[1] || 'default';
+        if (!map.has(type) && d.backgroundColor) map.set(type, d.backgroundColor);
     }
-    const result = Array.from(map.values()).map(n => {
-        const total = n.total || 0;
-        let acc = 0;
-        const parts = n.segments
-            .filter(s => s.value > 0)
-            .map(s => {
-                const pct = total > 0 ? (s.value / total) * 100 : 0;
-                const start = acc;
-                const end = acc + pct;
-                acc = end;
-                return `${s.color} ${start}% ${end}%`;
-            });
-        const gradient = parts.length > 0 ? `conic-gradient(${parts.join(', ')})` : 'conic-gradient(#e5e7eb 0% 100%)';
-        return { ...n, gradient };
-    });
-    return result;
+    return map;
 });
-const donutTotal = computed(() => {
-    const datasets = numberTypeChartData.value?.datasets || [];
-    const typeMap = new Map();
-    for (const ds of datasets) {
-        const label = ds.label || '';
-        const parts = label.split(' | ');
-        const typeLabel = parts[1] || 'default';
-        const total = (ds.data || []).reduce((sum, v) => sum + Number(v || 0), 0);
-        const color = ds.backgroundColor || '#6366F1';
-        if (!typeMap.has(typeLabel)) {
-            typeMap.set(typeLabel, { label: typeLabel, value: 0, color });
-        }
-        typeMap.get(typeLabel).value += total;
-    }
-    const segments = Array.from(typeMap.values()).filter(s => s.value > 0);
-    const totalValue = segments.reduce((s, seg) => s + seg.value, 0);
-    let acc = 0;
-    const parts = segments.map(seg => {
-        const pct = totalValue > 0 ? (seg.value / totalValue) * 100 : 0;
-        const start = acc;
-        const end = acc + pct;
-        acc = end;
-        return `${seg.color} ${start}% ${end}%`;
+const valueFor = (dayIndex, numberLabel, typeLabel) => {
+    const ds = numberTypeDatasets.value.find(d => {
+        const [num, type] = (d.label || '').split(' | ');
+        return num === numberLabel && type === typeLabel;
     });
-    const gradient = parts.length > 0 ? `conic-gradient(${parts.join(', ')})` : 'conic-gradient(#e5e7eb 0% 100%)';
-    return { label: 'Total por Tipo', total: totalValue, segments, gradient };
+    return Number(ds?.data?.[dayIndex] || 0);
+};
+const totalsByDayNumber = computed(() => {
+    const labels = numberTypeLabels.value;
+    const numbers = donutNumbers.value;
+    const types = messageTypes.value;
+    return labels.map((_, dayIdx) => {
+        const obj = {};
+        numbers.forEach(num => {
+            obj[num] = types.reduce((sum, t) => sum + valueFor(dayIdx, num, t), 0);
+        });
+        return obj;
+    });
 });
+const maxColumnTotal = computed(() => {
+    const arr = totalsByDayNumber.value.flatMap(dayObj => Object.values(dayObj));
+    return arr.length ? Math.max(...arr, 1) : 1;
+});
+const getStackHeightFor = (dayIdx, num, type) => {
+    const v = valueFor(dayIdx, num, type);
+    if (v <= 0) return '0%';
+    const pct = (v / maxColumnTotal.value) * 100;
+    const minPct = 3;
+    return `${Math.max(pct, minPct)}%`;
+};
 </script>
 
 <template>
@@ -671,41 +654,42 @@ const donutTotal = computed(() => {
                             </div>
                         </div>
                         <div :class="{ 'opacity-50': loadingNumberTypeChart }">
-                            <div v-if="donutNumbers.length === 0" class="text-xs text-gray-400 italic px-2">
+                            <div v-if="numberTypeLabels.length === 0" class="text-xs text-gray-400 italic px-2">
                                 Nenhum envio registrado no período.
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                <div v-for="n in donutNumbers" :key="n.label" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
-                                    <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-4">{{ n.label }}</h4>
-                                    <div class="flex justify-center">
-                                        <div class="relative w-48 h-48 rounded-full" :style="{ background: n.gradient }">
-                                            <div class="absolute inset-6 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700">
-                                                <span class="text-2xl font-bold text-gray-900 dark:text-white">{{ n.total }}</span>
+                            <div class="h-64 flex items-end gap-4 px-2 relative overflow-x-auto">
+                                <!-- Grid lines -->
+                                <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                </div>
+                                <!-- Days -->
+                                <div v-for="(dayLabel, dayIdx) in numberTypeLabels" :key="'d'+dayIdx" class="flex flex-col items-center justify-end">
+                                    <div class="flex items-end gap-1 h-56">
+                                        <!-- Columns per WhatsApp number -->
+                                        <div v-for="num in donutNumbers" :key="dayLabel+'|'+num" class="w-6 sm:w-7 md:w-8 bg-gray-50 dark:bg-gray-700/30 rounded-t overflow-hidden relative group">
+                                            <!-- Stacks per type -->
+                                            <div v-for="type in messageTypes" :key="dayLabel+'|'+num+'|'+type"
+                                                v-if="valueFor(dayIdx, num, type) > 0"
+                                                class="w-full outline outline-1 outline-white/70 dark:outline-gray-900/40"
+                                                :style="{ height: getStackHeightFor(dayIdx, num, type), backgroundColor: typeColorMap.get(type) || '#6366F1' }"
+                                                :title="`${num} - ${type}: ${valueFor(dayIdx, num, type)}`">
+                                                <div class="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[11px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20 shadow">
+                                                    {{ num }} • {{ type }}: {{ valueFor(dayIdx, num, type) }}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="mt-6 flex flex-wrap gap-3 justify-center">
-                                        <div v-for="(s, idx) in n.segments" :key="idx" class="flex items-center">
-                                            <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: s.color }"></span>
-                                            <span class="text-xs text-gray-600 dark:text-gray-400">{{ s.label }}: {{ s.value }}</span>
-                                        </div>
-                                    </div>
+                                    <span class="text-[10px] text-gray-400 mt-2 font-medium rotate-45 sm:rotate-0 origin-left">{{ dayLabel }}</span>
                                 </div>
                             </div>
-                            <div class="mt-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
-                                <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-4">{{ donutTotal.label }}</h4>
-                                <div class="flex justify-center">
-                                    <div class="relative w-56 h-56 rounded-full" :style="{ background: donutTotal.gradient }">
-                                        <div class="absolute inset-7 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700">
-                                            <span class="text-3xl font-bold text-gray-900 dark:text-white">{{ donutTotal.total }}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mt-6 flex flex-wrap gap-3 justify-center">
-                                    <div v-for="(s, idx) in donutTotal.segments" :key="'t'+idx" class="flex items-center">
-                                        <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: s.color }"></span>
-                                        <span class="text-xs text-gray-600 dark:text-gray-400">{{ s.label }}: {{ s.value }}</span>
-                                    </div>
+                            <!-- Legend by type -->
+                            <div class="mt-6 flex flex-wrap gap-3 justify-center">
+                                <div v-for="type in messageTypes" :key="'lg'+type" class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: typeColorMap.get(type) || '#6366F1' }"></span>
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">{{ type }}</span>
                                 </div>
                             </div>
                         </div>
