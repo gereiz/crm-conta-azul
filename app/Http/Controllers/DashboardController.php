@@ -238,7 +238,7 @@ class DashboardController extends Controller
         $startDate = Carbon::today()->subDays($periodDays - 1);
         $logs = \App\Models\WhatsappMessageLog::with(['messageCron', 'messageCron.whatsappNumber'])
             ->whereBetween('sent_at', [$startDate->startOfDay(), $endDate->endOfDay()])
-            ->where('status', 'success')
+            ->whereIn('status', ['success', 'error', 'skipped'])
             ->get();
         $labels = [];
         $period = \Carbon\CarbonPeriod::create($startDate, $endDate);

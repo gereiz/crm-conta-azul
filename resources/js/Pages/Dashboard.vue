@@ -509,7 +509,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                 <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm lg:col-span-2">
                         <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Envios</h3>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Envios por Empresa</h3>
                             <div class="flex items-center gap-2">
                                 <select v-model="chartViewMode" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
                                     <option value="stacked">Empresas</option>
@@ -524,7 +524,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                         </div>
                         
                         <!-- Stacked Bar Chart (CSS Pure) -->
-                        <div class="h-64 flex items-end justify-between gap-2 px-2 relative overflow-visible" :class="{ 'opacity-50': loadingChart }">
+                        <div class="h-64 flex items-end justify-start gap-2 px-2 relative overflow-x-auto overflow-y-hidden" :class="{ 'opacity-50': loadingChart }">
                             <!-- Y-Axis Lines (Background) -->
                             <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
                                 <div class="border-t border-gray-900 w-full"></div>
@@ -534,8 +534,8 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                 <div class="border-t border-gray-900 w-full"></div>
                             </div>
 
-                            <div v-for="(label, index) in localChartData.labels" :key="index" class="flex flex-col items-center flex-1 group h-full justify-end">
-                                <div class="w-full rounded-t-lg relative flex flex-col justify-end overflow-hidden transition-all duration-300 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50" style="height: 100%;">
+                            <div v-for="(label, index) in localChartData.labels" :key="index" class="flex flex-col items-center group h-full justify-end flex-none w-10 sm:w-12 md:w-14">
+                                <div class="w-full rounded-t-lg relative flex flex-col justify-end overflow-hidden transition-all duration-300 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 h-full">
                                     
                                     <!-- Stacked Segments -->
                                     <template v-for="(dataset, dIndex) in usedDatasets" :key="dIndex">
@@ -552,7 +552,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                         </div>
                                     </template>
 
-                                    <div class="opacity-0 group-hover:opacity-100 absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-900 text-white text-[11px] py-2 px-3 rounded shadow-lg pointer-events-none z-30 w-max max-w-[260px]">
+                                    <div class="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 text-white text-[11px] py-2 px-3 rounded shadow-lg pointer-events-none z-30 w-max max-w-[260px]">
                                         <div class="font-semibold text-center mb-1">Total: {{ getTotal(index) }}</div>
                                         <div v-if="chartViewMode === 'stacked'" v-for="item in breakdownByDay[index].slice(0,6)" :key="item.label" class="flex items-center justify-between gap-2">
                                             <span class="flex items-center"><span class="w-2 h-2 rounded-full mr-1" :style="{ backgroundColor: item.color }"></span>{{ item.label }}</span>
@@ -560,7 +560,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                         </div>
                                     </div>
                                 </div>
-                                <span class="text-[10px] text-gray-400 mt-2 font-medium rotate-45 sm:rotate-0 origin-left">{{ label }}</span>
+                                <span class="text-[10px] text-gray-400 mt-2 font-medium">{{ label }}</span>
                             </div>
                         </div>
                         

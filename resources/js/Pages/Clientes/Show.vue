@@ -508,7 +508,7 @@ const retrySend = () => {
                         <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                             <tr v-for="invoice in invoices" :key="invoice.id">
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                                    {{ invoice.data_vencimento ? new Date(invoice.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-' }}
+                                    {{ invoice.data_vencimento ? formatDate(invoice.data_vencimento) : '-' }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                                     {{ invoice.descricao || 'Fatura sem descrição' }}
