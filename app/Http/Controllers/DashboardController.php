@@ -309,11 +309,18 @@ class DashboardController extends Controller
 
         if ($contaAzulConnected) {
             try {
-                // Usar cache local para performance
-                // O front-end dispara a sincronização (syncFinancials) logo após montar
-                // A tabela invoices contém apenas faturas atrasadas (filtradas por data no sync)
-                $overdueCount = Invoice::when($selectedConnectionId, fn ($q) => $q->where('connection_id', $selectedConnectionId))->count();
-                $overdueValue = Invoice::when($selectedConnectionId, fn ($q) => $q->where('connection_id', $selectedConnectionId))->sum('saldo_devedor');
+                $today = Carbon::today()->format('Y-m-d');
+                $base = Invoice::query()
+                    ->when($selectedConnectionId, fn ($q) => $q->where('connection_id', $selectedConnectionId))
+                    ->where('saldo_devedor', '>', 0)
+                    ->where('data_vencimento', '<', $today)
+                    ->whereNotIn('status', [
+                        'PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO',
+                        'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO',
+                        'PENDING', 'ABERTO',
+                    ]);
+                $overdueCount = (int) $base->count();
+                $overdueValue = (float) $base->sum('saldo_devedor');
             } catch (\Exception $e) {
                 Log::error('Erro ao buscar cobranças para dashboard: '.$e->getMessage());
             }

@@ -1,4 +1,5 @@
-FROM php:8.2-apache
+# syntax=docker/dockerfile:1.4
+FROM --platform=linux/amd64 php:8.2-apache
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
