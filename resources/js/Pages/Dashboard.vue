@@ -357,20 +357,28 @@ const valueFor = (dayIndex, numberLabel, typeLabel) => {
 };
 const totalsByDayNumber = computed(() => {
     const labels = numberTypeLabels.value;
-    const numbers = Array.from(new Set(numberTypeDatasets.value.map(d => parseDsLabel(d.label).num)));
-    const types = messageTypes.value;
     return labels.map((_, dayIdx) => {
-        const obj = {};
-        numbers.forEach(num => {
-            obj[num] = types.reduce((sum, t) => sum + valueFor(dayIdx, num, t), 0);
-        });
-        return obj;
+        const total = numberTypeDatasets.value.reduce((sum, d) => {
+            return sum + Number(d?.data?.[dayIdx] || 0);
+        }, 0);
+        return { total };
     });
 });
 const maxColumnTotal = computed(() => {
-    const arr = totalsByDayNumber.value.flatMap(dayObj => Object.values(dayObj));
+    const arr = totalsByDayNumber.value.map(d => d.total);
     return arr.length ? Math.max(...arr, 1) : 1;
 });
+const numbersForDay = (dayIdx) => {
+    const set = new Set();
+    for (const d of numberTypeDatasets.value) {
+        const v = Number(d?.data?.[dayIdx] || 0);
+        if (v > 0) {
+            const { num } = parseDsLabel(d.label);
+            if (num) set.add(num);
+        }
+    }
+    return Array.from(set.values());
+};
 const getStackHeightFor = (dayIdx, num, type) => {
     const v = valueFor(dayIdx, num, type);
     if (v <= 0) return '0%';
@@ -675,7 +683,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                 <div v-for="(dayLabel, dayIdx) in numberTypeLabels" :key="'d'+dayIdx" class="flex flex-col items-center justify-end">
                                     <div class="flex items-end gap-1 h-56">
                                         <!-- Columns per WhatsApp number -->
-                                        <div v-for="num in donutNumbers" :key="dayLabel+'|'+num" class="w-6 sm:w-7 md:w-8 bg-gray-50 dark:bg-gray-700/30 rounded-t overflow-hidden relative group">
+                                        <div v-for="num in numbersForDay(dayIdx)" :key="dayLabel+'|'+num" class="w-6 sm:w-7 md:w-8 bg-gray-50 dark:bg-gray-700/30 rounded-t overflow-hidden relative group">
                                             <!-- Stacks per type -->
                                             <div v-for="type in messageTypes" :key="dayLabel+'|'+num+'|'+type"
                                                 v-if="valueFor(dayIdx, num, type) > 0"
