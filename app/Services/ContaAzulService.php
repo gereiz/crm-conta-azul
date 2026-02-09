@@ -155,6 +155,26 @@ class ContaAzulService
         return $token->access_token;
     }
 
+    protected function normalizeDate($raw): ?string
+    {
+        if (empty($raw)) {
+            return null;
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            return $raw;
+        }
+        if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $raw)) {
+            [$d, $m, $y] = explode('/', $raw);
+            return sprintf('%04d-%02d-%02d', (int) $y, (int) $m, (int) $d);
+        }
+        try {
+            return \Carbon\Carbon::parse($raw)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+    
+
     public function getClients($params = [])
     {
         // Mapeia parâmetros de paginação se necessário
@@ -370,8 +390,8 @@ class ContaAzulService
                     'valor_original' => $item['total'] ?? 0,
                     'saldo_devedor' => $item['nao_pago'] ?? 0, // Campo correto para saldo devedor
                     'descricao' => $item['descricao'] ?? null,
-                    'data_vencimento' => $item['data_vencimento'] ?? null,
-                    'data_emissao' => $item['data_emissao'] ?? null,
+                    'data_vencimento' => $this->normalizeDate($item['data_vencimento'] ?? ($item['vencimento'] ?? null)),
+                    'data_emissao' => $this->normalizeDate($item['data_emissao'] ?? null),
                     'link_boleto' => $invoiceDetails['url'],
                     'cliente_id' => $clienteLocal ? $clienteLocal->id : null,
                     'cliente_ca_id' => $clienteCaId,

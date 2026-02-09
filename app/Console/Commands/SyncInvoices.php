@@ -26,17 +26,19 @@ class SyncInvoices extends Command
      */
     public function handle(ContaAzulService $service)
     {
-        $this->info('Iniciando sincronização de faturas em atraso...');
+        return \App\Services\CronMutexService::run('cron:global', 600, 900, function () use ($service) {
+            $this->info('Iniciando sincronização de faturas em atraso...');
 
-        try {
-            $count = $service->syncOverdueInvoices();
-            $this->info("Sincronização concluída com sucesso! {$count} faturas processadas.");
-        } catch (\Exception $e) {
-            $this->error('Erro durante a sincronização: '.$e->getMessage());
+            try {
+                $count = $service->syncOverdueInvoices();
+                $this->info("Sincronização concluída com sucesso! {$count} faturas processadas.");
+            } catch (\Exception $e) {
+                $this->error('Erro durante a sincronização: '.$e->getMessage());
 
-            return Command::FAILURE;
-        }
+                return Command::FAILURE;
+            }
 
-        return Command::SUCCESS;
+            return Command::SUCCESS;
+        });
     }
 }

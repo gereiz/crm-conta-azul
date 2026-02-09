@@ -388,8 +388,8 @@ const deleteConnection = (id) => {
                         <div class="mt-4 p-4 rounded-md border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
                             <p class="font-semibold">Política de Sincronização</p>
                             <ul class="list-disc list-inside mt-1">
-                                <li>Clientes: sincronização somente manual através dos botões acima.</li>
-                                <li>Faturas: sincronização automática diária às <strong>01:00</strong> para todas as empresas ativas.</li>
+                                <li>01:00 — sincronização automática diária de <strong>Clientes + Faturas</strong> para todas as empresas ativas.</li>
+                                <li>13:00 — sincronização automática diária de <strong>apenas Faturas</strong>.</li>
                             </ul>
                         </div>
                     </div>

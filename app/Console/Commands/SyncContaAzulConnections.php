@@ -31,65 +31,76 @@ class SyncContaAzulConnections extends Command
 
     public function handle()
     {
-        $settings = SystemSetting::latest()->first();
-        if ($settings && $settings->contaazul_cron_enabled === false) {
-            $this->info('Cron de sincronização Conta Azul está desativada nas Configurações do Sistema.');
+        return \App\Services\CronMutexService::run('cron:global', 600, 1800, function () {
+            $settings = SystemSetting::latest()->first();
+            if ($settings && $settings->contaazul_cron_enabled === false) {
+                $this->info('Cron de sincronização Conta Azul está desativada nas Configurações do Sistema.');
 
-            return 0;
-        }
-        $now = Carbon::now();
-        $this->info("Iniciando sincronização automática de faturas às {$now->toDateTimeString()}");
+                return 0;
+            }
+            $now = Carbon::now();
+            $this->info("Iniciando sincronização automática de faturas às {$now->toDateTimeString()}");
+            $hour = (int) $now->format('H');
 
-        $connections = ContaAzulConnection::active()->orderBy('empresa_nome')->get();
-        foreach ($connections as $connection) {
-            $this->info("Sincronizando empresa: {$connection->empresa_nome} (ID {$connection->id})");
-            try {
-                $token = $this->auth->getValidToken($connection) ?? $this->auth->getValidToken($connection, true);
-                if (! $token) {
-                    $this->warn("Sem token válido para conexão {$connection->id}. Pulando.");
-
-                    continue;
-                }
-
-                $log = SyncJobLog::create([
-                    'conta_azul_connection_id' => $connection->id,
-                    'job_type' => 'invoices',
-                    'started_at' => Carbon::now(),
-                    'status' => 'success',
-                ]);
-
-                $syncedInvoices = $this->api->syncOverdueInvoices($connection);
-                $syncedClosed = $this->api->syncRecentlyClosedInvoices($connection);
-
-                $connection->last_sync_at = Carbon::now();
-                $connection->save();
-
-                $this->info("Empresa {$connection->empresa_nome}: {$syncedInvoices} abertas/atrasadas e {$syncedClosed} pagas/canceladas atualizadas.");
-
-                $log->update([
-                    'finished_at' => Carbon::now(),
-                    'items_processed' => (int) ($syncedInvoices + $syncedClosed),
-                    'message' => 'Execução automática diária',
-                ]);
-            } catch (\Exception $e) {
-                Log::error("Erro ao sincronizar conexão {$connection->id}: ".$e->getMessage());
-                $this->error("Erro ao sincronizar {$connection->empresa_nome}: ".$e->getMessage());
+            $connections = ContaAzulConnection::active()->orderBy('empresa_nome')->get();
+            foreach ($connections as $connection) {
+                $this->info("Sincronizando empresa: {$connection->empresa_nome} (ID {$connection->id})");
                 try {
-                    if (isset($log)) {
-                        $log->update([
-                            'finished_at' => Carbon::now(),
-                            'status' => 'error',
-                            'message' => $e->getMessage(),
-                        ]);
+                    $token = $this->auth->getValidToken($connection) ?? $this->auth->getValidToken($connection, true);
+                    if (! $token) {
+                        $this->warn("Sem token válido para conexão {$connection->id}. Pulando.");
+
+                        continue;
                     }
-                } catch (\Throwable $t) {
+
+                    $log = SyncJobLog::create([
+                        'conta_azul_connection_id' => $connection->id,
+                        'job_type' => 'invoices',
+                        'started_at' => Carbon::now(),
+                        'status' => 'success',
+                    ]);
+
+                    if ($hour === 1) {
+                        $this->info('Executando sincronização de clientes (janela 01:00).');
+                        try {
+                            $this->syncClients($connection);
+                        } catch (\Exception $e) {
+                            $this->warn('Falha ao sincronizar clientes nesta conexão: '.$e->getMessage());
+                        }
+                    }
+                    $syncedInvoices = $this->api->syncOverdueInvoices($connection);
+                    $syncedClosed = $this->api->syncRecentlyClosedInvoices($connection);
+
+                    $connection->last_sync_at = Carbon::now();
+                    $connection->save();
+
+                    $this->info("Empresa {$connection->empresa_nome}: {$syncedInvoices} abertas/atrasadas e {$syncedClosed} pagas/canceladas atualizadas.");
+
+                    $log->update([
+                        'finished_at' => Carbon::now(),
+                        'items_processed' => (int) ($syncedInvoices + $syncedClosed),
+                        'message' => 'Execução automática diária',
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error("Erro ao sincronizar conexão {$connection->id}: ".$e->getMessage());
+                    $this->error("Erro ao sincronizar {$connection->empresa_nome}: ".$e->getMessage());
+                    try {
+                        if (isset($log)) {
+                            $log->update([
+                                'finished_at' => Carbon::now(),
+                                'status' => 'error',
+                                'message' => $e->getMessage(),
+                            ]);
+                        }
+                    } catch (\Throwable $t) {
+                    }
                 }
             }
-        }
 
-        $this->info('Sincronização de faturas concluída.');
+            $this->info('Sincronização de faturas concluída.');
 
-        return 0;
+            return 0;
+        });
     }
 
     protected function syncClients(ContaAzulConnection $connection): int

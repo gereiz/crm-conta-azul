@@ -145,6 +145,8 @@ class ContaAzulApiService
         $details = [
             'url' => $response['url'] ?? null,
             'payment_type' => $response['metodo_pagamento'] ?? null,
+            'due_date' => $this->normalizeDate($response['vencimento'] ?? ($response['data_vencimento'] ?? null)),
+            'issue_date' => $this->normalizeDate($response['data_emissao'] ?? null),
         ];
 
         // Estratégia melhorada para encontrar URL
@@ -300,8 +302,8 @@ class ContaAzulApiService
                     'saldo_devedor' => $saldoDevedor,
                     'descricao' => $item['descricao'] ?? null,
                     'reference_code' => $item['codigo_referencia'] ?? ($existing['reference_code'] ?? null),
-                    'data_vencimento' => $item['data_vencimento'] ?? null,
-                    'data_emissao' => $item['data_emissao'] ?? null,
+                    'data_vencimento' => $this->normalizeDate($item['data_vencimento'] ?? ($item['vencimento'] ?? ($invoiceDetails['due_date'] ?? null))),
+                    'data_emissao' => $this->normalizeDate($item['data_emissao'] ?? ($invoiceDetails['issue_date'] ?? null)),
                     'link_boleto' => $invoiceDetails['url'],
                     'cliente_id' => $clienteLocalId,
                     'cliente_ca_id' => $clienteCaId,
@@ -380,8 +382,8 @@ class ContaAzulApiService
                                 'saldo_devedor' => $saldoDevedor,
                                 'descricao' => $item['descricao'] ?? null,
                                 'reference_code' => $item['codigo_referencia'] ?? null,
-                                'data_vencimento' => $item['data_vencimento'] ?? null,
-                                'data_emissao' => $item['data_emissao'] ?? null,
+                                'data_vencimento' => $this->normalizeDate($item['data_vencimento'] ?? ($item['vencimento'] ?? null)),
+                                'data_emissao' => $this->normalizeDate($item['data_emissao'] ?? null),
                                 'cliente_id' => $clienteLocalId,
                                 'cliente_ca_id' => $clienteCaId,
                                 'cliente_nome' => $item['cliente']['nome'] ?? null,
@@ -451,5 +453,25 @@ class ContaAzulApiService
         $closed = ['PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO'];
 
         return in_array($s, $closed, true);
+    }
+
+    protected function normalizeDate($raw): ?string
+    {
+        if (empty($raw)) {
+            return null;
+        }
+        // Aceita formatos 'YYYY-MM-DD' ou 'DD/MM/YYYY'
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            return $raw;
+        }
+        if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $raw)) {
+            [$d, $m, $y] = explode('/', $raw);
+            return sprintf('%04d-%02d-%02d', (int) $y, (int) $m, (int) $d);
+        }
+        try {
+            return \Carbon\Carbon::parse($raw)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }
