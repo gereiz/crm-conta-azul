@@ -325,33 +325,39 @@ watch(selectedConnectionId, async (newVal) => {
 });
 const donutNumbers = computed(() => {
     const ds = numberTypeChartData.value?.datasets || [];
-    const numbers = Array.from(new Set(ds.map(d => (d.label || '').split(' | ')[0]).filter(Boolean)));
+    const numbers = Array.from(new Set(ds.map(d => parseDsLabel(d.label).num).filter(Boolean)));
     return numbers;
 });
 const numberTypeLabels = computed(() => numberTypeChartData.value?.labels || []);
 const numberTypeDatasets = computed(() => numberTypeChartData.value?.datasets || []);
+const parseDsLabel = (label) => {
+    const parts = (label || '').split('|');
+    const num = (parts[0] || '').trim();
+    const type = (parts[1] || '').trim();
+    return { num: num || 'Número', type: type || 'default' };
+};
 const messageTypes = computed(() => {
     const ds = numberTypeDatasets.value;
-    return Array.from(new Set(ds.map(d => (d.label || '').split(' | ')[1] || 'default')));
+    return Array.from(new Set(ds.map(d => parseDsLabel(d.label).type)));
 });
 const typeColorMap = computed(() => {
     const map = new Map();
     for (const d of numberTypeDatasets.value) {
-        const type = (d.label || '').split(' | ')[1] || 'default';
+        const { type } = parseDsLabel(d.label);
         if (!map.has(type) && d.backgroundColor) map.set(type, d.backgroundColor);
     }
     return map;
 });
 const valueFor = (dayIndex, numberLabel, typeLabel) => {
     const ds = numberTypeDatasets.value.find(d => {
-        const [num, type] = (d.label || '').split(' | ');
+        const { num, type } = parseDsLabel(d.label);
         return num === numberLabel && type === typeLabel;
     });
     return Number(ds?.data?.[dayIndex] || 0);
 };
 const totalsByDayNumber = computed(() => {
     const labels = numberTypeLabels.value;
-    const numbers = donutNumbers.value;
+    const numbers = Array.from(new Set(numberTypeDatasets.value.map(d => parseDsLabel(d.label).num)));
     const types = messageTypes.value;
     return labels.map((_, dayIdx) => {
         const obj = {};
