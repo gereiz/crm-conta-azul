@@ -164,8 +164,8 @@ class FutureMessageService
         }
 
         if (in_array($cron->type, ['billing', 'due_date', 'boleto']) && $sendDate->isToday()) {
-            $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
-                ->where('cliente_id', $cliente->id)
+            $alreadySent = WhatsappMessageLog::where('cliente_id', $cliente->id)
+                ->where('message_type', $cron->type)
                 ->where('status', 'success')
                 ->whereDate('sent_at', Carbon::today())
                 ->exists();

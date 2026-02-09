@@ -477,8 +477,8 @@ class MessageCronService
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
 
         if (in_array($cron->type, ['billing', 'due_date', 'boleto']) && ! $ignoreSentToday) {
-            $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
-                ->where('cliente_id', $invoice->cliente_id)
+            $alreadySent = WhatsappMessageLog::where('cliente_id', $invoice->cliente_id)
+                ->where('message_type', $cron->type)
                 ->where('status', 'success')
                 ->whereDate('sent_at', Carbon::today())
                 ->exists();
@@ -889,8 +889,8 @@ class MessageCronService
                 ->value('is_enabled');
         }
         if (in_array($cron->type, ['billing', 'due_date', 'boleto']) && ! $ignoreSentToday) {
-            $alreadySent = WhatsappMessageLog::where('message_cron_id', $cron->id)
-                ->where('cliente_id', $cliente->id)
+            $alreadySent = WhatsappMessageLog::where('cliente_id', $cliente->id)
+                ->where('message_type', $cron->type)
                 ->where('status', 'success')
                 ->whereDate('sent_at', Carbon::today())
                 ->exists();

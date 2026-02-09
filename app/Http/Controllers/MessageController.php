@@ -70,6 +70,27 @@ class MessageController extends Controller
             }
         }
 
+        // Regra de "já enviado hoje" (manual), se possível identificar cliente e tipo
+        $messageType = $request->input('message_type') ?: ($request->input('type') ?: null);
+        $clienteId = null;
+        if ($request->filled('cliente_ca_id')) {
+            $c = Cliente::where('ca_id', $request->input('cliente_ca_id'))->first();
+            $clienteId = $c?->id;
+        } elseif ($request->filled('invoice_ca_id')) {
+            $inv = Invoice::where('ca_id', $request->input('invoice_ca_id'))->first();
+            $clienteId = $inv?->cliente_id;
+        }
+        if ($messageType && $clienteId) {
+            $sentToday = \App\Models\WhatsappMessageLog::where('cliente_id', $clienteId)
+                ->where('message_type', $messageType)
+                ->where('status', 'success')
+                ->whereDate('sent_at', \Carbon\Carbon::today())
+                ->exists();
+            if ($sentToday) {
+                return redirect()->back()->with('error', 'Já enviado hoje para este cliente e tipo.');
+            }
+        }
+
         // Sanitização do telefone
         $originalPhone = $request->to;
         $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
