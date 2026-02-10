@@ -236,7 +236,7 @@ class DashboardController extends Controller
         }
         $endDate = Carbon::today();
         $startDate = Carbon::today()->subDays($periodDays - 1);
-        $logs = \App\Models\WhatsappMessageLog::with(['messageCron', 'messageCron.whatsappNumber'])
+        $logs = \App\Models\WhatsappMessageLog::with(['messageCron', 'messageCron.whatsappNumber', 'whatsappNumber'])
             ->whereBetween('sent_at', [$startDate->startOfDay(), $endDate->endOfDay()])
             ->whereIn('status', ['success', 'error', 'skipped'])
             ->get();
@@ -258,7 +258,9 @@ class DashboardController extends Controller
             if (! $dateKey) {
                 continue;
             }
-            $numberDesc = $log->messageCron && $log->messageCron->whatsappNumber ? ($log->messageCron->whatsappNumber->description ?? 'Número') : 'Número';
+            $numberDesc = $log->messageCron && $log->messageCron->whatsappNumber
+                ? ($log->messageCron->whatsappNumber->description ?? 'Número')
+                : ($log->whatsappNumber?->description ?? 'Número');
             $type = $log->message_type ?? ($log->messageCron ? $log->messageCron->type : 'default');
             $key = $numberDesc.' | '.$type;
             if (! isset($datasets[$key])) {
