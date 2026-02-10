@@ -379,6 +379,15 @@ const numbersForDay = (dayIdx) => {
     }
     return Array.from(set.values());
 };
+const typeTotalFor = (dayIdx, typeLabel) => {
+    return numberTypeDatasets.value.reduce((sum, d) => {
+        const { type } = parseDsLabel(d.label);
+        if (type === typeLabel) {
+            sum += Number(d?.data?.[dayIdx] || 0);
+        }
+        return sum;
+    }, 0);
+};
 const getStackHeightFor = (dayIdx, num, type) => {
     const v = valueFor(dayIdx, num, type);
     if (v <= 0) return '0%';
@@ -683,7 +692,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                 <div v-for="(dayLabel, dayIdx) in numberTypeLabels" :key="'d'+dayIdx" class="flex flex-col items-center justify-end">
                                     <div class="flex items-end gap-1 h-56">
                                         <!-- Columns per WhatsApp number -->
-                                        <div v-for="num in numbersForDay(dayIdx)" :key="dayLabel+'|'+num" class="w-6 sm:w-7 md:w-8 bg-gray-50 dark:bg-gray-700/30 rounded-t overflow-hidden relative group">
+                                        <div v-if="numbersForDay(dayIdx).length > 0" v-for="num in numbersForDay(dayIdx)" :key="dayLabel+'|'+num" class="w-6 sm:w-7 md:w-8 bg-gray-50 dark:bg-gray-700/30 rounded-t overflow-hidden relative group">
                                             <!-- Stacks per type -->
                                             <div v-for="type in messageTypes" :key="dayLabel+'|'+num+'|'+type"
                                                 v-if="valueFor(dayIdx, num, type) > 0"
@@ -692,6 +701,18 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                                 :title="`${num} - ${type}: ${valueFor(dayIdx, num, type)}`">
                                                 <div class="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[11px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20 shadow">
                                                     {{ num }} • {{ type }}: {{ valueFor(dayIdx, num, type) }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Fallback: aggregate column when no per-number data for the day -->
+                                        <div v-else class="w-6 sm:w-7 md:w-8 bg-gray-50 dark:bg-gray-700/30 rounded-t overflow-hidden relative group">
+                                            <div v-for="type in messageTypes" :key="'agg'+dayLabel+'|'+type"
+                                                v-if="typeTotalFor(dayIdx, type) > 0"
+                                                class="w-full outline outline-1 outline-white/70 dark:outline-gray-900/40"
+                                                :style="{ height: ((typeTotalFor(dayIdx, type) / maxColumnTotal) * 100 < 3 ? '3%' : ((typeTotalFor(dayIdx, type) / maxColumnTotal) * 100 + '%')), backgroundColor: typeColorMap.get(type) || '#6366F1' }"
+                                                :title="`Total • ${type}: ${typeTotalFor(dayIdx, type)}`">
+                                                <div class="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[11px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20 shadow">
+                                                    Total • {{ type }}: {{ typeTotalFor(dayIdx, type) }}
                                                 </div>
                                             </div>
                                         </div>
