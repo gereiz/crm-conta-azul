@@ -90,10 +90,18 @@ class ClienteController extends Controller
             $cliente['company_name'] = $clienteLocal->company_name;
         }
 
-        // Buscar faturas atrasadas do cliente (usando cache local)
-        // $invoices = $this->contaAzulService->getCustomerInvoices($caId);
+        // Buscar apenas faturas em atraso (saldo > 0, vencidas e não pagas/baixadas)
+        $today = \Carbon\Carbon::today()->format('Y-m-d');
+        $excludeStatuses = [
+            'PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO',
+            'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO',
+            'PENDING', 'ABERTO',
+        ];
         $invoices = \App\Models\Invoice::where('cliente_ca_id', $caId)
-            ->orderBy('data_vencimento', 'desc')
+            ->where('saldo_devedor', '>', 0)
+            ->where('data_vencimento', '<', $today)
+            ->whereNotIn('status', $excludeStatuses)
+            ->orderBy('data_vencimento', 'asc')
             ->get();
 
         $whatsappNumbers = WhatsappNumber::where('status', 'active')->get();
@@ -190,7 +198,16 @@ class ClienteController extends Controller
             return response()->json(['error' => 'Cliente não encontrado'], 404);
         }
 
+        $today = \Carbon\Carbon::today()->format('Y-m-d');
+        $excludeStatuses = [
+            'PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO',
+            'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO',
+            'PENDING', 'ABERTO',
+        ];
         $query = \App\Models\Invoice::where('cliente_ca_id', $cliente->ca_id)
+            ->where('saldo_devedor', '>', 0)
+            ->where('data_vencimento', '<', $today)
+            ->whereNotIn('status', $excludeStatuses)
             ->orderBy('data_vencimento', 'asc');
 
         if ($request->has('start_date') && $request->has('end_date') && $request->start_date && $request->end_date) {

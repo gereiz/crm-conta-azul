@@ -28,6 +28,10 @@ const getGroupedCronDownloadUrl = () => {
     const params = {};
     if (startDate.value) params.start_date = startDate.value;
     if (endDate.value) params.end_date = endDate.value;
+    if (selectedConnectionId.value) params.connection_id = selectedConnectionId.value;
+    if (searchQuery.value) params.search = searchQuery.value;
+    if (selectedType.value) params.type = selectedType.value;
+    if (selectedStatus.value) params.status = selectedStatus.value;
     return route('whatsapp.reports.cron.download_grouped', params);
 };
 const selectedConnectionId = ref(props.selectedConnectionId || '');
@@ -161,8 +165,13 @@ const formatWhatsAppNumber = (n) => {
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             <div class="flex flex-col">
-                                                <span class="font-medium text-gray-900 dark:text-gray-100">{{ report.client_name || 'Desconhecido' }}</span>
-                                                <span class="text-xs text-gray-500">{{ report.connection?.empresa_nome }}</span>
+                                                <span v-if="report.message_type === 'manual'" class="font-medium text-gray-900 dark:text-gray-100">
+                                                    {{ (report.client_name || 'Desconhecido') + ' - manual' }}
+                                                </span>
+                                                <template v-else>
+                                                    <span class="font-medium text-gray-900 dark:text-gray-100">{{ report.client_name || 'Desconhecido' }}</span>
+                                                    <span class="text-xs text-gray-500">{{ report.connection?.empresa_nome }}</span>
+                                                </template>
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">

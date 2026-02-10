@@ -122,6 +122,10 @@ class WhatsappReportController extends Controller
         $dateParam = $request->input('date');
         $startParam = $request->input('start_date');
         $endParam = $request->input('end_date');
+        $connectionId = $request->input('connection_id');
+        $search = $request->input('search');
+        $type = $request->input('type');
+        $status = $request->input('status');
 
         if ($startParam || $endParam) {
             $start = $startParam ? Carbon::parse($startParam)->startOfDay() : Carbon::today()->startOfDay();
@@ -132,10 +136,25 @@ class WhatsappReportController extends Controller
             $end = $date->copy()->endOfDay();
         }
 
-        $logs = WhatsappMessageLog::with(['connection', 'template'])
-            ->whereBetween('sent_at', [$start, $end])
-            ->orderBy('sent_at', 'asc')
-            ->get();
+        $query = WhatsappMessageLog::with(['connection', 'template'])
+            ->whereBetween('sent_at', [$start, $end]);
+        if ($connectionId) {
+            $query->where('connection_id', $connectionId);
+        }
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('client_name', 'like', "%{$search}%")
+                    ->orWhere('phone_original', 'like', "%{$search}%")
+                    ->orWhere('phone_sanitized', 'like', "%{$search}%");
+            });
+        }
+        if ($type && in_array($type, ['billing', 'boleto', 'due_date'])) {
+            $query->where('message_type', $type);
+        }
+        if ($status) {
+            $query->where('status', $status);
+        }
+        $logs = $query->orderBy('sent_at', 'asc')->get();
 
         $groups = $logs->groupBy('connection_id');
 
