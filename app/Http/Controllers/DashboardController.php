@@ -250,6 +250,7 @@ class DashboardController extends Controller
             'due_date' => '#F59E0B',
             'boleto' => '#10B981',
             'birthday' => '#8B5CF6',
+            'manual' => '#6366F1',
             'default' => '#6366F1',
         ];
         $datasets = [];

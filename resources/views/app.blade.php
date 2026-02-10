@@ -8,7 +8,17 @@
         <title inertia>{{ isset($system_settings) && $system_settings->system_name ? $system_settings->system_name : config('app.name', 'Laravel') }}</title>
 
         <!-- Favicon -->
-        <link rel="icon" type="image/png" href="{{ isset($system_settings) && $system_settings->favicon_path ? asset('storage/'.$system_settings->favicon_path) : asset('favicon.ico') }}">
+        @php
+            $favStoragePath = isset($system_settings) ? $system_settings->favicon_path : null;
+            $favExists = false;
+            try {
+                $favExists = $favStoragePath ? \Illuminate\Support\Facades\Storage::disk('public')->exists($favStoragePath) : false;
+            } catch (\Exception $e) {
+                $favExists = false;
+            }
+            $favUrl = $favExists ? asset('storage/'.$favStoragePath) : asset('favicon.ico');
+        @endphp
+        <link rel="icon" type="image/png" href="{{ $favUrl }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

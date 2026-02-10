@@ -165,9 +165,18 @@ const formatWhatsAppNumber = (n) => {
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             <div class="flex flex-col">
-                                                <span v-if="report.message_type === 'manual'" class="font-medium text-gray-900 dark:text-gray-100">
-                                                    {{ (report.client_name || 'Desconhecido') + ' - manual' }}
-                                                </span>
+                                                <template v-if="report.message_type === 'manual'">
+                                                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                                                        {{
+                                                            ((report.client_name && report.client_name.toLowerCase() !== 'manual')
+                                                                ? report.client_name
+                                                                : 'Cliente não identificado') + ' - manual'
+                                                        }}
+                                                    </span>
+                                                    <span v-if="report.connection?.empresa_nome" class="text-xs text-gray-500">
+                                                        {{ report.connection.empresa_nome }}
+                                                    </span>
+                                                </template>
                                                 <template v-else>
                                                     <span class="font-medium text-gray-900 dark:text-gray-100">{{ report.client_name || 'Desconhecido' }}</span>
                                                     <span class="text-xs text-gray-500">{{ report.connection?.empresa_nome }}</span>
