@@ -117,16 +117,33 @@ class MessageController extends Controller
             if ($clienteCaId) {
                 $cliente = Cliente::where('ca_id', $clienteCaId)->first();
             }
-            // Buscar faturas do cliente para agregação
+            // Buscar faturas do cliente para agregação (apenas ATRASADAS e não pagas)
             if ($clienteCaId) {
+                $today = Carbon::today()->format('Y-m-d');
+                $excludeStatuses = [
+                    'PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO',
+                    'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO',
+                ];
                 $query = Invoice::where('cliente_ca_id', $clienteCaId)
+                    ->where('saldo_devedor', '>', 0)
+                    ->where('data_vencimento', '<', $today)
+                    ->whereNotIn('status', $excludeStatuses)
                     ->orderBy('data_vencimento', 'asc');
                 if ($request->filled('connection_id')) {
                     $query->where('connection_id', $request->input('connection_id'));
                 }
                 $invoices = $query->get();
             } elseif ($request->filled('invoice_ca_id')) {
-                $inv = Invoice::where('ca_id', $request->input('invoice_ca_id'))->first();
+                $today = Carbon::today()->format('Y-m-d');
+                $excludeStatuses = [
+                    'PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO',
+                    'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO',
+                ];
+                $inv = Invoice::where('ca_id', $request->input('invoice_ca_id'))
+                    ->where('saldo_devedor', '>', 0)
+                    ->where('data_vencimento', '<', $today)
+                    ->whereNotIn('status', $excludeStatuses)
+                    ->first();
                 if ($inv) {
                     $invoices = collect([$inv]);
                 }
