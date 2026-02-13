@@ -142,20 +142,37 @@ class SyncContaAzulConnections extends Command
                     $city = $primaryAddress['cidade'] ?? null;
                     $state = $primaryAddress['estado'] ?? null;
                 }
+                $existing = Cliente::where('connection_id', $connection->id)->where('ca_id', $caClient['id'])->first();
+                $currentPhone = $existing?->phone;
+                $currentMobile = $existing?->mobile_phone;
+                $hasPlusCurrent = is_string($currentPhone) && preg_match('/^\s*\+/', $currentPhone);
+                $hasPlusMobile = is_string($currentMobile) && preg_match('/^\s*\+/', $currentMobile);
+                $sanitizedCurrent = \App\Services\PhoneSanitizerService::sanitize($currentPhone ?? '');
+                $sanitizedMobile = \App\Services\PhoneSanitizerService::sanitize($currentMobile ?? '');
+                $isInternationalCurrent = $sanitizedCurrent && (!str_starts_with($sanitizedCurrent, '55')) && (strlen($sanitizedCurrent) >= 12);
+                $isInternationalMobile = $sanitizedMobile && (!str_starts_with($sanitizedMobile, '55')) && (strlen($sanitizedMobile) >= 12);
+                $preserveCurrent = $currentPhone && ($hasPlusCurrent || $isInternationalCurrent);
+                $preserveMobile = $currentMobile && ($hasPlusMobile || $isInternationalMobile);
+
+                $data = [
+                    'connection_id' => $connection->id,
+                    'name' => $caClient['nome'] ?? 'Sem Nome',
+                    'company_name' => $connection->empresa_nome,
+                    'email' => $caClient['email'] ?? null,
+                    'cpf_cnpj' => $cpfCnpj,
+                    'person_type' => $caClient['tipo_pessoa'] ?? null,
+                    'city' => $city,
+                    'state' => $state,
+                ];
+                if (! $preserveCurrent && ! empty($phone)) {
+                    $data['phone'] = $phone;
+                }
+                if (! $preserveMobile && ! empty($mobilePhone)) {
+                    $data['mobile_phone'] = $mobilePhone;
+                }
                 Cliente::updateOrCreate(
                     ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
-                    [
-                        'connection_id' => $connection->id,
-                        'name' => $caClient['nome'] ?? 'Sem Nome',
-                        'company_name' => $connection->empresa_nome,
-                        'email' => $caClient['email'] ?? null,
-                        'phone' => $phone,
-                        'mobile_phone' => $mobilePhone,
-                        'cpf_cnpj' => $cpfCnpj,
-                        'person_type' => $caClient['tipo_pessoa'] ?? null,
-                        'city' => $city,
-                        'state' => $state,
-                    ]
+                    $data
                 );
                 $syncedCount++;
             }
