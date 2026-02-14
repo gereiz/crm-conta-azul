@@ -334,9 +334,16 @@ class FutureMessageService
         if ($periodStart) {
             $query->where('data_vencimento', '>=', $periodStart);
         }
-        // Somente boletos para cobranças
-        $query->whereNotNull('payment_type')
-            ->where('payment_type', 'LIKE', '%BOLETO%');
+        // Somente boletos para cobranças (flexível):
+        // Considera como boleto quando payment_type LIKE BOLETO OU quando há link_boleto preenchido
+        $query->where(function ($q) {
+            $q->where(function ($qq) {
+                $qq->whereNotNull('payment_type')
+                    ->where('payment_type', 'LIKE', '%BOLETO%');
+            })->orWhere(function ($qq) {
+                $qq->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
+            });
+        });
 
         $invoices = $query->get();
 

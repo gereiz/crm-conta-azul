@@ -297,7 +297,8 @@ class ContaAzulApiService
                 [
                     'connection_id' => $connection->id,
                     'status' => $item['status'],
-                    'payment_type' => $invoiceDetails['payment_type'],
+                    // Fallback: se vier com link de boleto mas sem tipo, marcar como BOLETO
+                    'payment_type' => $invoiceDetails['payment_type'] ?: (!empty($invoiceDetails['url']) ? 'BOLETO' : null),
                     'valor_original' => $valorOriginal,
                     'saldo_devedor' => $saldoDevedor,
                     'descricao' => $item['descricao'] ?? null,
