@@ -89,11 +89,53 @@ const deleteCron = (cron) => {
     }
 };
 
-const runCron = (cron) => {
-    if (confirm(`Deseja disparar manualmente a automação "${cron.name}"? Isso enviará mensagens para os clientes que se encaixam na regra agora.`)) {
-        router.post(route('settings.crons.run', cron.id), {}, {
-            preserveScroll: true
-        });
+const showPreviewModal = ref(false);
+const previewLoading = ref(false);
+const previewItems = ref([]);
+const selectedIds = ref(new Set());
+const currentCron = ref(null);
+const openPreview = async (cron) => {
+    currentCron.value = cron;
+    showPreviewModal.value = true;
+    previewLoading.value = true;
+    previewItems.value = [];
+    selectedIds.value = new Set();
+    try {
+        const { data } = await axios.get(route('settings.crons.preview', cron.id));
+        const items = (data.items || []).map(i => ({
+            id: i.id,
+            name: i.name,
+            phone: i.phone,
+            company: i.company,
+            count: i.count
+        }));
+        previewItems.value = items;
+        items.forEach(i => selectedIds.value.add(i.id));
+    } catch (e) {
+        previewItems.value = [];
+        alert('Falha ao carregar destinatários.');
+    } finally {
+        previewLoading.value = false;
+    }
+};
+const toggleSelect = (id) => {
+    if (selectedIds.value.has(id)) selectedIds.value.delete(id);
+    else selectedIds.value.add(id);
+};
+const selectAll = () => {
+    selectedIds.value = new Set(previewItems.value.map(i => i.id));
+};
+const deselectAll = () => {
+    selectedIds.value = new Set();
+};
+const continueRun = () => {
+    if (selectedIds.value.size === 0) {
+        alert('Selecione ao menos um destinatário');
+        return;
+    }
+    if (confirm(`Deseja disparar manualmente a automação "${currentCron.value.name}" para ${selectedIds.value.size} contato(s) selecionado(s)?`)) {
+        router.post(route('settings.crons.run', currentCron.value.id), { contatos_selecionados: Array.from(selectedIds.value) }, { preserveScroll: true });
+        showPreviewModal.value = false;
     }
 };
 
@@ -446,7 +488,7 @@ onMounted(async () => {
                                             </button>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button v-if="can.update" @click="runCron(cron)" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-3">Disparar</button>
+                                            <button v-if="can.update" @click="openPreview(cron)" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-3">Disparar</button>
                                             <Link v-if="can.update" :href="route('settings.crons.edit', cron.id)" class="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 mr-3">Editar</Link>
                                             <button v-if="can.delete" @click="deleteCron(cron)" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">Excluir</button>
                                         </td>
@@ -522,6 +564,59 @@ onMounted(async () => {
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal de Pré-visualização -->
+                <div v-if="showPreviewModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-3xl">
+                        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Pré-visualização de Destinatários</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Revise os contatos que receberão esta automação</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-sm text-gray-600 dark:text-gray-300">
+                                    {{ selectedIds.size }} contatos selecionados de {{ previewItems.length }}
+                                </div>
+                                <div class="flex gap-2">
+                                    <button @click="selectAll" class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">Selecionar todos</button>
+                                    <button @click="deselectAll" class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">Desmarcar todos</button>
+                                </div>
+                            </div>
+                            <div v-if="previewLoading" class="text-sm text-gray-500 dark:text-gray-400">Carregando...</div>
+                            <div v-else class="max-h-72 overflow-y-auto">
+                                <table class="min-w-full text-sm">
+                                    <thead>
+                                        <tr class="text-left text-gray-500 dark:text-gray-300">
+                                            <th class="px-2 py-2">Selecionar</th>
+                                            <th class="px-2 py-2">Cliente</th>
+                                            <th class="px-2 py-2">Telefone</th>
+                                            <th class="px-2 py-2">Empresa</th>
+                                            <th class="px-2 py-2">Itens</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="item in previewItems" :key="item.id" class="border-t border-gray-100 dark:border-gray-700">
+                                            <td class="px-2 py-2">
+                                                <input type="checkbox" :checked="selectedIds.has(item.id)" @change="toggleSelect(item.id)" />
+                                            </td>
+                                            <td class="px-2 py-2">{{ item.name }}</td>
+                                            <td class="px-2 py-2 font-mono">{{ item.phone || '-' }}</td>
+                                            <td class="px-2 py-2">{{ item.company || '-' }}</td>
+                                            <td class="px-2 py-2">{{ item.count ?? '-' }}</td>
+                                        </tr>
+                                        <tr v-if="previewItems.length === 0">
+                                            <td colspan="5" class="px-2 py-2 text-center text-gray-500 dark:text-gray-400">Nenhum destinatário encontrado para esta automação.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                            <button @click="showPreviewModal=false" class="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm">Cancelar</button>
+                            <button @click="continueRun" :disabled="selectedIds.size===0" class="px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 text-sm">Continuar</button>
                         </div>
                     </div>
                 </div>

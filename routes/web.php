@@ -111,6 +111,7 @@ Route::middleware('auth')->group(function () {
         Route::resource('templates', WhatsappTemplateController::class);
 
         // Crons (Mensagens Automáticas)
+        Route::get('crons/{cron}/preview', [\App\Http\Controllers\MessageCronController::class, 'preview'])->name('crons.preview');
         Route::post('crons/{cron}/run', [\App\Http\Controllers\MessageCronController::class, 'runNow'])->name('crons.run');
         Route::resource('crons', \App\Http\Controllers\MessageCronController::class);
 

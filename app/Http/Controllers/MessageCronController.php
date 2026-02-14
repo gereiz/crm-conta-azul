@@ -137,8 +137,10 @@ class MessageCronController extends Controller
     {
         $this->authorize('update', $cron);
 
+        $allowed = request()->input('contatos_selecionados');
+        $allowedIds = is_array($allowed) ? array_values(array_filter($allowed)) : null;
         $start = now();
-        $stats = $service->processCron($cron, true);
+        $stats = $service->processCron($cron, true, $allowedIds);
         $logs = \App\Models\WhatsappMessageLog::where('message_cron_id', $cron->id)
             ->where('sent_at', '>=', $start)
             ->orderBy('sent_at', 'desc')
@@ -159,5 +161,96 @@ class MessageCronController extends Controller
         $message = "Execução finalizada. Enviadas: {$stats['sent']}, Erros: {$stats['errors']}, Ignoradas: {$stats['skipped']}.";
 
         return redirect()->back()->with('success', $message)->with('cron_report', $report);
+    }
+
+    public function preview(MessageCron $cron)
+    {
+        $this->authorize('update', $cron);
+        $today = \Carbon\Carbon::today()->format('Y-m-d');
+        $items = [];
+        switch ($cron->type) {
+            case 'billing':
+                $daysLate = max(0, (int) ($cron->days_after_due ?? 0));
+                $dueDateLimit = \Carbon\Carbon::today()->subDays($daysLate)->format('Y-m-d');
+                $query = \App\Models\Invoice::where('connection_id', $cron->connection_id)
+                    ->where('data_vencimento', '<', $dueDateLimit)
+                    ->where('data_vencimento', '<', $today)
+                    ->where('saldo_devedor', '>', 0)
+                    ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'PENDING', 'ABERTO'])
+                    ->whereNotNull('payment_type')
+                    ->where('payment_type', 'LIKE', '%BOLETO%')
+                    ->with('cliente');
+                $grouped = $query->get()->groupBy('cliente_id');
+                foreach ($grouped as $cid => $clientInvoices) {
+                    $c = $clientInvoices->first()->cliente;
+                    if (! $c) continue;
+                    $items[] = [
+                        'id' => $c->id,
+                        'name' => $c->name,
+                        'phone' => $c->mobile_phone ?? $c->phone,
+                        'company' => $c->company_name,
+                        'count' => count($clientInvoices),
+                    ];
+                }
+                break;
+            case 'boleto':
+                $days = (int) ($cron->days_before_due ?? $cron->period_value ?? 0);
+                $startDate = $today;
+                $endDate = \Carbon\Carbon::now()->addDays($days)->format('Y-m-d');
+                $invoices = \App\Models\Invoice::where('status', 'PENDING')
+                    ->whereDate('data_vencimento', '>=', $startDate)
+                    ->whereDate('data_vencimento', '<=', $endDate)
+                    ->whereNotNull('link_boleto')->where('link_boleto', '!=', '')
+                    ->when($cron->connection_id, fn($q) => $q->where('connection_id', $cron->connection_id))
+                    ->with('cliente')
+                    ->get();
+                foreach ($invoices as $inv) {
+                    if (! $inv->cliente) continue;
+                    $items[] = [
+                        'id' => $inv->cliente->id,
+                        'name' => $inv->cliente->name,
+                        'phone' => $inv->cliente->mobile_phone ?? $inv->cliente->phone,
+                        'company' => $inv->cliente->company_name,
+                        'count' => 1,
+                    ];
+                }
+                break;
+            case 'due_date':
+                $daysBefore = (int) ($cron->days_before_due ?? 3);
+                $targetDue = \Carbon\Carbon::today()->addDays($daysBefore)->format('Y-m-d');
+                $invoices = \App\Models\Invoice::where('connection_id', $cron->connection_id)
+                    ->where('data_vencimento', '>', $today)
+                    ->whereDate('data_vencimento', $targetDue)
+                    ->where(function ($q) { $q->whereNull('link_boleto')->orWhere('link_boleto', ''); })
+                    ->whereNotIn('status', ['PAID','BAIXADO'])
+                    ->with('cliente')->get();
+                foreach ($invoices as $inv) {
+                    if (! $inv->cliente) continue;
+                    $items[] = [
+                        'id' => $inv->cliente->id,
+                        'name' => $inv->cliente->name,
+                        'phone' => $inv->cliente->mobile_phone ?? $inv->cliente->phone,
+                        'company' => $inv->cliente->company_name,
+                        'count' => 1,
+                    ];
+                }
+                break;
+            case 'birthday':
+                $dayMonth = \Carbon\Carbon::today()->format('m-d');
+                $clientes = \App\Models\Cliente::where('connection_id', $cron->connection_id)
+                    ->whereRaw("DATE_FORMAT(birthdate, '%m-%d') = ?", [$dayMonth])
+                    ->get();
+                foreach ($clientes as $c) {
+                    $items[] = [
+                        'id' => $c->id,
+                        'name' => $c->name,
+                        'phone' => $c->mobile_phone ?? $c->phone,
+                        'company' => $c->company_name,
+                        'count' => null,
+                    ];
+                }
+                break;
+        }
+        return response()->json(['success' => true, 'items' => $items]);
     }
 }

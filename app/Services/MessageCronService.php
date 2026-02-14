@@ -33,7 +33,7 @@ class MessageCronService
         $this->orchestrator = $orchestrator;
     }
 
-    public function processCron(MessageCron $cron, bool $forceRun = false)
+    public function processCron(MessageCron $cron, bool $forceRun = false, ?array $allowedClienteIds = null)
     {
         Log::info("Processando cron: {$cron->name} (ID: {$cron->id}, Tipo: {$cron->type})");
 
@@ -66,18 +66,19 @@ class MessageCronService
                 }
             }
 
+            $allowedSet = $allowedClienteIds ? array_flip($allowedClienteIds) : null;
             switch ($cron->type) {
                 case 'billing':
-                    $stats = $this->processBilling($cron, $batchId);
+                    $stats = $this->processBilling($cron, $batchId, $allowedSet);
                     break;
                 case 'due_date':
-                    $stats = $this->processDueDate($cron, $batchId);
+                    $stats = $this->processDueDate($cron, $batchId, $allowedSet);
                     break;
                 case 'boleto':
-                    $stats = $this->processBoleto($cron, $batchId);
+                    $stats = $this->processBoleto($cron, $batchId, $allowedSet);
                     break;
                 case 'birthday':
-                    $stats = $this->processBirthday($cron, $batchId);
+                    $stats = $this->processBirthday($cron, $batchId, $allowedSet);
                     break;
             }
 
@@ -177,7 +178,7 @@ class MessageCronService
         }
     }
 
-    protected function processBilling(MessageCron $cron, string $batchId)
+    protected function processBilling(MessageCron $cron, string $batchId, ?array $allowedSet = null)
     {
         $tz = config('app.timezone') ?: 'America/Sao_Paulo';
         $today = Carbon::today($tz);
@@ -244,6 +245,9 @@ class MessageCronService
         $chunks = $groups->chunk($this->batchSize);
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $clienteId => $clientInvoices) {
+                if ($allowedSet && !isset($allowedSet[$clienteId])) {
+                    continue;
+                }
                 $cliente = $clientInvoices->first()->cliente;
                 if (! $isNumberActive) {
                     $phone = $cliente->mobile_phone ?? $cliente->phone;
@@ -269,7 +273,7 @@ class MessageCronService
         return $stats;
     }
 
-    protected function processDueDate(MessageCron $cron, string $batchId)
+    protected function processDueDate(MessageCron $cron, string $batchId, ?array $allowedSet = null)
     {
         $daysBefore = $cron->days_before_due ?? 0;
         $targetDate = Carbon::now()->addDays($daysBefore)->format('Y-m-d');
@@ -306,6 +310,9 @@ class MessageCronService
         $chunks = $invoices->chunk($this->batchSize);
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $invoice) {
+                if ($allowedSet && !isset($allowedSet[$invoice->cliente_id])) {
+                    continue;
+                }
                 if (! $isNumberActive) {
                     $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
                     $this->logError($cron, $invoice->cliente, $phone, 'Número de envio desconectado/inativo (Cron abortado).', 1);
@@ -330,7 +337,7 @@ class MessageCronService
         return $stats;
     }
 
-    protected function processBoleto(MessageCron $cron, string $batchId)
+    protected function processBoleto(MessageCron $cron, string $batchId, ?array $allowedSet = null)
     {
         $days = (int) ($cron->days_before_due ?? $cron->period_value ?? 0);
         $startDate = Carbon::today()->format('Y-m-d');
@@ -364,6 +371,9 @@ class MessageCronService
         $chunks = $invoices->chunk($this->batchSize);
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $invoice) {
+                if ($allowedSet && !isset($allowedSet[$invoice->cliente_id])) {
+                    continue;
+                }
                 if (! $isNumberActive) {
                     $phone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
                     $this->logError($cron, $invoice->cliente, $phone, 'Número de envio desconectado/inativo (Cron abortado).', 1);
@@ -416,7 +426,7 @@ class MessageCronService
         return $stats;
     }
 
-    protected function processBirthday(MessageCron $cron, string $batchId)
+    protected function processBirthday(MessageCron $cron, string $batchId, ?array $allowedSet = null)
     {
         $today = Carbon::now()->format('m-d');
 
@@ -434,6 +444,9 @@ class MessageCronService
         $chunks = $clients->chunk($this->batchSize);
         foreach ($chunks as $chunkIndex => $chunk) {
             foreach ($chunk as $client) {
+                if ($allowedSet && !isset($allowedSet[$client->id])) {
+                    continue;
+                }
                 if (! $isNumberActive) {
                     $phone = $client->mobile_phone ?? $client->phone;
                     $this->logError($cron, $client, $phone, 'Número de envio desconectado/inativo (Cron abortado).');
