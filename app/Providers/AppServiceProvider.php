@@ -43,5 +43,16 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Exception $e) {
             // Ignorar erros durante migrações ou setup inicial
         }
+
+        // Garante que o symlink de storage exista (evita perda aparente de imagens após commits/deploys)
+        try {
+            $publicStorage = public_path('storage');
+            $target = storage_path('app/public');
+            if (! is_link($publicStorage) && is_dir($target)) {
+                @symlink($target, $publicStorage);
+            }
+        } catch (\Throwable $e) {
+            // Ambientes Windows podem exigir permissões elevadas; ignorar silenciosamente
+        }
     }
 }

@@ -638,7 +638,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                         </div>
                     </div>
                     
-                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm lg:col-span-1">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm lg:col-span-1 overflow-hidden">
                         <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Status do Sistema</h3>
                         <div class="space-y-4">
                             <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -664,7 +664,7 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                     <div class="w-2 h-2 rounded-full mr-3" :class="evolutionStatusClass"></div>
                                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Evolution</span>
                                 </div>
-                                <div class="flex items-center gap-2 ml-1">
+                                <div class="flex items-center gap-2 ml-1 flex-wrap">
                                     <select v-if="(props.evolutionNumbers || []).length > 0" v-model="selectedEvolutionNumberId" :disabled="checkingEvolution" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
                                         <option v-for="n in props.evolutionNumbers" :key="n.id" :value="n.id">
                                             {{ n.description || ('#'+n.id) }} ({{ n.provider_instance || 'instância' }})
@@ -692,10 +692,10 @@ const getStackHeightFor = (dayIdx, num, type) => {
                             </div>
                             <div v-if="evolutionError || (evolutionDetails && evolutionDetails.instance)" class="px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
                                 <div v-if="evolutionError" class="text-xs text-red-600 dark:text-red-400 font-semibold">{{ evolutionError }}</div>
-                                <div v-if="evolutionDetails && evolutionDetails.instance" class="text-[11px] text-gray-600 dark:text-gray-400">
+                                <div v-if="evolutionDetails && evolutionDetails.instance" class="text-[11px] text-gray-600 dark:text-gray-400 break-all">
                                     Instância: {{ evolutionDetails.instance }}
                                 </div>
-                                <div v-if="evolutionDetails && evolutionDetails.number" class="text-[11px] text-gray-600 dark:text-gray-400">
+                                <div v-if="evolutionDetails && evolutionDetails.number" class="text-[11px] text-gray-600 dark:text-gray-400 break-all">
                                     Número: {{ evolutionDetails.number }}
                                 </div>
                             </div>
