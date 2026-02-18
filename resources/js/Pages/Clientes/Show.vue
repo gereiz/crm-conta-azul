@@ -23,6 +23,7 @@ const contactForm = useForm({
     phone: props.cliente.phone || props.cliente.telefone_comercial || '',
     mobile_phone: props.cliente.mobile_phone || props.cliente.telefone_celular || '',
     birthdate: props.cliente.birthdate || props.cliente.data_nascimento || '',
+    is_international: !!props.cliente.is_international,
 });
 const contactSaved = ref(false);
 const saveContact = () => {
@@ -85,6 +86,11 @@ const formatPhoneForWhatsapp = (phone) => {
     let digits = original.replace(/\D/g, '');
     const hasPlus = original.trim().startsWith('+');
 
+    // Se marcado internacional, não sanitiza (somente remove não dígitos)
+    if (contactForm.is_international) {
+        return digits;
+    }
+
     // Remove leading zero
     if (digits.startsWith('0')) digits = digits.substring(1);
 
@@ -98,15 +104,9 @@ const formatPhoneForWhatsapp = (phone) => {
         return digits;
     }
 
-    // 11 dígitos: preservar se parecer internacional (ex.: inicia com 1/NANP ou códigos comuns de 2 dígitos)
+    // 11 dígitos (BR): prefixa 55
     if (digits.length === 11 && !digits.startsWith('55')) {
-        const oneDigit = ['1', '7'];
-        const twoDigit = ['20','27','30','31','32','33','34','36','39','40','41','43','44','45','46','47','48','49','51','52','53','54','56','57','58','60','61','62','63','64','65','66','81','82','84','86','90','91','92','93','94','95','98','99'];
-        const threeDigit = ['212','213','216','218','220','221','222','223','224','225','226','227','228','229','230','231','232','233','234','235','236','237','238','239','240','241','242','243','244','245','248','249','250','251','252','253','254','255','256','257','258','260','261','262','263','264','265','266','267','268','269','350','351','352','353','354','355','356','357','358','359','380','381','382','385','386','387','420','421','423','965','966','967','968','970','971','972','973','974','975','976','977','880','852','853','886'];
-        const startsInternational = oneDigit.includes(digits[0]) || twoDigit.includes(digits.slice(0,2)) || threeDigit.includes(digits.slice(0,3));
-        if (startsInternational) {
-            return digits;
-        }
+        return '55' + digits;
     }
 
     // Caso típico BR: prefixa 55
@@ -437,6 +437,10 @@ const retrySend = () => {
                                         <PhoneInput id="mobile_phone" v-model="contactForm.mobile_phone" class="mt-1 block w-full" />
                                         <InputError class="mt-2" :message="contactForm.errors.mobile_phone" />
                                     </div>
+                            <div class="flex items-center gap-2">
+                                <input id="is_international" type="checkbox" v-model="contactForm.is_international" class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500">
+                                <label for="is_international" class="text-sm text-gray-700 dark:text-gray-300">Número internacional (não sanitizar)</label>
+                            </div>
                                     <div>
                                         <InputLabel for="birthdate" value="Data de Nascimento" />
                                         <input id="birthdate" type="date" v-model="contactForm.birthdate" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm" />

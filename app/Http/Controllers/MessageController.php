@@ -93,7 +93,11 @@ class MessageController extends Controller
 
         // Sanitização do telefone
         $originalPhone = $request->to;
-        $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
+        // Se cliente identificado e marcado como internacional, não sanitiza (mantém DDI digitado)
+        $isInternational = $cliente?->is_international ?? false;
+        $sanitizedPhone = $isInternational
+            ? preg_replace('/\D/', '', $originalPhone)
+            : PhoneSanitizerService::sanitize($originalPhone);
 
         if (! $sanitizedPhone) {
             return redirect()->back()->with('error', 'Número de telefone inválido após sanitização.');

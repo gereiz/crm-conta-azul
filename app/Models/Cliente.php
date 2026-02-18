@@ -17,6 +17,7 @@ class Cliente extends Model
         'email',
         'phone',
         'mobile_phone',
+        'is_international',
         'cpf_cnpj',
         'person_type',
         'city',
@@ -38,4 +39,8 @@ class Cliente extends Model
     {
         return $this->hasMany(Invoice::class, 'cliente_id');
     }
+
+    protected $casts = [
+        'is_international' => 'boolean',
+    ];
 }

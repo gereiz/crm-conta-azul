@@ -485,9 +485,11 @@ class MessageCronService
                 ->value('is_enabled');
         }
 
-        // Sanitização
+        // Sanitização (respeita flag de internacional no cliente)
         $originalPhone = $invoice->cliente->mobile_phone ?? $invoice->cliente->phone;
-        $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
+        $sanitizedPhone = ($invoice->cliente->is_international ?? false)
+            ? preg_replace('/\D/', '', $originalPhone)
+            : PhoneSanitizerService::sanitize($originalPhone);
 
         if (in_array($cron->type, ['billing', 'due_date', 'boleto']) && ! $ignoreSentToday) {
             $alreadySent = WhatsappMessageLog::where('cliente_id', $invoice->cliente_id)
@@ -619,14 +621,16 @@ class MessageCronService
             return 'skipped';
         }
 
-        $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
+        $sanitizedPhone = ($client->is_international ?? false)
+            ? preg_replace('/\D/', '', $originalPhone)
+            : PhoneSanitizerService::sanitize($originalPhone);
         if (! $sanitizedPhone) {
             $this->logError($cron, $client, $originalPhone, 'Cliente sem telefone válido após sanitização.');
 
             return 'error';
         }
 
-        if (PhoneSanitizerService::isLandline($sanitizedPhone)) {
+        if ((!$client->is_international) && PhoneSanitizerService::isLandline($sanitizedPhone)) {
             $this->logError($cron, $client, $originalPhone, 'Telefone fixo (não suportado).');
 
             return 'error';
@@ -881,14 +885,16 @@ class MessageCronService
             return 'error';
         }
 
-        $sanitizedPhone = PhoneSanitizerService::sanitize($originalPhone);
+        $sanitizedPhone = ($cliente->is_international ?? false)
+            ? preg_replace('/\D/', '', $originalPhone)
+            : PhoneSanitizerService::sanitize($originalPhone);
         if (! $sanitizedPhone) {
             $this->logError($cron, $cliente, $originalPhone, 'Cliente sem telefone válido após sanitização.', is_countable($invoices) ? count($invoices) : null);
 
             return 'error';
         }
 
-        if (PhoneSanitizerService::isLandline($sanitizedPhone)) {
+        if ((!$cliente->is_international) && PhoneSanitizerService::isLandline($sanitizedPhone)) {
             $this->logError($cron, $cliente, $originalPhone, 'Telefone fixo (não suportado).', is_countable($invoices) ? count($invoices) : null);
 
             return 'error';

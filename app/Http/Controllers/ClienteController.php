@@ -228,6 +228,7 @@ class ClienteController extends Controller
             'phone' => 'nullable|string|max:20',
             'mobile_phone' => 'nullable|string|max:20',
             'birthdate' => 'nullable|date',
+            'is_international' => 'sometimes|boolean',
         ]);
         $cliente->update($validated);
 
