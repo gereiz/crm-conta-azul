@@ -376,6 +376,13 @@ class SettingsController extends Controller
 
                     Storage::disk('public')->put($path, file_get_contents($sourcePath));
                     $settings->logo_path = $path;
+                    // Copia também para um caminho estável versionado (fallback do frontend)
+                    try {
+                        $publicPath = public_path('logo.png');
+                        @copy($sourcePath, $publicPath);
+                    } catch (\Throwable $e) {
+                        Log::warning('Falha ao copiar logo para public/logo.png: '.$e->getMessage());
+                    }
                 } catch (\Exception $e) {
                     Log::error('Logo upload failed: '.$e->getMessage());
 
@@ -402,6 +409,14 @@ class SettingsController extends Controller
 
                     Storage::disk('public')->put($path, file_get_contents($sourcePath));
                     $settings->favicon_path = $path;
+                    // Copia para caminho estável em public/
+                    try {
+                        $ext = strtolower($file->getClientOriginalExtension());
+                        $dest = public_path($ext === 'ico' ? 'favicon.ico' : 'favicon.png');
+                        @copy($sourcePath, $dest);
+                    } catch (\Throwable $e) {
+                        Log::warning('Falha ao copiar favicon para public/: '.$e->getMessage());
+                    }
                 } catch (\Exception $e) {
                     Log::error('Favicon upload failed: '.$e->getMessage());
 

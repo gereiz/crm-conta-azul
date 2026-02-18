@@ -204,6 +204,8 @@ const localChartData = ref(props.chartData || { labels: [], datasets: [] });
 const chartViewMode = ref('stacked');
 const loadingNumberTypeChart = ref(false);
 const numberTypeChartData = ref({ labels: [], datasets: [] });
+const loadingPhoneChart = ref(false);
+const phoneChartData = ref({ labels: [], datasets: [] });
 
 // Se os dados vierem do backend via props, inicializa localChartData
 watch(() => props.chartData, (newVal) => {
@@ -276,10 +278,24 @@ const fetchNumberTypeChart = async () => {
         loadingNumberTypeChart.value = false;
     }
 };
+const fetchPhoneChart = async () => {
+    loadingPhoneChart.value = true;
+    try {
+        const response = await axios.get(route('dashboard.chart-data-whatsapp-phones', { period: chartPeriod.value }));
+        if (response.data.success) {
+            phoneChartData.value = response.data.chartData;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar gráfico por telefone:', e);
+    } finally {
+        loadingPhoneChart.value = false;
+    }
+};
 
 watch(chartPeriod, () => {
     fetchChartData();
     fetchNumberTypeChart();
+    fetchPhoneChart();
 });
 
 const fetchStats = async () => {
@@ -303,6 +319,7 @@ onMounted(() => {
     // Não sincronizar automaticamente; dados serão atualizados via cron e leitura do banco
     fetchStats();
     fetchNumberTypeChart();
+    fetchPhoneChart();
     // Fallback de processamento automático de crons (se scheduler do servidor não estiver ativo)
     setInterval(async () => {
         try {
@@ -348,6 +365,28 @@ const typeColorMap = computed(() => {
     }
     return map;
 });
+const phoneTypes = computed(() => phoneChartData.value?.datasets?.map(d => d.label) || []);
+const phoneTypeColor = (t) => {
+    const ds = phoneChartData.value?.datasets?.find(d => d.label === t);
+    return ds?.backgroundColor || '#6366F1';
+};
+const phoneMaxTotal = computed(() => {
+    const labels = phoneChartData.value?.labels || [];
+    return labels.reduce((max, _, idx) => {
+        const total = (phoneChartData.value?.datasets || []).reduce((s, d) => s + Number(d?.data?.[idx] || 0), 0);
+        return Math.max(max, total);
+    }, 1);
+});
+const phoneValue = (phoneIdx, type) => {
+    const ds = phoneChartData.value?.datasets?.find(d => d.label === type);
+    return Number(ds?.data?.[phoneIdx] || 0);
+};
+const phoneStackHeight = (phoneIdx, type) => {
+    const v = phoneValue(phoneIdx, type);
+    if (v <= 0) return '0%';
+    const pct = (v / phoneMaxTotal.value) * 100;
+    return `${Math.max(pct, 3)}%`;
+};
 const valueFor = (dayIndex, numberLabel, typeLabel) => {
     const ds = numberTypeDatasets.value.find(d => {
         const { num, type } = parseDsLabel(d.label);
@@ -725,6 +764,57 @@ const getStackHeightFor = (dayIdx, num, type) => {
                                 <div v-for="type in messageTypes" :key="'lg'+type" class="flex items-center">
                                     <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: typeColorMap.get(type) || '#6366F1' }"></span>
                                     <span class="text-xs text-gray-600 dark:text-gray-400">{{ type }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aggregated by Phone -->
+                <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm lg:col-span-3">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Envios por Telefone (Empilhado por Tipo)</h3>
+                            <div class="flex items-center gap-2">
+                                <select v-model="chartPeriod" :disabled="loadingPhoneChart" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
+                                    <option :value="7">Últimos 7 dias</option>
+                                    <option :value="15">Últimos 15 dias</option>
+                                    <option :value="30">Últimos 30 dias</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div :class="{ 'opacity-50': loadingPhoneChart }">
+                            <div v-if="(phoneChartData.labels || []).length === 0" class="text-xs text-gray-400 italic px-2">
+                                Nenhum envio registrado no período.
+                            </div>
+                            <div class="h-64 flex items-end gap-3 px-2 relative overflow-x-auto">
+                                <!-- Grid lines -->
+                                <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                    <div class="border-t border-gray-900 w-full"></div>
+                                </div>
+                                <div v-for="(label, idx) in (phoneChartData.labels || [])" :key="'p'+idx" class="flex flex-col items-center justify-end">
+                                    <div class="flex items-end h-56 w-10 sm:w-12 md:w-14 bg-gray-50 dark:bg-gray-700/30 rounded-t overflow-hidden relative group">
+                                        <div v-for="t in phoneTypes" :key="label+'|'+t"
+                                             v-if="phoneValue(idx, t) > 0"
+                                             class="w-full outline outline-1 outline-white/70 dark:outline-gray-900/40"
+                                             :style="{ height: phoneStackHeight(idx, t), backgroundColor: phoneTypeColor(t) }"
+                                             :title="`${label} • ${t}: ${phoneValue(idx,t)}`">
+                                             <div class="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[11px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-20 shadow">
+                                                {{ label }} • {{ t }}: {{ phoneValue(idx,t) }}
+                                             </div>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] text-gray-400 mt-2 font-medium max-w-[80px] truncate" :title="label">{{ label }}</span>
+                                </div>
+                            </div>
+                            <!-- Legend -->
+                            <div class="mt-6 flex flex-wrap gap-3 justify-center">
+                                <div v-for="t in phoneTypes" :key="'plt'+t" class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full mr-1" :style="{ backgroundColor: phoneTypeColor(t) }"></span>
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">{{ t }}</span>
                                 </div>
                             </div>
                         </div>

@@ -76,7 +76,7 @@ watch(() => page.props.system_settings, (newSettings) => {
         <!-- Logo Area -->
         <div class="h-16 flex items-center justify-center border-b border-gray-100 dark:border-gray-700 shrink-0">
             <Link :href="route('dashboard')" class="flex items-center gap-2">
-                <ApplicationLogo class="block h-8 w-auto fill-current text-primary-600 dark:text-primary-400" />
+                <ApplicationLogo class="block h-12 w-auto fill-current text-primary-600 dark:text-primary-400" />
                 <span v-if="open && page.props.system_settings?.system_name" class="font-bold text-xl text-gray-800 dark:text-white tracking-tight">
                     {{ page.props.system_settings.system_name }}
                 </span>

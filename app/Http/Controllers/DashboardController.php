@@ -288,6 +288,78 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function chartDataWhatsappPhones(Request $request)
+    {
+        $periodDays = (int) $request->input('period', 7);
+        $allowedPeriods = [7, 15, 30];
+        if (! in_array($periodDays, $allowedPeriods)) {
+            $periodDays = 7;
+        }
+        $endDate = Carbon::today();
+        $startDate = Carbon::today()->subDays($periodDays - 1);
+        $logs = \App\Models\WhatsappMessageLog::with(['messageCron', 'messageCron.whatsappNumber', 'whatsappNumber'])
+            ->whereBetween('sent_at', [$startDate->startOfDay(), $endDate->endOfDay()])
+            ->whereIn('status', ['success', 'error', 'skipped'])
+            ->get();
+        $palette = [
+            'billing' => '#3B82F6',
+            'due_date' => '#F59E0B',
+            'boleto' => '#10B981',
+            'birthday' => '#8B5CF6',
+            'manual' => '#6366F1',
+            'default' => '#6366F1',
+        ];
+        // Labels: números (descrição)
+        $labels = [];
+        $counts = []; // [phone][type] => count
+        foreach ($logs as $log) {
+            $numberDesc = $log->messageCron && $log->messageCron->whatsappNumber
+                ? ($log->messageCron->whatsappNumber->description ?? null)
+                : null;
+            if (! $numberDesc) {
+                $wn = $log->whatsappNumber;
+                if ($wn && ($wn->description ?? null)) {
+                    $numberDesc = $wn->description;
+                } elseif ($wn) {
+                    $numberDesc = trim(($wn->ddi ?? '').' '.($wn->ddd ?? '').' '.($wn->phone ?? '')) ?: 'Número';
+                } else {
+                    $numberDesc = 'Número';
+                }
+            }
+            $type = $log->message_type ?? ($log->messageCron ? $log->messageCron->type : 'default');
+            if (! isset($counts[$numberDesc])) {
+                $counts[$numberDesc] = [];
+                $labels[] = $numberDesc;
+            }
+            $counts[$numberDesc][$type] = ($counts[$numberDesc][$type] ?? 0) + 1;
+        }
+        // Tipos encontrados
+        $types = ['billing', 'due_date', 'boleto', 'birthday', 'manual'];
+        $datasets = [];
+        foreach ($types as $t) {
+            // Monta dados por label (número)
+            $data = [];
+            foreach ($labels as $lbl) {
+                $data[] = (int) ($counts[$lbl][$t] ?? 0);
+            }
+            // Só inclui dataset se houver algum valor > 0
+            if (array_sum($data) > 0) {
+                $datasets[] = [
+                    'label' => $t,
+                    'data' => $data,
+                    'backgroundColor' => $palette[$t] ?? $palette['default'],
+                ];
+            }
+        }
+        return response()->json([
+            'success' => true,
+            'chartData' => [
+                'labels' => $labels,
+                'datasets' => $datasets,
+            ],
+        ]);
+    }
+
     public function index(Request $request)
     {
         $selectedConnectionId = $request->input('connection_id') ?? session('dashboard_connection_id');
