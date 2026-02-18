@@ -74,11 +74,14 @@ class MessageCronController extends Controller
             'run_when_delayed' => 'boolean',
             'send_without_boleto' => 'boolean',
             'no_boleto_template_id' => 'nullable|exists:whatsapp_templates,id',
-            'send_without_boleto' => 'boolean',
-            'no_boleto_template_id' => 'nullable|exists:whatsapp_templates,id',
         ]);
 
+        // Normaliza campos opcionais/booleanos
+        $validated['send_without_boleto'] = $request->boolean('send_without_boleto', false);
+        $validated['no_boleto_template_id'] = $request->input('no_boleto_template_id') ?: null;
         $validated['created_by'] = Auth::id();
+
+        MessageCron::create($validated);
 
         return redirect()->route('settings.crons.index')->with('success', 'Automação criada com sucesso!');
     }
@@ -121,7 +124,13 @@ class MessageCronController extends Controller
             'limit_link_preview' => 'boolean',
             'disable_link_preview' => 'boolean',
             'run_when_delayed' => 'boolean',
+            'send_without_boleto' => 'boolean',
+            'no_boleto_template_id' => 'nullable|exists:whatsapp_templates,id',
         ]);
+
+        // Normaliza campos opcionais/booleanos
+        $validated['send_without_boleto'] = $request->boolean('send_without_boleto', false);
+        $validated['no_boleto_template_id'] = $request->input('no_boleto_template_id') ?: null;
 
         $cron->update($validated);
 
