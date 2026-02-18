@@ -84,16 +84,47 @@ class WhapiService implements WhatsAppProviderInterface
             $to = $validId;
         }
 
-        $response = Http::withHeaders([
+        $headers = [
             'Authorization' => 'Bearer '.($whatsapp->provider_token ?? $whatsapp->whapi_key),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
-        ])->post($endpoint, [
-            'to' => $to,
-            'body' => $message,
-            'typing_time' => 0,
-            'no_link_preview' => true,
-        ]);
+            // Chave idempotente reduz risco de duplicidade em reenvios por timeout (se suportado pelo provedor)
+            'Idempotency-Key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        try {
+            $response = Http::withHeaders($headers)
+                ->timeout(60)
+                ->connectTimeout(10)
+                ->retry(3, 1500)
+                ->post($endpoint, [
+                    'to' => $to,
+                    'body' => $message,
+                    'typing_time' => 0,
+                    'no_link_preview' => true,
+                ]);
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            Log::error("Erro Whapi (exceção na requisição): {$msg}");
+
+            // Última tentativa com timeout estendido
+            try {
+                $response = Http::withHeaders($headers)
+                    ->timeout(90)
+                    ->connectTimeout(15)
+                    ->post($endpoint, [
+                        'to' => $to,
+                        'body' => $message,
+                        'typing_time' => 0,
+                        'no_link_preview' => true,
+                    ]);
+            } catch (\Throwable $ex) {
+                $msg2 = $ex->getMessage();
+                Log::error("Erro Whapi (tentativa estendida): {$msg2}");
+
+                return ['success' => false, 'message' => "Erro de comunicação com Whapi: {$msg2}"];
+            }
+        }
 
         if ($response->successful()) {
             $json = $response->json();
@@ -105,6 +136,7 @@ class WhapiService implements WhatsAppProviderInterface
                 'whapi_status' => $msg['status'] ?? ($json['status'] ?? null),
                 'message_id' => $msg['id'] ?? null,
                 'chat_id' => $msg['chat_id'] ?? null,
+                'provider' => 'whapi',
             ];
 
             return ['success' => true, 'data' => $json, 'meta' => $meta];
@@ -116,6 +148,11 @@ class WhapiService implements WhatsAppProviderInterface
 
             if ($response->status() === 401 && str_contains($errorMessage, 'need channel authorization')) {
                 return ['success' => false, 'message' => 'WhatsApp desconectado. Necessário ler o QR Code no painel da Whapi.'];
+            }
+
+            // Trata timeouts de forma diferenciada para permitir nova tentativa automática em próximo ciclo
+            if (stripos($errorMessage, 'Operation timed out') !== false || stripos($errorMessage, 'cURL error 28') !== false) {
+                return ['success' => false, 'message' => 'Timeout de rede ao contactar Whapi. Nova tentativa será realizada pelo orquestrador.'];
             }
 
             return ['success' => false, 'message' => 'Erro ao enviar mensagem via Whapi: '.$errorMessage];
