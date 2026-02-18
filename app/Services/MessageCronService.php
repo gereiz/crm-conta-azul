@@ -213,14 +213,17 @@ class MessageCronService
         $query->where('saldo_devedor', '>', 0)
             ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO']);
         // Preferir boletos: aceita quando payment_type contém 'BOLETO' OU quando há link_boleto presente
-        $query->where(function ($q) {
-            $q->where(function ($qq) {
-                $qq->whereNotNull('payment_type')
-                    ->where('payment_type', 'LIKE', '%BOLETO%');
-            })->orWhere(function ($qq) {
-                $qq->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
+        // Preferir boletos; quando habilitado "cobrança sem boleto", incluímos também faturas sem link
+        if (!($cron->send_without_boleto ?? false)) {
+            $query->where(function ($q) {
+                $q->where(function ($qq) {
+                    $qq->whereNotNull('payment_type')
+                        ->where('payment_type', 'LIKE', '%BOLETO%');
+                })->orWhere(function ($qq) {
+                    $qq->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
+                });
             });
-        });
+        }
 
         $invoices = $query->with('cliente')->get();
 
@@ -1053,7 +1056,21 @@ class MessageCronService
             return $due.' - '.$display;
         })->implode("\n");
 
-        $content = $cron->messageTemplate->content;
+        // Se habilitado "cobrança sem boleto" e não há nenhum link, usa template alternativo
+        if (($cron->send_without_boleto ?? false) && ($cron->no_boleto_template_id ?? null) && ! $firstUrl) {
+            try {
+                $altTpl = \App\Models\WhatsappTemplate::find($cron->no_boleto_template_id);
+                if ($altTpl) {
+                    $content = $altTpl->content;
+                } else {
+                    $content = $cron->messageTemplate->content;
+                }
+            } catch (\Throwable $e) {
+                $content = $cron->messageTemplate->content;
+            }
+        } else {
+            $content = $cron->messageTemplate->content;
+        }
         $content = $this->replaceVariables($content, null, $cliente);
         $content = str_replace([
             '@@invoicePastDueQuantity@@',
@@ -1104,11 +1121,15 @@ class MessageCronService
             'phone_sanitized' => $sanitizedPhone,
             'message_type' => $cron->type,
             'provider' => $whatsapp->provider ?? null,
-            'message_template_id' => $cron->message_template_id,
-            'total_boletos' => is_countable($invoices) ? count($invoices) : null,
+            'message_template_id' => (($cron->send_without_boleto ?? false) && ($cron->no_boleto_template_id ?? null) && ! $firstUrl) ? $cron->no_boleto_template_id : $cron->message_template_id,
+            'total_boletos' => $firstUrl ? (is_countable($invoices) ? count($invoices) : null) : 0,
             'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
             'status' => ($result['queued'] ?? false) ? 'skipped' : ($result['success'] ? 'success' : 'error'),
-            'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
+            'error_message' => ($result['queued'] ?? false)
+                ? ($result['message'] ?? 'Enfileirado')
+                : ($result['success']
+                    ? ((!$firstUrl && ($cron->send_without_boleto ?? false)) ? 'Cobrança sem boletos' : null)
+                    : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $content,
             'batch_id' => $batchId,
             'sent_at' => now(),

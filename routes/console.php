@@ -12,7 +12,7 @@ Artisan::command('inspire', function () {
 Schedule::command('message:process-crons')->everyMinute()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('message:process-delayed-crons')->everyMinute()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('contaazul:sync-stale')->dailyAt('01:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
-Schedule::command('invoices:sync')->dailyAt('13:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
+Schedule::command('invoices:sync')->dailyAt('10:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('contaazul:refresh-tokens')->everyThirtyMinutes()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('message:calculate-future')->dailyAt('00:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::call(function () {

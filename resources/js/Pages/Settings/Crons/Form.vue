@@ -54,6 +54,8 @@ const form = useForm({
     limit_link_preview: props.cron?.limit_link_preview ?? false,
     disable_link_preview: props.cron?.disable_link_preview ?? false,
     run_when_delayed: props.cron?.run_when_delayed ?? false,
+    send_without_boleto: props.cron?.send_without_boleto ?? false,
+    no_boleto_template_id: props.cron?.no_boleto_template_id || '',
 });
 
 const submit = () => {
@@ -272,6 +274,25 @@ watch(() => form.type, (newType) => {
                                     </div>
                                 </div>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Ex: Analisar faturas dos últimos 30 dias</p>
+
+                                <!-- Cobrança sem boleto -->
+                                <div class="mt-4 space-y-2 p-3 rounded border border-yellow-200 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20">
+                                    <div class="flex items-center">
+                                        <input id="send_without_boleto" type="checkbox" v-model="form.send_without_boleto" class="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500 dark:focus:ring-yellow-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                                        <label for="send_without_boleto" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Cobrança sem boleto</label>
+                                    </div>
+                                    <div>
+                                        <InputLabel for="no_boleto_template_id" value="Mensagem para clientes SEM link de boleto" />
+                                        <select id="no_boleto_template_id" v-model="form.no_boleto_template_id" :disabled="!form.send_without_boleto" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-primary-500 dark:focus:border-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 rounded-md shadow-sm">
+                                            <option value="">Selecione um layout (opcional)</option>
+                                            <option v-for="template in templates" :key="template.id" :value="template.id">
+                                                {{ template.name }}
+                                            </option>
+                                        </select>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Se habilitado, envia esta mensagem quando houver cobranças, mas nenhum link de boleto disponível.</p>
+                                        <InputError class="mt-2" :message="form.errors.no_boleto_template_id" />
+                                    </div>
+                                </div>
                             </div>
 
                             <div v-if="form.type === 'due_date'" class="space-y-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
