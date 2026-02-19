@@ -147,6 +147,8 @@ class ContaAzulApiService
             'payment_type' => $response['metodo_pagamento'] ?? null,
             'due_date' => $this->normalizeDate($response['vencimento'] ?? ($response['data_vencimento'] ?? null)),
             'issue_date' => $this->normalizeDate($response['data_emissao'] ?? null),
+            // Captura descrição a partir de chaves possíveis retornadas pela API
+            'descricao' => $response['descricao'] ?? ($response['historico'] ?? ($response['descricao_parcela'] ?? ($response['observacao'] ?? ($response['mensagem'] ?? ($response['description'] ?? null))))),
         ];
 
         // Estratégia melhorada para encontrar URL
@@ -264,18 +266,16 @@ class ContaAzulApiService
                 \Illuminate\Support\Facades\Log::error('Falha na verificação de duplicidade de fatura: '.$e->getMessage());
             }
 
-            // Optimization: Only fetch details if we don't have a link or if it's a new invoice
-            // Note: If status changes (e.g. pending -> overdue), the link usually remains valid, but let's be safe.
-            // If we have a link and it's not empty, we skip the detail request to save time.
-
-            $invoiceDetails = ['url' => null, 'payment_type' => null];
+            // Optimization com garantia de atualização de descrição:
+            // Busca detalhes se não houver link salvo OU se a listagem não trouxer 'descricao'
+            $invoiceDetails = ['url' => null, 'payment_type' => null, 'descricao' => null];
             $existing = $existingInvoices[$caId] ?? null;
 
             $shouldFetchDetails = true;
-            if ($existing && ! empty($existing['link_boleto'])) {
+            if ($existing && ! empty($existing['link_boleto']) && ! empty(($item['descricao'] ?? null))) {
                 $shouldFetchDetails = false;
                 $invoiceDetails['url'] = $existing['link_boleto'];
-                // We might miss payment_type update if we skip, but it rarely changes.
+                // Mantemos a possibilidade de atualizar descrição via listagem quando presente
             }
 
             if ($shouldFetchDetails) {
@@ -292,6 +292,8 @@ class ContaAzulApiService
             $naoPago = isset($item['nao_pago']) ? (float) $item['nao_pago'] : null;
             $saldoDevedor = $naoPago ?? ($valorPago !== null ? max(0.0, $valorOriginal - $valorPago) : $valorOriginal);
 
+            $newDescricao = $item['descricao'] ?? ($invoiceDetails['descricao'] ?? null);
+
             \App\Models\Invoice::updateOrCreate(
                 ['connection_id' => $connection->id, 'ca_id' => $caId],
                 [
@@ -301,7 +303,7 @@ class ContaAzulApiService
                     'payment_type' => $invoiceDetails['payment_type'] ?: (!empty($invoiceDetails['url']) ? 'BOLETO' : null),
                     'valor_original' => $valorOriginal,
                     'saldo_devedor' => $saldoDevedor,
-                    'descricao' => $item['descricao'] ?? null,
+                    'descricao' => $newDescricao,
                     'reference_code' => $item['codigo_referencia'] ?? ($existing['reference_code'] ?? null),
                     'data_vencimento' => $this->normalizeDate($item['data_vencimento'] ?? ($item['vencimento'] ?? ($invoiceDetails['due_date'] ?? null))),
                     'data_emissao' => $this->normalizeDate($item['data_emissao'] ?? ($invoiceDetails['issue_date'] ?? null)),
