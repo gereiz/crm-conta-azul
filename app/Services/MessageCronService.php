@@ -227,6 +227,28 @@ class MessageCronService
 
         $invoices = $query->with('cliente')->get();
 
+        // Fallback: vincula cliente ausente on-the-fly usando cliente_ca_id + connection_id
+        $missingClientInvoices = $invoices->filter(fn ($inv) => empty($inv->cliente_id) && !empty($inv->cliente_ca_id));
+        if ($missingClientInvoices->isNotEmpty()) {
+            $connId = (int) ($cron->connection_id ?? 0);
+            $caIds = $missingClientInvoices->pluck('cliente_ca_id')->filter()->unique()->values();
+            if ($connId && $caIds->isNotEmpty()) {
+                $clientMap = Cliente::where('connection_id', $connId)
+                    ->whereIn('ca_id', $caIds)
+                    ->get(['id', 'ca_id'])
+                    ->keyBy('ca_id');
+                foreach ($missingClientInvoices as $inv) {
+                    $c = $clientMap->get($inv->cliente_ca_id);
+                    if ($c) {
+                        \App\Models\Invoice::where('id', $inv->id)->update(['cliente_id' => $c->id]);
+                        $inv->cliente_id = $c->id;
+                        // opcional: anexa a relação em memória
+                        $inv->setRelation('cliente', $c);
+                    }
+                }
+            }
+        }
+
         // Agrupar por cliente para envio único
         $groups = $invoices->filter(fn ($inv) => $inv->cliente_id && $inv->cliente)->groupBy('cliente_id');
 

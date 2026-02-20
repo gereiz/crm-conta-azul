@@ -182,16 +182,44 @@ class MessageCronController extends Controller
         switch ($cron->type) {
             case 'billing':
                 $daysLate = max(0, (int) ($cron->days_after_due ?? 0));
-                $dueDateLimit = \Carbon\Carbon::today()->subDays($daysLate)->format('Y-m-d');
+                $strictThresholdDays = $daysLate + 1;
+                $dueDateLimit = \Carbon\Carbon::today()->subDays($strictThresholdDays)->format('Y-m-d');
                 $query = \App\Models\Invoice::where('connection_id', $cron->connection_id)
-                    ->where('data_vencimento', '<', $dueDateLimit)
+                    ->where('data_vencimento', '<=', $dueDateLimit)
                     ->where('data_vencimento', '<', $today)
                     ->where('saldo_devedor', '>', 0)
-                    ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'PENDING', 'ABERTO'])
-                    ->whereNotNull('payment_type')
-                    ->where('payment_type', 'LIKE', '%BOLETO%')
-                    ->with('cliente');
+                    ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'PENDING', 'ABERTO']);
+                if (!($cron->send_without_boleto ?? false)) {
+                    $query->where(function ($q) {
+                        $q->where(function ($qq) {
+                            $qq->whereNotNull('payment_type')
+                                ->where('payment_type', 'LIKE', '%BOLETO%');
+                        })->orWhere(function ($qq) {
+                            $qq->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
+                        });
+                    });
+                }
+                $query->with('cliente');
                 $grouped = $query->get()->groupBy('cliente_id');
+                // Fallback: se há faturas sem cliente_id, tenta vincular antes de montar itens
+                if ($grouped->has(null)) {
+                    $missing = $grouped->get(null);
+                    $caIds = $missing->pluck('cliente_ca_id')->filter()->unique()->values();
+                    if ($caIds->isNotEmpty()) {
+                        $clientMap = \App\Models\Cliente::where('connection_id', $cron->connection_id)
+                            ->whereIn('ca_id', $caIds)
+                            ->get(['id', 'ca_id'])->keyBy('ca_id');
+                        foreach ($missing as $inv) {
+                            $c = $clientMap->get($inv->cliente_ca_id);
+                            if ($c) {
+                                \App\Models\Invoice::where('id', $inv->id)->update(['cliente_id' => $c->id]);
+                                $inv->cliente_id = $c->id;
+                                $inv->setRelation('cliente', $c);
+                            }
+                        }
+                        $grouped = $query->get()->groupBy('cliente_id');
+                    }
+                }
                 foreach ($grouped as $cid => $clientInvoices) {
                     $c = $clientInvoices->first()->cliente;
                     if (! $c) continue;
