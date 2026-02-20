@@ -500,7 +500,7 @@ class SettingsController extends Controller
         try {
             $connectionId = $request->input('connection_id');
             $mode = $request->input('mode', 'update'); // 'reset' or 'update'
-            $target = $request->input('target', 'all'); // 'all' or 'invoices'
+            $target = $request->input('target', 'all'); // 'all' | 'invoices' | 'clients'
 
             if (! $connectionId) {
                 return response()->json(['error' => 'Selecione uma empresa para sincronizar.'], 400);
@@ -523,7 +523,7 @@ class SettingsController extends Controller
                 if ($target === 'all') {
                     Cliente::where('connection_id', $connection->id)->delete();
                     \App\Models\Invoice::where('connection_id', $connection->id)->delete();
-                } else {
+                } elseif ($target === 'invoices') {
                     \App\Models\Invoice::where('connection_id', $connection->id)->delete();
                 }
             }
@@ -533,7 +533,7 @@ class SettingsController extends Controller
             $hasMore = true;
             $syncedCount = 0;
 
-            if ($target === 'all') {
+            if ($target === 'all' || $target === 'clients') {
                 while ($hasMore) {
                     $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
                     $clientsData = [];
@@ -662,7 +662,7 @@ class SettingsController extends Controller
             // Pruning incremental por ID (mais robusto):
             // Remove clientes que existem no sistema para esta conexão mas não vieram da Conta Azul.
             // Mantém proteção: não remove clientes que possuem faturas vinculadas.
-            if ($target === 'all' && $mode === 'update' && $syncedCount > 0) {
+            if (in_array($target, ['all', 'clients'], true) && $mode === 'update' && $syncedCount > 0) {
                 try {
                     $processedIds = \App\Models\Cliente::where('connection_id', $connection->id)
                         ->where('updated_at', '>=', $startTime)
@@ -691,9 +691,13 @@ class SettingsController extends Controller
                 }
             }
 
-            // Sincroniza faturas
-            $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
-            $closedCount = $this->contaAzulApiService->syncRecentlyClosedInvoices($connection);
+            // Sincroniza faturas quando solicitado
+            $invoicesCount = 0;
+            $closedCount = 0;
+            if (in_array($target, ['all', 'invoices'], true)) {
+                $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
+                $closedCount = $this->contaAzulApiService->syncRecentlyClosedInvoices($connection);
+            }
 
             // Atualiza timestamp da conexão
             $connection->last_sync_at = now();
@@ -710,12 +714,96 @@ class SettingsController extends Controller
             $apiTotals = $this->contaAzulApiService->getOverdueTotals($connection);
             $invoicesApiCount = $apiTotals['count'] ?? 0;
 
+            // Fallback: se solicitei clientes (all/clients) e o total ficou 0, tenta sincronizar clientes novamente uma única vez
+            if (in_array($target, ['all', 'clients'], true) && $clientesDbCount === 0) {
+                try {
+                    $page = 1;
+                    $size = 50;
+                    $hasMore = true;
+                    while ($hasMore) {
+                        $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
+                        $clientsData = [];
+                        if (isset($response['items'])) {
+                            $clientsData = $response['items'];
+                        } elseif (is_array($response)) {
+                            $clientsData = $response;
+                        }
+                        if (empty($clientsData)) {
+                            $hasMore = false;
+                            break;
+                        }
+                        foreach ($clientsData as $caClient) {
+                            $perfis = $caClient['perfis'] ?? [];
+                            $perfis = array_map('strtolower', $perfis);
+                            if (! in_array('cliente', $perfis)) {
+                                continue;
+                            }
+                            if (empty($caClient['ativo'])) {
+                                continue;
+                            }
+                            $cpfCnpj = $caClient['documento'] ?? ($caClient['cpf'] ?? ($caClient['cnpj'] ?? null));
+                            $phone = $caClient['telefone'] ?? ($caClient['telefone_comercial'] ?? null);
+                            $mobilePhone = $caClient['telefone_celular'] ?? null;
+                            $city = null;
+                            $state = null;
+                            if (! empty($caClient['enderecos']) && is_array($caClient['enderecos'])) {
+                                $primaryAddress = $caClient['enderecos'][0];
+                                $city = $primaryAddress['cidade'] ?? null;
+                                $state = $primaryAddress['estado'] ?? null;
+                            }
+                            $existing = Cliente::where('connection_id', $connection->id)->where('ca_id', $caClient['id'])->first();
+                            $currentPhone = $existing?->phone;
+                            $currentMobile = $existing?->mobile_phone;
+                            $hasPlusCurrent = is_string($currentPhone) && preg_match('/^\s*\+/', $currentPhone);
+                            $hasPlusMobile = is_string($currentMobile) && preg_match('/^\s*\+/', $currentMobile);
+                            $sanitizedCurrent = \App\Services\PhoneSanitizerService::sanitize($currentPhone ?? '');
+                            $sanitizedMobile = \App\Services\PhoneSanitizerService::sanitize($currentMobile ?? '');
+                            $isInternationalCurrent = $sanitizedCurrent && (!str_starts_with($sanitizedCurrent, '55')) && (strlen($sanitizedCurrent) >= 12);
+                            $isInternationalMobile = $sanitizedMobile && (!str_starts_with($sanitizedMobile, '55')) && (strlen($sanitizedMobile) >= 12);
+                            $preserveCurrent = $currentPhone && ($hasPlusCurrent || $isInternationalCurrent);
+                            $preserveMobile = $currentMobile && ($hasPlusMobile || $isInternationalMobile);
+                            $data = [
+                                'connection_id' => $connection->id,
+                                'name' => $caClient['nome'] ?? 'Sem Nome',
+                                'company_name' => $connection->empresa_nome,
+                                'email' => $caClient['email'] ?? null,
+                                'cpf_cnpj' => $cpfCnpj,
+                                'person_type' => $caClient['tipo_pessoa'] ?? null,
+                                'city' => $city,
+                                'state' => $state,
+                            ];
+                            if (! $preserveCurrent && ! empty($phone)) {
+                                $data['phone'] = $phone;
+                            }
+                            if (! $preserveMobile && ! empty($mobilePhone)) {
+                                $data['mobile_phone'] = $mobilePhone;
+                            }
+                            Cliente::updateOrCreate(
+                                ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
+                                $data
+                            );
+                        }
+                        if (count($clientsData) < $size) {
+                            $hasMore = false;
+                        } else {
+                            $page++;
+                        }
+                        usleep(200000);
+                    }
+                } catch (\Throwable $t) {
+                    Log::warning("Fallback de clientes falhou ({$connection->empresa_nome}): ".$t->getMessage());
+                }
+                $clientesDbCount = \App\Models\Cliente::where('connection_id', $connection->id)->count();
+            }
+
             if ($request->wantsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => $target === 'all'
-                        ? "Sincronização concluída! {$clientesDbCount} clientes, {$invoicesApiCount} faturas em atraso e {$closedCount} atualizações de pagas/canceladas."
-                        : "Sincronização concluída! {$invoicesApiCount} faturas em atraso e {$closedCount} atualizações de pagas/canceladas.",
+                    'message' =>
+                        $target === 'all' ? "Sincronização concluída! {$clientesDbCount} clientes, {$invoicesApiCount} faturas em atraso e {$closedCount} atualizações de pagas/canceladas."
+                        : ($target === 'clients'
+                            ? "Sincronização de clientes concluída! {$clientesDbCount} clientes atualizados para a conexão {$connection->empresa_nome}."
+                            : "Sincronização concluída! {$invoicesApiCount} faturas em atraso e {$closedCount} atualizações de pagas/canceladas."),
                     'details' => [
                         'clientes_count' => $clientesDbCount,
                         'invoices_count' => $invoicesApiCount,
@@ -725,9 +813,12 @@ class SettingsController extends Controller
                 ]);
             }
 
-            $msg = $target === 'all'
-                ? "Sincronização concluída! {$clientesDbCount} clientes, {$invoicesApiCount} faturas em atraso e {$closedCount} pagas/canceladas atualizadas para a conexão {$connection->empresa_nome}."
-                : "Sincronização concluída! {$invoicesApiCount} faturas em atraso e {$closedCount} pagas/canceladas atualizadas para a conexão {$connection->empresa_nome}.";
+            $msg =
+                $target === 'all'
+                    ? "Sincronização concluída! {$clientesDbCount} clientes, {$invoicesApiCount} faturas em atraso e {$closedCount} pagas/canceladas atualizadas para a conexão {$connection->empresa_nome}."
+                    : ($target === 'clients'
+                        ? "Sincronização de clientes concluída! {$clientesDbCount} clientes atualizados para a conexão {$connection->empresa_nome}."
+                        : "Sincronização concluída! {$invoicesApiCount} faturas em atraso e {$closedCount} pagas/canceladas atualizadas para a conexão {$connection->empresa_nome}.");
 
             return redirect()->back()->with('success', $msg);
 
@@ -836,6 +927,73 @@ class SettingsController extends Controller
                         $hasMore = false;
                     }
                     sleep(1);
+                }
+                // Fallback: se a conexão ficou com 0 clientes, tenta novamente uma única vez
+                $clientesCountConn = \App\Models\Cliente::where('connection_id', $connection->id)->count();
+                if ($clientesCountConn === 0) {
+                    $this->contaAzulAuthService->getValidToken($connection, true);
+                    $page = 1;
+                    $size = 20;
+                    $hasMore = true;
+                    while ($hasMore) {
+                        $response = $this->contaAzulApiService->getClients($connection, ['page' => $page, 'size' => $size]);
+                        $clientsData = [];
+                        if (isset($response['items'])) {
+                            $clientsData = $response['items'];
+                        } elseif (is_array($response)) {
+                            $clientsData = $response;
+                        }
+                        if (empty($clientsData)) {
+                            $hasMore = false;
+                            break;
+                        }
+                        foreach ($clientsData as $caClient) {
+                            $perfis = $caClient['perfis'] ?? [];
+                            $perfis = array_map('strtolower', $perfis);
+                            if (! in_array('cliente', $perfis)) {
+                                continue;
+                            }
+                            if (empty($caClient['ativo'])) {
+                                continue;
+                            }
+                            $cpfCnpj = $caClient['documento'] ?? ($caClient['cpf'] ?? ($caClient['cnpj'] ?? null));
+                            $phone = $caClient['telefone'] ?? ($caClient['telefone_comercial'] ?? null);
+                            $mobilePhone = $caClient['telefone_celular'] ?? null;
+                            $city = null;
+                            $state = null;
+                            if (! empty($caClient['enderecos']) && is_array($caClient['enderecos'])) {
+                                $primaryAddress = $caClient['enderecos'][0];
+                                $city = $primaryAddress['cidade'] ?? null;
+                                $state = $primaryAddress['estado'] ?? null;
+                            }
+                            $data = [
+                                'connection_id' => $connection->id,
+                                'name' => $caClient['nome'] ?? 'Sem Nome',
+                                'company_name' => $connection->empresa_nome,
+                                'email' => $caClient['email'] ?? null,
+                                'cpf_cnpj' => $cpfCnpj,
+                                'person_type' => $caClient['tipo_pessoa'] ?? null,
+                                'city' => $city,
+                                'state' => $state,
+                            ];
+                            if (! empty($phone)) {
+                                $data['phone'] = $phone;
+                            }
+                            if (! empty($mobilePhone)) {
+                                $data['mobile_phone'] = $mobilePhone;
+                            }
+                            \App\Models\Cliente::updateOrCreate(
+                                ['connection_id' => $connection->id, 'ca_id' => $caClient['id']],
+                                $data
+                            );
+                        }
+                        if (count($clientsData) < $size) {
+                            $hasMore = false;
+                        } else {
+                            $page++;
+                        }
+                        sleep(1);
+                    }
                 }
                 $invoicesCount = $this->contaAzulApiService->syncOverdueInvoices($connection);
                 $clientesDbCount = \App\Models\Cliente::where('connection_id', $connection->id)->count();

@@ -39,8 +39,9 @@ class SyncContaAzulConnections extends Command
                 return 0;
             }
             $now = Carbon::now();
-            $this->info("Iniciando sincronização automática de faturas às {$now->toDateTimeString()}");
+            $this->info("Iniciando sincronização automática às {$now->toDateTimeString()}");
             $hour = (int) $now->format('H');
+            $minute = (int) $now->format('i');
 
             $connections = ContaAzulConnection::active()->orderBy('empresa_nome')->get();
             foreach ($connections as $connection) {
@@ -60,10 +61,23 @@ class SyncContaAzulConnections extends Command
                         'status' => 'success',
                     ]);
 
-                    if ($hour === 1) {
-                        $this->info('Executando sincronização de clientes (janela 01:00).');
+                    if ($hour === 1 || ($hour === 8 && $minute === 45)) {
+                        $this->info('Executando sincronização de clientes (janela agendada).');
                         try {
-                            $this->syncClients($connection);
+                            $synced = $this->syncClients($connection);
+                            // Fallback: se após a sincronização a empresa ficou sem clientes, tenta uma vez novamente
+                            $clientesCount = Cliente::where('connection_id', $connection->id)->count();
+                            if ($clientesCount === 0) {
+                                $this->warn("Nenhum cliente retornado para {$connection->empresa_nome}. Tentando novamente...");
+                                sleep(2);
+                                $syncedRetry = $this->syncClients($connection);
+                                $clientesCount = Cliente::where('connection_id', $connection->id)->count();
+                                if ($clientesCount === 0) {
+                                    $this->error("Fallback falhou: ainda sem clientes após segunda tentativa ({$connection->empresa_nome}).");
+                                } else {
+                                    $this->info("Fallback bem-sucedido: {$clientesCount} clientes após segunda tentativa ({$connection->empresa_nome}).");
+                                }
+                            }
                         } catch (\Exception $e) {
                             $this->warn('Falha ao sincronizar clientes nesta conexão: '.$e->getMessage());
                         }

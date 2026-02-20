@@ -14,6 +14,8 @@ Schedule::command('message:process-delayed-crons')->everyMinute()->timezone(conf
 Schedule::command('contaazul:sync-stale')->dailyAt('01:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 // Alinhado ao fluxo multi-empresa e tokens por conexão
 Schedule::command('contaazul:sync-stale')->dailyAt('10:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
+// Nova janela: sincronização diária de apenas Clientes às 08:45
+Schedule::command('contaazul:sync-stale')->dailyAt('08:45')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('contaazul:refresh-tokens')->everyThirtyMinutes()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('message:calculate-future')->dailyAt('00:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::call(function () {

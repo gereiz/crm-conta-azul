@@ -360,6 +360,7 @@ const deleteConnection = (id) => {
                             <div class="flex items-center gap-3">
                                 <select v-model="syncTarget" class="text-sm border-gray-300 rounded-md">
                                     <option value="invoices">Apenas faturas</option>
+                                    <option value="clients">Apenas clientes</option>
                                     <option value="all">Clientes + faturas</option>
                                 </select>
                                 <button 
@@ -381,7 +382,8 @@ const deleteConnection = (id) => {
 
                         <div class="mt-4 text-sm text-gray-500">
                             <p v-if="syncTarget === 'all'">Esta ação irá buscar todos os clientes do Conta Azul e atualizar/criar no banco de dados local, além de sincronizar faturas.</p>
-                            <p v-else>Esta ação irá sincronizar apenas as faturas em atraso desta empresa.</p>
+                            <p v-else-if="syncTarget === 'clients'">Esta ação irá sincronizar apenas os clientes desta empresa.</p>
+                            <p v-else>Esta ação irá sincronizar apenas as faturas (abertas/atrasadas e atualizações recentes).</p>
                         </div>
 
                         <!-- Aviso de política de sincronização -->
@@ -389,7 +391,8 @@ const deleteConnection = (id) => {
                             <p class="font-semibold">Política de Sincronização</p>
                             <ul class="list-disc list-inside mt-1">
                                 <li>01:00 — sincronização automática diária de <strong>Clientes + Faturas</strong> para todas as empresas ativas.</li>
-                                <li>13:00 — sincronização automática diária de <strong>apenas Faturas</strong>.</li>
+                                <li>08:45 — sincronização automática diária de <strong>apenas Clientes</strong>.</li>
+                                <li>10:00 — sincronização automática diária de <strong>apenas Faturas</strong>.</li>
                             </ul>
                         </div>
                     </div>
@@ -403,6 +406,7 @@ const deleteConnection = (id) => {
                         <div class="mt-4">
                             <select v-model="syncTarget" class="text-sm border-gray-300 rounded-md w-full">
                                 <option value="invoices">Apenas faturas</option>
+                                <option value="clients">Apenas clientes</option>
                                 <option value="all">Clientes + faturas</option>
                             </select>
                         </div>
@@ -430,6 +434,7 @@ const deleteConnection = (id) => {
                                 <label class="text-sm text-gray-700 dark:text-gray-300">Alvo da sincronização</label>
                                 <select v-model="syncBatchTarget" class="mt-1 text-sm border-gray-300 rounded-md w-full">
                                     <option value="invoices">Apenas faturas</option>
+                                    <option value="clients">Apenas clientes</option>
                                     <option value="all">Clientes + faturas</option>
                                 </select>
                             </div>
