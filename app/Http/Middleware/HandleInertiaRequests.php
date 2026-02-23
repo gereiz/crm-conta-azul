@@ -74,6 +74,10 @@ class HandleInertiaRequests extends Middleware
                 'secondary_color' => $settings->secondary_color ?? '#22C55E',
                 'logo' => $settings->logo_path ?? null,
                 'favicon' => $settings->favicon_path ?? null,
+                'whapi_webhook_enabled' => (bool) ($settings->whapi_webhook_enabled ?? false),
+                'whapi_webhook_url' => $settings->whapi_webhook_url ?? null,
+                'evolution_webhook_enabled' => (bool) ($settings->evolution_webhook_enabled ?? false),
+                'evolution_webhook_url' => $settings->evolution_webhook_url ?? null,
             ],
         ];
     }

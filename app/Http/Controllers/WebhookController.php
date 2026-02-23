@@ -77,41 +77,65 @@ class WebhookController extends Controller
                 }
                 foreach ($incomingMsgs as $msg) {
                     $fromMe = (bool) ($msg['from_me'] ?? $msg['fromMe'] ?? false);
-                    if ($fromMe) {
-                        continue;
-                    }
                     $mId = (string) ($msg['id'] ?? '');
-                    $mFromRaw = $msg['from'] ?? (function ($chatId) {
-                        if (! is_string($chatId)) {
-                            return null;
-                        }
+                    $chatIdRaw = $msg['chat_id'] ?? null;
+                    $toRaw = (function ($chatId) {
+                        if (! is_string($chatId)) return null;
                         $num = preg_replace('/\D+/', '', $chatId);
                         return $num ?: null;
-                    })($msg['chat_id'] ?? null);
+                    })($chatIdRaw);
+                    $toSanitized = $this->normalizePhone($toRaw);
+                    $mFromRaw = $msg['from'] ?? null;
                     $mFrom = $this->normalizePhone(is_string($mFromRaw) ? $mFromRaw : null);
 
+                    // Se for mensagem nossa (from_me=true) e houver status, atualiza delivery_status
+                    if ($fromMe && isset($msg['status'])) {
+                        $statusNormMsg = $this->normalizeStatus($msg['status']);
+                        $target = null;
+                        if (!empty($msg['message_id'])) {
+                            $target = WhatsappMessageLog::where('provider_message_id', $msg['message_id'])->first();
+                        }
+                        if (!$target && $toSanitized) {
+                            $target = WhatsappMessageLog::where('phone_sanitized', $toSanitized)->orderByDesc('sent_at')->first();
+                        }
+                        if ($target && $statusNormMsg) {
+                            $target->delivery_status = $statusNormMsg;
+                            $target->delivery_status_updated_at = isset($msg['timestamp']) ? \Carbon\Carbon::createFromTimestamp((int) $msg['timestamp']) : now();
+                            $target->save();
+                        }
+                        continue;
+                    }
+
+                    // Mensagem recebida do cliente (from_me=false) => marca respondida
                     \DB::table('incoming_messages')->insert([
-                        'numero_origem' => $mFrom,
-                        'numero_destino' => null,
+                        'numero_origem' => $mFrom ?: $toSanitized,
+                        'numero_destino' => $toSanitized,
                         'provider' => $provider,
                         'provider_message_id' => $mId ?: null,
                         'payload_json' => json_encode($msg),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
-                    if ($mFrom) {
-                        $lastSent = WhatsappMessageLog::where('phone_sanitized', $mFrom)
-                            ->orderByDesc('sent_at')
-                            ->first();
+                    $matchPhone = $mFrom ?: $toSanitized;
+                    if ($matchPhone) {
+                        $ts = isset($msg['timestamp']) ? \Carbon\Carbon::createFromTimestamp((int) $msg['timestamp']) : now();
+                        $lastSent = WhatsappMessageLog::where('phone_sanitized', $matchPhone)->orderByDesc('sent_at')->first();
                         if (! $lastSent) {
-                            $lastSent = WhatsappMessageLog::whereRaw('REPLACE(REPLACE(REPLACE(phone_original, " ", ""), "-", ""), "(", "") = ?', [$mFrom])
+                            $lastSent = WhatsappMessageLog::whereRaw('REGEXP_REPLACE(COALESCE(phone_original, ""), "[^0-9]", "") = ?', [$matchPhone])
                                 ->orderByDesc('sent_at')
                                 ->first();
                         }
                         if ($lastSent) {
                             $lastSent->responded = true;
-                            $lastSent->responded_at = isset($msg['timestamp']) ? \Carbon\Carbon::createFromTimestamp((int) $msg['timestamp']) : now();
+                            $lastSent->responded_at = $ts;
                             $lastSent->save();
+                        } else {
+                            // Atualiza o mais recente do dia para esse telefone
+                            WhatsappMessageLog::where('phone_sanitized', $matchPhone)
+                                ->whereDate('sent_at', $ts->toDateString())
+                                ->orderByDesc('sent_at')
+                                ->limit(1)
+                                ->update(['responded' => true, 'responded_at' => $ts]);
                         }
                     }
                 }

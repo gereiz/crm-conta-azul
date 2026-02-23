@@ -366,10 +366,10 @@ class SettingsController extends Controller
         $settings->primary_color = $request->input('primary_color', '#6366F1');
         $settings->secondary_color = $request->input('secondary_color', '#22C55E');
         $settings->evolution_api_base_url = $request->input('evolution_api_base_url') ? rtrim($request->input('evolution_api_base_url'), '/') : null;
-        $settings->whapi_webhook_enabled = (bool) $request->input('whapi_webhook_enabled', false);
+        $settings->whapi_webhook_enabled = $request->boolean('whapi_webhook_enabled');
         $settings->whapi_webhook_secret = $request->input('whapi_webhook_secret');
         $settings->whapi_webhook_url = $request->input('whapi_webhook_url');
-        $settings->evolution_webhook_enabled = (bool) $request->input('evolution_webhook_enabled', false);
+        $settings->evolution_webhook_enabled = $request->boolean('evolution_webhook_enabled');
         $settings->evolution_webhook_secret = $request->input('evolution_webhook_secret');
         $settings->evolution_webhook_url = $request->input('evolution_webhook_url');
 

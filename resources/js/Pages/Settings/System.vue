@@ -4,7 +4,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import axios from 'axios';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 
 const props = defineProps({
     settings: Object,
@@ -26,6 +26,21 @@ const form = useForm({
 });
 
 const currentOrigin = typeof window !== 'undefined' && window?.location ? window.location.origin : '';
+const cronEnabled = ref(null);
+// Sincroniza quando props.settings muda após salvar
+watch(() => props.settings, (s) => {
+  if (!s) return;
+  form.system_name = s.system_name ?? form.system_name;
+  form.primary_color = s.primary_color ?? form.primary_color;
+  form.secondary_color = s.secondary_color ?? form.secondary_color;
+  form.evolution_api_base_url = s.evolution_api_base_url ?? form.evolution_api_base_url;
+  form.whapi_webhook_enabled = Boolean(s.whapi_webhook_enabled ?? false);
+  form.whapi_webhook_secret = s.whapi_webhook_secret ?? form.whapi_webhook_secret;
+  form.whapi_webhook_url = s.whapi_webhook_url ?? form.whapi_webhook_url;
+  form.evolution_webhook_enabled = Boolean(s.evolution_webhook_enabled ?? false);
+  form.evolution_webhook_secret = s.evolution_webhook_secret ?? form.evolution_webhook_secret;
+  form.evolution_webhook_url = s.evolution_webhook_url ?? form.evolution_webhook_url;
+}, { deep: true });
 const cronEnabled = ref(null);
 const checkingCron = ref(false);
 
