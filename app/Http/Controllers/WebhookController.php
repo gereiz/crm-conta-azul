@@ -77,8 +77,9 @@ class WebhookController extends Controller
         $eventType = strtolower((string) ($payload['event']['type'] ?? ''));
         $eventAction = strtolower((string) ($payload['event']['event'] ?? ''));
         $isWhapiIncoming = ($eventType === 'messages' && in_array($eventAction, ['post', 'put'], true) && isset($payload['messages']));
+        $isWhapiStatuses = ($eventType === 'statuses' && in_array($eventAction, ['post', 'put'], true) && isset($payload['messages']));
 
-        if ($type === 'incoming' || $isWhapiIncoming) {
+        if ($type === 'incoming' || $isWhapiIncoming || $isWhapiStatuses) {
             if ($isWhapiIncoming) {
                 $incomingMsgs = $payload['messages'] ?? [];
                 if (! is_array($incomingMsgs)) {
@@ -203,6 +204,65 @@ class WebhookController extends Controller
                     }
                 }
 
+                return response()->json(['success' => true]);
+            } elseif ($isWhapiStatuses) {
+                $statusMsgs = $payload['messages'] ?? [];
+                if (! is_array($statusMsgs)) {
+                    $statusMsgs = [$statusMsgs];
+                }
+                foreach ($statusMsgs as $msg) {
+                    $fromMe = (bool) ($msg['from_me'] ?? $msg['fromMe'] ?? false);
+                    if (! $fromMe) {
+                        // Ignora status de mensagens que não são deste remetente
+                        continue;
+                    }
+                    $mId = (string) ($msg['id'] ?? ($msg['message_id'] ?? ''));
+                    $chatIdRaw = $msg['chat_id'] ?? null;
+                    $toRaw = (function ($chatId) {
+                        if (! is_string($chatId)) return null;
+                        $num = preg_replace('/\D+/', '', $chatId);
+                        return $num ?: null;
+                    })($chatIdRaw);
+                    $toSanitized = $this->normalizePhone($toRaw);
+                    $statusNormMsg = $this->normalizeStatus($msg['status'] ?? null);
+                    if (! $statusNormMsg) {
+                        continue;
+                    }
+                    $target = null;
+                    if (! empty($mId)) {
+                        $target = WhatsappMessageLog::where('provider_message_id', $mId)->first();
+                    }
+                    if (! $target && $toSanitized) {
+                        $target = WhatsappMessageLog::where('phone_sanitized', $toSanitized)->orderByDesc('sent_at')->first();
+                    }
+                    if ($target) {
+                        $target->delivery_status = $statusNormMsg;
+                        $target->delivery_status_updated_at = isset($msg['timestamp']) ? \Carbon\Carbon::createFromTimestamp((int) $msg['timestamp']) : now();
+                        $target->save();
+                        \App\Models\WebhookEventLog::create([
+                            'provider' => $provider,
+                            'event_type' => 'statuses.post',
+                            'from_me' => true,
+                            'phone' => $toSanitized,
+                            'chat_id' => $chatIdRaw,
+                            'provider_message_id' => $mId ?: null,
+                            'matched_log_id' => $target->id,
+                            'reason' => 'status_atualizado:'.$statusNormMsg,
+                            'payload_json' => $msg,
+                        ]);
+                    } else {
+                        \App\Models\WebhookEventLog::create([
+                            'provider' => $provider,
+                            'event_type' => 'statuses.post',
+                            'from_me' => true,
+                            'phone' => $toSanitized,
+                            'chat_id' => $chatIdRaw,
+                            'provider_message_id' => $mId ?: null,
+                            'reason' => 'sem_match_para_status',
+                            'payload_json' => $msg,
+                        ]);
+                    }
+                }
                 return response()->json(['success' => true]);
             }
 

@@ -56,7 +56,11 @@ const checkCronStatus = async () => {
 };
 
 const submit = () => {
-    form.post(route('settings.system.save'), {
+    form.transform((data) => ({
+        ...data,
+        whapi_webhook_enabled: data.whapi_webhook_enabled ? '1' : '0',
+        evolution_webhook_enabled: data.evolution_webhook_enabled ? '1' : '0',
+    })).post(route('settings.system.save'), {
         forceFormData: true,
         preserveScroll: true,
     });
