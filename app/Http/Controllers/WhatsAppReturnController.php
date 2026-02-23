@@ -66,4 +66,16 @@ class WhatsAppReturnController extends Controller
             ],
         ]);
     }
+
+    public function webhookDebug(Request $request)
+    {
+        $phone = preg_replace('/\D+/', '', (string) $request->input('phone'));
+        $limit = (int) ($request->input('limit') ?? 100);
+        $query = \App\Models\WebhookEventLog::orderByDesc('created_at');
+        if ($phone) {
+            $query->where('phone', $phone);
+        }
+        $logs = $query->limit(max(10, min(500, $limit)))->get();
+        return response()->json(['items' => $logs]);
+    }
 }

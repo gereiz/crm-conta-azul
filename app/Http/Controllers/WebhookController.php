@@ -51,6 +51,13 @@ class WebhookController extends Controller
         );
         if ($expectedSecret) {
             if (! hash_equals($expectedSecret, $incomingSecret)) {
+                \App\Models\WebhookEventLog::create([
+                    'provider' => $provider,
+                    'event_type' => is_array($payload['event'] ?? null) ? (($payload['event']['type'] ?? '').'.'.($payload['event']['event'] ?? '')) : (string) ($payload['event'] ?? ''),
+                    'from_me' => false,
+                    'reason' => 'secret_invalido',
+                    'payload_json' => $payload,
+                ]);
                 return response()->json(['success' => false, 'error' => 'Invalid webhook secret'], 401);
             }
         }
@@ -102,6 +109,28 @@ class WebhookController extends Controller
                             $target->delivery_status = $statusNormMsg;
                             $target->delivery_status_updated_at = isset($msg['timestamp']) ? \Carbon\Carbon::createFromTimestamp((int) $msg['timestamp']) : now();
                             $target->save();
+                            \App\Models\WebhookEventLog::create([
+                                'provider' => $provider,
+                                'event_type' => 'messages.post',
+                                'from_me' => true,
+                                'phone' => $toSanitized,
+                                'chat_id' => $chatIdRaw,
+                                'provider_message_id' => $mId ?: null,
+                                'matched_log_id' => $target->id,
+                                'reason' => 'status_atualizado:'.$statusNormMsg,
+                                'payload_json' => $msg,
+                            ]);
+                        } else {
+                            \App\Models\WebhookEventLog::create([
+                                'provider' => $provider,
+                                'event_type' => 'messages.post',
+                                'from_me' => true,
+                                'phone' => $toSanitized,
+                                'chat_id' => $chatIdRaw,
+                                'provider_message_id' => $mId ?: null,
+                                'reason' => 'sem_match_para_status',
+                                'payload_json' => $msg,
+                            ]);
                         }
                         continue;
                     }
@@ -129,14 +158,46 @@ class WebhookController extends Controller
                             $lastSent->responded = true;
                             $lastSent->responded_at = $ts;
                             $lastSent->save();
+                            \App\Models\WebhookEventLog::create([
+                                'provider' => $provider,
+                                'event_type' => 'messages.post',
+                                'from_me' => false,
+                                'phone' => $matchPhone,
+                                'chat_id' => $chatIdRaw,
+                                'provider_message_id' => $mId ?: null,
+                                'matched_log_id' => $lastSent->id,
+                                'reason' => 'respondida_ok',
+                                'payload_json' => $msg,
+                            ]);
                         } else {
                             // Atualiza o mais recente do dia para esse telefone
-                            WhatsappMessageLog::where('phone_sanitized', $matchPhone)
+                            $updated = WhatsappMessageLog::where('phone_sanitized', $matchPhone)
                                 ->whereDate('sent_at', $ts->toDateString())
                                 ->orderByDesc('sent_at')
                                 ->limit(1)
                                 ->update(['responded' => true, 'responded_at' => $ts]);
+                            \App\Models\WebhookEventLog::create([
+                                'provider' => $provider,
+                                'event_type' => 'messages.post',
+                                'from_me' => false,
+                                'phone' => $matchPhone,
+                                'chat_id' => $chatIdRaw,
+                                'provider_message_id' => $mId ?: null,
+                                'reason' => $updated ? 'respondida_fallback_dia' : 'sem_match_para_resposta',
+                                'payload_json' => $msg,
+                            ]);
                         }
+                    } else {
+                        \App\Models\WebhookEventLog::create([
+                            'provider' => $provider,
+                            'event_type' => 'messages.post',
+                            'from_me' => false,
+                            'phone' => null,
+                            'chat_id' => $chatIdRaw,
+                            'provider_message_id' => $mId ?: null,
+                            'reason' => 'telefone_invalido_ou_ausente',
+                            'payload_json' => $msg,
+                        ]);
                     }
                 }
 

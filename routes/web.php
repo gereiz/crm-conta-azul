@@ -155,6 +155,7 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('whatsapp', WhatsAppController::class)->only(['index','store','update','destroy']);
     Route::get('/whatsapp/retornos', [WhatsAppReturnController::class, 'index'])->name('whatsapp.returns.index');
+    Route::get('/whatsapp/retornos/debug', [WhatsAppReturnController::class, 'webhookDebug'])->name('whatsapp.returns.debug');
 
     // Envio de Mensagens
     Route::post('/messages/send', [MessageController::class, 'send'])->name('messages.send')->middleware('permission:messages.send');
