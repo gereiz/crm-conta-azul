@@ -41,7 +41,14 @@ class WebhookController extends Controller
         if ($provider === 'evolution' && ($settings?->evolution_webhook_enabled ?? false)) {
             $expectedSecret = $settings->evolution_webhook_secret;
         }
-        $incomingSecret = (string) ($request->header('X-Webhook-Secret') ?? $request->input('secret') ?? '');
+        $incomingSecret = (string) (
+            $request->header('X-Webhook-Secret')
+            ?? $request->header('X-Callback-Token')
+            ?? $request->route('secret')
+            ?? $request->query('secret')
+            ?? $request->input('secret')
+            ?? ''
+        );
         if ($expectedSecret) {
             if (! hash_equals($expectedSecret, $incomingSecret)) {
                 return response()->json(['success' => false, 'error' => 'Invalid webhook secret'], 401);

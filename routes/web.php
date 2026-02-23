@@ -37,7 +37,7 @@ Route::get('/', function () {
 
 // Webhooks (públicos) sem CSRF
 Route::withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-    ->post('/webhooks/whatsapp/status', [WebhookController::class, 'whatsappStatus'])
+    ->post('/webhooks/whatsapp/status/{secret?}', [WebhookController::class, 'whatsappStatus'])
     ->name('webhooks.whatsapp.status');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
