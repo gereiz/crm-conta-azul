@@ -47,7 +47,9 @@ class WhatsappReportController extends Controller
             $query->where('message_type', $type);
         }
         $baseForStatuses = clone $query;
-        $statuses = $baseForStatuses->select('status')->distinct()->pluck('status')->filter()->values();
+        // Remove ORDER BY para evitar erro "ORDER BY não está no SELECT" com DISTINCT (MySQL 3065)
+        $baseForStatuses->reorder();
+        $statuses = $baseForStatuses->select('status')->distinct()->orderBy('status')->pluck('status')->filter()->values();
         if ($status && in_array($status, $statuses->all())) {
             $query->where('status', $status);
         }

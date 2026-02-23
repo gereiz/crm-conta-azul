@@ -17,8 +17,15 @@ const form = useForm({
     logo: null,
     favicon: null,
     evolution_api_base_url: props.settings?.evolution_api_base_url ?? '',
+    whapi_webhook_enabled: props.settings?.whapi_webhook_enabled ?? false,
+    whapi_webhook_secret: props.settings?.whapi_webhook_secret ?? '',
+    whapi_webhook_url: props.settings?.whapi_webhook_url ?? '',
+    evolution_webhook_enabled: props.settings?.evolution_webhook_enabled ?? false,
+    evolution_webhook_secret: props.settings?.evolution_webhook_secret ?? '',
+    evolution_webhook_url: props.settings?.evolution_webhook_url ?? '',
 });
 
+const currentOrigin = typeof window !== 'undefined' && window?.location ? window.location.origin : '';
 const cronEnabled = ref(null);
 const checkingCron = ref(false);
 
@@ -133,6 +140,62 @@ onMounted(() => {
                                 URL da Evolution API
                             </label>
                             <TextInput v-model="form.evolution_api_base_url" class="w-full" placeholder="https://api.seu-vps.com" />
+                        </div>
+
+                        <!-- Webhooks WhatsApp -->
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+                            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Webhooks WhatsApp</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="space-y-3">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" id="whapi_enabled" v-model="form.whapi_webhook_enabled" />
+                                        <label for="whapi_enabled" class="text-sm">Habilitar Webhook Whapi</label>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Segredo (Whapi)
+                                        </label>
+                                        <TextInput v-model="form.whapi_webhook_secret" class="w-full" placeholder="Chave secreta para validação" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            URL do Webhook (Whapi)
+                                        </label>
+                                        <TextInput v-model="form.whapi_webhook_url" class="w-full" placeholder="https://seu-dominio/webhooks/whatsapp/status" />
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            Recomenda-se usar: {{ currentOrigin }}/webhooks/whatsapp/status
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" id="evo_enabled" v-model="form.evolution_webhook_enabled" />
+                                        <label for="evo_enabled" class="text-sm">Habilitar Webhook Evolution</label>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Segredo (Evolution)
+                                        </label>
+                                        <TextInput v-model="form.evolution_webhook_secret" class="w-full" placeholder="Chave secreta para validação" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            URL do Webhook (Evolution)
+                                        </label>
+                                        <TextInput v-model="form.evolution_webhook_url" class="w-full" placeholder="https://seu-dominio/webhooks/whatsapp/status" />
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            Recomenda-se usar: {{ currentOrigin }}/webhooks/whatsapp/status
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-600 dark:text-gray-300">
+                                <p class="mb-2">Após salvar, configure no painel do provedor:</p>
+                                <ul class="list-disc list-inside">
+                                    <li>Whapi: defina Webhook URL e inclua um cabeçalho X-Webhook-Secret com o segredo configurado.</li>
+                                    <li>Evolution: defina Webhook URL e inclua um cabeçalho X-Webhook-Secret com o segredo configurado.</li>
+                                </ul>
+                            </div>
                         </div>
 
                         <div class="flex justify-end">

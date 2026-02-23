@@ -353,6 +353,12 @@ class SettingsController extends Controller
             'logo' => 'nullable|image|max:2048',
             'favicon' => 'nullable|image|max:1024',
             'evolution_api_base_url' => 'nullable|url',
+            'whapi_webhook_enabled' => 'nullable|boolean',
+            'whapi_webhook_secret' => 'nullable|string|max:100',
+            'whapi_webhook_url' => 'nullable|url',
+            'evolution_webhook_enabled' => 'nullable|boolean',
+            'evolution_webhook_secret' => 'nullable|string|max:100',
+            'evolution_webhook_url' => 'nullable|url',
         ]);
 
         $settings = SystemSetting::latest()->first() ?? new SystemSetting;
@@ -360,6 +366,12 @@ class SettingsController extends Controller
         $settings->primary_color = $request->input('primary_color', '#6366F1');
         $settings->secondary_color = $request->input('secondary_color', '#22C55E');
         $settings->evolution_api_base_url = $request->input('evolution_api_base_url') ? rtrim($request->input('evolution_api_base_url'), '/') : null;
+        $settings->whapi_webhook_enabled = (bool) $request->input('whapi_webhook_enabled', false);
+        $settings->whapi_webhook_secret = $request->input('whapi_webhook_secret');
+        $settings->whapi_webhook_url = $request->input('whapi_webhook_url');
+        $settings->evolution_webhook_enabled = (bool) $request->input('evolution_webhook_enabled', false);
+        $settings->evolution_webhook_secret = $request->input('evolution_webhook_secret');
+        $settings->evolution_webhook_url = $request->input('evolution_webhook_url');
 
         if ($request->hasFile('logo')) {
             $file = $request->file('logo');

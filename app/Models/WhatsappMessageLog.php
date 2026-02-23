@@ -18,10 +18,15 @@ class WhatsappMessageLog extends Model
         'phone_sanitized',
         'message_type',
         'provider',
+        'provider_message_id',
         'message_template_id',
         'total_boletos',
         'boleto_ids',
         'status',
+        'delivery_status',
+        'delivery_status_updated_at',
+        'responded',
+        'responded_at',
         'error_message',
         'content',
         'batch_id',
@@ -33,6 +38,9 @@ class WhatsappMessageLog extends Model
     protected $casts = [
         'boleto_ids' => 'array',
         'sent_at' => 'datetime',
+        'delivery_status_updated_at' => 'datetime',
+        'responded' => 'boolean',
+        'responded_at' => 'datetime',
     ];
 
     public function connection()
@@ -63,5 +71,10 @@ class WhatsappMessageLog extends Model
     public function messageCron()
     {
         return $this->belongsTo(MessageCron::class, 'message_cron_id');
+    }
+
+    public function statusLogs()
+    {
+        return $this->hasMany(MessageStatusLog::class, 'whatsapp_message_log_id');
     }
 }

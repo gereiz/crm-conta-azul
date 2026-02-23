@@ -135,6 +135,9 @@ watch(() => page.props.system_settings, (newSettings) => {
                     <Link :href="route('whatsapp.reports.index')" :class="route().current('whatsapp.reports.index') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
                         <span>Relatórios de Envio</span>
                     </Link>
+                    <Link :href="route('whatsapp.returns.index')" :class="route().current('whatsapp.returns.index') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
+                        <span>Retorno de Mensagens</span>
+                    </Link>
                     <Link :href="route('whatsapp.future.index')" :class="route().current('whatsapp.future.index') ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white'" class="group relative flex items-center pl-12 pr-4 py-2 text-sm font-medium rounded-xl transition-all duration-200">
                         <span>Envios Futuros</span>
                     </Link>

@@ -15,6 +15,8 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WhatsAppController;
 use App\Http\Controllers\WhatsappTemplateController;
+use App\Http\Controllers\WebhookController;
+use App\Http\Controllers\WhatsAppReturnController;
 use Illuminate\Support\Facades\Route;
 
 // Rotas de Instalação (Públicas, mas protegidas pelo middleware CheckInstalled)
@@ -32,6 +34,11 @@ Route::prefix('install')->name('install.')->group(function () {
 Route::get('/', function () {
     return redirect()->route('login');
 });
+
+// Webhooks (públicos) sem CSRF
+Route::withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->post('/webhooks/whatsapp/status', [WebhookController::class, 'whatsappStatus'])
+    ->name('webhooks.whatsapp.status');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
@@ -146,7 +153,8 @@ Route::middleware('auth')->group(function () {
     // Envios Futuros
     Route::get('whatsapp/future-messages', [\App\Http\Controllers\FutureMessageController::class, 'index'])->name('whatsapp.future.index');
 
-    Route::resource('whatsapp', WhatsAppController::class);
+    Route::resource('whatsapp', WhatsAppController::class)->only(['index','store','update','destroy']);
+    Route::get('/whatsapp/retornos', [WhatsAppReturnController::class, 'index'])->name('whatsapp.returns.index');
 
     // Envio de Mensagens
     Route::post('/messages/send', [MessageController::class, 'send'])->name('messages.send')->middleware('permission:messages.send');
