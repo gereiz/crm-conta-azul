@@ -41,7 +41,6 @@ watch(() => props.settings, (s) => {
   form.evolution_webhook_secret = s.evolution_webhook_secret ?? form.evolution_webhook_secret;
   form.evolution_webhook_url = s.evolution_webhook_url ?? form.evolution_webhook_url;
 }, { deep: true });
-const cronEnabled = ref(null);
 const checkingCron = ref(false);
 
 const checkCronStatus = async () => {
