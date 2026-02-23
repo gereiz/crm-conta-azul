@@ -67,11 +67,15 @@ class WebhookController extends Controller
         // Whapi: incoming messages are delivered with { event: { type: 'messages', event: 'post' }, messages: [...] }
         $eventType = strtolower((string) ($payload['event']['type'] ?? ''));
         $eventAction = strtolower((string) ($payload['event']['event'] ?? ''));
-        $isWhapiIncoming = ($eventType === 'messages' && in_array($eventAction, ['post', 'put'], true) && is_array($payload['messages'] ?? null));
+        $isWhapiIncoming = ($eventType === 'messages' && in_array($eventAction, ['post', 'put'], true) && isset($payload['messages']));
 
         if ($type === 'incoming' || $isWhapiIncoming) {
             if ($isWhapiIncoming) {
-                foreach (($payload['messages'] ?? []) as $msg) {
+                $incomingMsgs = $payload['messages'] ?? [];
+                if (! is_array($incomingMsgs)) {
+                    $incomingMsgs = [$incomingMsgs];
+                }
+                foreach ($incomingMsgs as $msg) {
                     $fromMe = (bool) ($msg['from_me'] ?? $msg['fromMe'] ?? false);
                     if ($fromMe) {
                         continue;
@@ -99,9 +103,14 @@ class WebhookController extends Controller
                         $lastSent = WhatsappMessageLog::where('phone_sanitized', $mFrom)
                             ->orderByDesc('sent_at')
                             ->first();
+                        if (! $lastSent) {
+                            $lastSent = WhatsappMessageLog::whereRaw('REPLACE(REPLACE(REPLACE(phone_original, " ", ""), "-", ""), "(", "") = ?', [$mFrom])
+                                ->orderByDesc('sent_at')
+                                ->first();
+                        }
                         if ($lastSent) {
                             $lastSent->responded = true;
-                            $lastSent->responded_at = now();
+                            $lastSent->responded_at = isset($msg['timestamp']) ? \Carbon\Carbon::createFromTimestamp((int) $msg['timestamp']) : now();
                             $lastSent->save();
                         }
                     }
