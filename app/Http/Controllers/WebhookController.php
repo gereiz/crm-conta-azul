@@ -77,14 +77,14 @@ class WebhookController extends Controller
                         continue;
                     }
                     $mId = (string) ($msg['id'] ?? '');
-                    $mFrom = $this->normalizePhone($msg['from'] ?? null) ?: (function ($chatId) {
+                    $mFromRaw = $msg['from'] ?? (function ($chatId) {
                         if (! is_string($chatId)) {
                             return null;
                         }
-                        // Extract numeric from chat_id like "5511999999999@c.us"
                         $num = preg_replace('/\D+/', '', $chatId);
                         return $num ?: null;
                     })($msg['chat_id'] ?? null);
+                    $mFrom = $this->normalizePhone(is_string($mFromRaw) ? $mFromRaw : null);
 
                     \DB::table('incoming_messages')->insert([
                         'numero_origem' => $mFrom,
