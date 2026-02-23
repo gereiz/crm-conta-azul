@@ -21,4 +21,10 @@ class SystemSetting extends Model
         'evolution_webhook_secret',
         'evolution_webhook_url',
     ];
+
+    protected $casts = [
+        'contaazul_cron_enabled' => 'boolean',
+        'whapi_webhook_enabled' => 'boolean',
+        'evolution_webhook_enabled' => 'boolean',
+    ];
 }
