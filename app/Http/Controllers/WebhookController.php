@@ -56,7 +56,8 @@ class WebhookController extends Controller
         }
         $payload = $request->all();
 
-        $type = strtolower((string) ($payload['type'] ?? $payload['event'] ?? 'status'));
+        // 'event' pode ser um array (Whapi). Evita conversão de array para string.
+        $type = strtolower((string) ($payload['type'] ?? ($payload['event']['type'] ?? 'status')));
         $messageId = (string) ($payload['message_id'] ?? $payload['id'] ?? ($payload['message']['id'] ?? ''));
         $statusOriginal = (string) ($payload['status'] ?? ($payload['message']['status'] ?? ''));
         $statusNorm = $this->normalizeStatus($statusOriginal);
