@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cliente;
+use App\Models\ContaAzulConnection;
 use App\Models\WhatsappNumber;
 use App\Models\WhatsappTemplate;
 use App\Services\ContaAzulService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ClienteController extends Controller
 {
@@ -22,16 +25,43 @@ class ClienteController extends Controller
     {
         $search = $request->input('search');
         $size = $request->input('size', 20);
+        $connectionId = $request->input('connection_id');
+        $noPhone = filter_var($request->input('no_phone'), FILTER_VALIDATE_BOOLEAN);
+        $noEmail = filter_var($request->input('no_email'), FILTER_VALIDATE_BOOLEAN);
+        $noDocument = filter_var($request->input('no_document'), FILTER_VALIDATE_BOOLEAN);
 
         $query = Cliente::query();
 
         if ($search) {
+            $digits = preg_replace('/\D+/', '', (string) $search);
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('cpf_cnpj', 'like', "%{$search}%")
-                    ->orWhere('company_name', 'like', "%{$search}%");
+                    ->orWhere('company_name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('mobile_phone', 'like', "%{$search}%");
             });
+            if ($digits && strlen($digits) >= 6) {
+                $query->orWhere(function ($q) use ($digits) {
+                    $q->where('phone', 'like', "%{$digits}%")
+                        ->orWhere('mobile_phone', 'like', "%{$digits}%");
+                });
+            }
+        }
+
+        if ($connectionId) {
+            $query->where('connection_id', $connectionId);
+        }
+
+        if ($noPhone) {
+            $query->whereNull('phone')->whereNull('mobile_phone');
+        }
+        if ($noEmail) {
+            $query->whereNull('email');
+        }
+        if ($noDocument) {
+            $query->whereNull('cpf_cnpj');
         }
 
         // Ordenação
@@ -50,12 +80,18 @@ class ClienteController extends Controller
         $query->orderBy($sort, $direction);
 
         $clientes = $query->paginate($size)->withQueryString();
+        $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
 
         return Inertia::render('Clientes/Index', [
             'clientes' => $clientes,
+            'connections' => $connections,
             'filters' => array_merge($request->only(['search', 'size']), [
                 'sort' => $sort,
                 'direction' => $direction,
+                'connection_id' => $connectionId,
+                'no_phone' => $noPhone,
+                'no_email' => $noEmail,
+                'no_document' => $noDocument,
             ]),
         ]);
     }
@@ -112,6 +148,111 @@ class ClienteController extends Controller
             'invoices' => $invoices,
             'whatsappNumbers' => $whatsappNumbers,
             'templates' => $templates,
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        $search = $request->input('search');
+        $connectionId = $request->input('connection_id');
+        $noPhone = filter_var($request->input('no_phone'), FILTER_VALIDATE_BOOLEAN);
+        $noEmail = filter_var($request->input('no_email'), FILTER_VALIDATE_BOOLEAN);
+        $noDocument = filter_var($request->input('no_document'), FILTER_VALIDATE_BOOLEAN);
+        $sort = $request->input('sort', 'name');
+        $direction = $request->input('direction', 'asc');
+
+        $query = Cliente::query();
+        if ($search) {
+            $digits = preg_replace('/\D+/', '', (string) $search);
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('cpf_cnpj', 'like', "%{$search}%")
+                    ->orWhere('company_name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('mobile_phone', 'like', "%{$search}%");
+            });
+            if ($digits && strlen($digits) >= 6) {
+                $query->orWhere(function ($q) use ($digits) {
+                    $q->where('phone', 'like', "%{$digits}%")
+                        ->orWhere('mobile_phone', 'like', "%{$digits}%");
+                });
+            }
+        }
+        if ($connectionId) {
+            $query->where('connection_id', $connectionId);
+        }
+        if ($noPhone) {
+            $query->whereNull('phone')->whereNull('mobile_phone');
+        }
+        if ($noEmail) {
+            $query->whereNull('email');
+        }
+        if ($noDocument) {
+            $query->whereNull('cpf_cnpj');
+        }
+        $allowedSorts = ['name', 'email', 'company_name', 'cpf_cnpj', 'mobile_phone'];
+        if (! in_array($sort, $allowedSorts)) {
+            $sort = 'name';
+        }
+        if (! in_array(strtolower($direction), ['asc', 'desc'])) {
+            $direction = 'asc';
+        }
+        $query->orderBy($sort, $direction);
+        $items = $query->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Clientes');
+        $headers = [
+            'ID',
+            'CA ID',
+            'Empresa',
+            'Nome',
+            'Email',
+            'Telefone',
+            'Celular',
+            'Internacional',
+            'CPF/CNPJ',
+            'Tipo Pessoa',
+            'Cidade',
+            'Estado',
+            'Data Nascimento',
+            'Criado em',
+            'Atualizado em',
+        ];
+        $sheet->fromArray([$headers], null, 'A1');
+        $row = 2;
+        foreach ($items as $c) {
+            $sheet->fromArray([[
+                $c->id,
+                $c->ca_id,
+                $c->company_name,
+                $c->name,
+                $c->email,
+                $c->phone,
+                $c->mobile_phone,
+                $c->is_international ? 'Sim' : 'Não',
+                $c->cpf_cnpj,
+                $c->person_type,
+                $c->city,
+                $c->state,
+                $c->birthdate ? \Carbon\Carbon::parse($c->birthdate)->format('d/m/Y') : '',
+                $c->created_at ? \Carbon\Carbon::parse($c->created_at)->format('d/m/Y H:i:s') : '',
+                $c->updated_at ? \Carbon\Carbon::parse($c->updated_at)->format('d/m/Y H:i:s') : '',
+            ]], null, 'A'.$row);
+            $row++;
+        }
+        foreach (range('A', 'O') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+        $filename = 'clientes_filtrados_'.now()->format('Y-m-d_H-i').'.xlsx';
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 

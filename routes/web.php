@@ -142,6 +142,7 @@ Route::middleware('auth')->group(function () {
     // Módulos
     Route::get('/clientes/faturas-atrasadas', [ClienteController::class, 'overdueInvoices'])->name('clientes.invoices.overdue');
     Route::get('/clientes/{id}/invoices', [ClienteController::class, 'getClientInvoices'])->name('clientes.invoices.json');
+    Route::get('/clientes/export', [ClienteController::class, 'export'])->name('clientes.export');
     Route::resource('clientes', ClienteController::class);
     Route::resource('empresas', EmpresaController::class);
     Route::post('empresas/{connection}/settings/messages', [EmpresaController::class, 'updateMessageSettings'])->name('empresas.settings.messages');

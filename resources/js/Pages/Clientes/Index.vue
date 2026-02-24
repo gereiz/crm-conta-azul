@@ -9,11 +9,16 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 const props = defineProps({
     clientes: Object, // Paginator Laravel
     filters: Object,
+    connections: Array,
 });
 
 const search = ref(props.filters.search || '');
 const currentSort = ref(props.filters.sort || 'name');
 const currentDirection = ref(props.filters.direction || 'asc');
+const connectionId = ref(props.filters.connection_id || '');
+const noPhone = ref(Boolean(props.filters.no_phone || false));
+const noEmail = ref(Boolean(props.filters.no_email || false));
+const noDocument = ref(Boolean(props.filters.no_document || false));
 
 // Função para acionar a ordenação
 const sort = (field) => {
@@ -32,6 +37,10 @@ const updateParams = () => {
         search: search.value, 
         sort: currentSort.value,
         direction: currentDirection.value,
+        connection_id: connectionId.value || '',
+        no_phone: noPhone.value ? '1' : '',
+        no_email: noEmail.value ? '1' : '',
+        no_document: noDocument.value ? '1' : '',
         page: 1 // Resetar página ao ordenar ou filtrar
     }, {
         preserveState: true,
@@ -48,7 +57,11 @@ watch(search, (value) => {
             search: value, 
             page: 1,
             sort: currentSort.value,
-            direction: currentDirection.value
+            direction: currentDirection.value,
+            connection_id: connectionId.value || '',
+            no_phone: noPhone.value ? '1' : '',
+            no_email: noEmail.value ? '1' : '',
+            no_document: noDocument.value ? '1' : '',
         }, {
             preserveState: true,
             replace: true,
@@ -69,11 +82,28 @@ const changePage = (page) => {
         search: search.value, 
         page: page,
         sort: currentSort.value,
-        direction: currentDirection.value
+        direction: currentDirection.value,
+        connection_id: connectionId.value || '',
+        no_phone: noPhone.value ? '1' : '',
+        no_email: noEmail.value ? '1' : '',
+        no_document: noDocument.value ? '1' : '',
     }, {
         preserveState: true,
         preserveScroll: true,
     });
+};
+
+const exportClients = () => {
+    const params = new URLSearchParams({
+        search: search.value || '',
+        sort: currentSort.value || 'name',
+        direction: currentDirection.value || 'asc',
+        connection_id: connectionId.value || '',
+        no_phone: noPhone.value ? '1' : '',
+        no_email: noEmail.value ? '1' : '',
+        no_document: noDocument.value ? '1' : '',
+    });
+    window.location.href = route('clientes.export') + '?' + params.toString();
 };
 
 </script>
@@ -95,13 +125,36 @@ const changePage = (page) => {
                 
                 <!-- Filtros -->
                 <div class="mb-6 bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg p-4">
-                    <div class="flex gap-4">
+                    <div class="flex flex-col md:flex-row md:items-end gap-4">
                         <TextInput
                             v-model="search"
                             type="text"
                             placeholder="Buscar por nome, telefone..."
                             class="block w-full md:w-1/3"
                         />
+                        <div class="w-full md:w-1/4">
+                            <label class="block text-xs mb-1 text-gray-600 dark:text-gray-300">Empresa</label>
+                            <select v-model="connectionId" @change="updateParams" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md text-sm">
+                                <option value="">Todas</option>
+                                <option v-for="c in (connections || [])" :key="c.id" :value="c.id">{{ c.empresa_nome }}</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
+                                <input type="checkbox" v-model="noPhone" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
+                                <span class="ml-2">Sem telefone</span>
+                            </label>
+                            <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
+                                <input type="checkbox" v-model="noEmail" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
+                                <span class="ml-2">Sem e-mail</span>
+                            </label>
+                            <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
+                                <input type="checkbox" v-model="noDocument" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
+                                <span class="ml-2">Sem documento</span>
+                            </label>
+                        </div>
+                        <div class="flex-1"></div>
+                        <PrimaryButton @click="exportClients" class="text-xs">Exportar Clientes</PrimaryButton>
                     </div>
                 </div>
 
