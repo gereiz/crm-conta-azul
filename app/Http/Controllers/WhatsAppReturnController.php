@@ -37,7 +37,12 @@ class WhatsAppReturnController extends Controller
                     JSON_UNQUOTE(JSON_EXTRACT(im.payload_json, '$.caption'))
                 )
                 FROM incoming_messages im
-                WHERE (im.numero_origem = whatsapp_message_logs.phone_sanitized OR im.numero_destino = whatsapp_message_logs.phone_sanitized)
+                WHERE (
+                    im.numero_origem = whatsapp_message_logs.phone_sanitized
+                    OR im.numero_destino = whatsapp_message_logs.phone_sanitized
+                    OR im.numero_origem = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp_message_logs.phone_original,''),' ',''),'-',''),'(',''),')',''),'.',''),'+','')
+                    OR im.numero_destino = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp_message_logs.phone_original,''),' ',''),'-',''),'(',''),')',''),'.',''),'+','')
+                )
                 ORDER BY im.created_at DESC
                 LIMIT 1)")
             ]);
