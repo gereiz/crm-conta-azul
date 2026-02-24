@@ -28,23 +28,13 @@ class WhatsAppReturnController extends Controller
         $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
 
         $query = WhatsappMessageLog::with(['connection', 'cliente', 'user', 'whatsappNumber'])
-            ->select('whatsapp_message_logs.*')
             ->orderBy('sent_at', 'desc')
             ->addSelect([
-                'last_response_text' => DB::raw("(SELECT COALESCE(
-                    JSON_UNQUOTE(JSON_EXTRACT(im.payload_json, '$.text.body')),
-                    JSON_UNQUOTE(JSON_EXTRACT(im.payload_json, '$.body')),
-                    JSON_UNQUOTE(JSON_EXTRACT(im.payload_json, '$.caption'))
-                )
-                FROM incoming_messages im
-                WHERE (
-                    im.numero_origem = whatsapp_message_logs.phone_sanitized
-                    OR im.numero_destino = whatsapp_message_logs.phone_sanitized
-                    OR im.numero_origem = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp_message_logs.phone_original,''),' ',''),'-',''),'(',''),')',''),'.',''),'+','')
-                    OR im.numero_destino = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp_message_logs.phone_original,''),' ',''),'-',''),'(',''),')',''),'.',''),'+','')
-                )
-                ORDER BY im.created_at DESC
-                LIMIT 1)")
+                'last_response_text' => DB::raw("(SELECT JSON_UNQUOTE(JSON_EXTRACT(im.payload_json, '$.text.body'))
+                    FROM incoming_messages im
+                    WHERE im.numero_origem = whatsapp_message_logs.phone_sanitized
+                    ORDER BY im.created_at DESC
+                    LIMIT 1)")
             ]);
 
         if ($connectionId) $query->where('connection_id', $connectionId);
