@@ -6,6 +6,7 @@ use App\Models\ContaAzulConnection;
 use App\Models\WhatsappMessageLog;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class WhatsAppReturnController extends Controller
@@ -27,7 +28,10 @@ class WhatsAppReturnController extends Controller
         $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
 
         $query = WhatsappMessageLog::with(['connection', 'cliente', 'user', 'whatsappNumber'])
-            ->orderBy('sent_at', 'desc');
+            ->orderBy('sent_at', 'desc')
+            ->addSelect([
+                'last_response_text' => DB::raw("(SELECT JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.body')) FROM incoming_messages im WHERE im.numero_origem = whatsapp_message_logs.phone_sanitized ORDER BY im.created_at DESC LIMIT 1)")
+            ]);
 
         if ($connectionId) $query->where('connection_id', $connectionId);
         if ($senderNumberId) $query->where('whatsapp_number_id', $senderNumberId);

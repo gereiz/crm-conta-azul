@@ -130,7 +130,7 @@ const clearFilters = () => {
                     <th class="py-1">ID provedor</th>
                     <th class="py-1">Status</th>
                     <th class="py-1">Respondida?</th>
-                    <th class="py-1">Data resposta</th>
+                    <th class="py-1">Resposta</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -166,7 +166,18 @@ const clearFilters = () => {
                         {{ row.responded ? 'Sim' : 'Não' }}
                       </span>
                     </td>
-                    <td class="py-1">{{ row.responded_at ? new Date(row.responded_at).toLocaleString() : '' }}</td>
+                    <td class="py-1">
+                      <span
+                        :class="(row.last_response_text ? 'px-2 py-0.5 rounded bg-indigo-100 text-indigo-800' : 'px-2 py-0.5 rounded bg-gray-100 text-gray-600')"
+                        :title="row.last_response_text || 'Sem resposta'"
+                      >
+                        {{
+                          (row.last_response_text
+                            ? (row.last_response_text.length > 80 ? (row.last_response_text.slice(0, 80) + '…') : row.last_response_text)
+                            : 'N/A')
+                        }}
+                      </span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
