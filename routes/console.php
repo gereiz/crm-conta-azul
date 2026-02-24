@@ -11,6 +11,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('message:process-crons')->everyMinute()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('message:process-delayed-crons')->everyMinute()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
+Schedule::command('message:process-enqueued')->everyTwoMinutes()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('contaazul:sync-stale')->dailyAt('01:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 // Alinhado ao fluxo multi-empresa e tokens por conexão
 Schedule::command('contaazul:sync-stale')->dailyAt('10:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
