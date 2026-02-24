@@ -276,6 +276,9 @@ class MessageController extends Controller
             'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $logContent,
             'batch_id' => $result['meta']['batch_id'] ?? null,
+            'provider_message_id' => $result['meta']['message_id'] ?? null,
+            'delivery_status' => isset($result['meta']) ? $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)) : null,
+            'delivery_status_updated_at' => isset($result['meta']) && (($result['meta']['whapi_status'] ?? null) || ($result['meta']['evolution_status'] ?? null)) ? now() : null,
             'sent_at' => now(),
         ]);
 
@@ -331,5 +334,20 @@ class MessageController extends Controller
     protected function disablePreviewLinks(string $text): string
     {
         return preg_replace('/\bhxxps:\/\//i', 'https://', $text);
+    }
+
+    protected function normalizeStatus(?string $status): ?string
+    {
+        if (! $status) return null;
+        $s = strtolower($status);
+        return match ($s) {
+            'pending', 'queueing', 'queued', 'submit', 'submitted' => 'PENDING',
+            'sent' => 'SENT',
+            'delivered' => 'DELIVERED',
+            'read', 'seen' => 'READ',
+            'failed', 'fail' => 'FAILED',
+            'error' => 'ERROR',
+            default => strtoupper($s),
+        };
     }
 }

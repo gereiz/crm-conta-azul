@@ -33,6 +33,21 @@ class MessageCronService
         $this->orchestrator = $orchestrator;
     }
 
+    protected function normalizeStatus(?string $status): ?string
+    {
+        if (! $status) return null;
+        $s = strtolower($status);
+        return match ($s) {
+            'pending', 'queueing', 'queued', 'submit', 'submitted' => 'PENDING',
+            'sent' => 'SENT',
+            'delivered' => 'DELIVERED',
+            'read', 'seen' => 'READ',
+            'failed', 'fail' => 'FAILED',
+            'error' => 'ERROR',
+            default => strtoupper($s),
+        };
+    }
+
     public function processCron(MessageCron $cron, bool $forceRun = false, ?array $allowedClienteIds = null)
     {
         Log::info("Processando cron: {$cron->name} (ID: {$cron->id}, Tipo: {$cron->type})");
@@ -626,6 +641,7 @@ class MessageCronService
             'phone_sanitized' => $sanitizedPhone,
             'message_type' => $cron->type,
             'provider' => $whatsapp->provider ?? null,
+            'provider_message_id' => $result['meta']['message_id'] ?? null,
             'message_template_id' => $cron->message_template_id,
             'total_boletos' => 1,
             'boleto_ids' => [$invoice->id],
@@ -633,6 +649,8 @@ class MessageCronService
             'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $logContent,
             'batch_id' => $batchId,
+            'delivery_status' => $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)),
+            'delivery_status_updated_at' => isset($result['meta']['whapi_status']) || isset($result['meta']['evolution_status']) ? now() : null,
             'sent_at' => now(),
         ]);
 
@@ -706,6 +724,9 @@ class MessageCronService
                 'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
                 'content' => $logContent,
                 'batch_id' => $batchId,
+                'provider_message_id' => $result['meta']['message_id'] ?? null,
+                'delivery_status' => $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)),
+                'delivery_status_updated_at' => isset($result['meta']['whapi_status']) || isset($result['meta']['evolution_status']) ? now() : null,
                 'sent_at' => now(),
             ]);
 
@@ -1154,6 +1175,9 @@ class MessageCronService
                     : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $content,
             'batch_id' => $batchId,
+            'provider_message_id' => $result['meta']['message_id'] ?? null,
+            'delivery_status' => $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)),
+            'delivery_status_updated_at' => isset($result['meta']['whapi_status']) || isset($result['meta']['evolution_status']) ? now() : null,
             'sent_at' => now(),
         ]);
 

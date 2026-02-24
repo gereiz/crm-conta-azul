@@ -18,7 +18,7 @@ Schedule::command('contaazul:sync-stale')->dailyAt('10:00')->timezone(config('ap
 Schedule::command('contaazul:sync-stale')->dailyAt('08:45')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('contaazul:refresh-tokens')->everyThirtyMinutes()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::command('message:calculate-future')->dailyAt('00:00')->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
-Schedule::command('messages:sync-status')->everyTenMinutes()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
+Schedule::command('messages:sync-status')->everyFiveMinutes()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');
 Schedule::call(function () {
     Cache::put('scheduler_heartbeat', now()->toDateTimeString(), 120);
 })->everyMinute()->timezone(config('app.timezone') ?: 'America/Sao_Paulo');

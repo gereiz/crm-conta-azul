@@ -117,54 +117,56 @@ const clearFilters = () => {
           <div class="p-6 text-gray-900 dark:text-gray-100">
             <h3 class="text-lg font-medium mb-4">Mensagens</h3>
             <div class="overflow-x-auto">
-              <table class="min-w-full text-sm">
+              <table class="min-w-full text-xs">
                 <thead>
                   <tr class="text-left text-gray-600 dark:text-gray-300">
-                    <th class="py-2">Data envio</th>
-                    <th class="py-2">Empresa</th>
-                    <th class="py-2">Número remetente</th>
-                    <th class="py-2">Cliente</th>
-                    <th class="py-2">Telefone</th>
-                    <th class="py-2">Tipo</th>
-                    <th class="py-2">Provedor</th>
-                    <th class="py-2">ID provedor</th>
-                    <th class="py-2">Status</th>
-                    <th class="py-2">Atualizado</th>
-                    <th class="py-2">Respondida?</th>
-                    <th class="py-2">Data resposta</th>
+                    <th class="py-1">Data envio</th>
+                    <th class="py-1">Empresa</th>
+                    <th class="py-1">Número remetente</th>
+                    <th class="py-1">Cliente</th>
+                    <th class="py-1">Telefone</th>
+                    <th class="py-1">Tipo</th>
+                    <th class="py-1">Provedor</th>
+                    <th class="py-1">ID provedor</th>
+                    <th class="py-1">Status</th>
+                    <th class="py-1">Respondida?</th>
+                    <th class="py-1">Data resposta</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in items.data" :key="row.id" class="border-t border-gray-200 dark:border-gray-700">
-                    <td class="py-2">{{ row.sent_at ? new Date(row.sent_at).toLocaleString() : '' }}</td>
-                    <td class="py-2">{{ row.connection?.empresa_nome || '' }}</td>
-                    <td class="py-2">{{ row.whatsapp_number?.description || '' }}</td>
-                    <td class="py-2">{{ row.client_name }}</td>
-                    <td class="py-2">{{ row.phone_sanitized || row.phone_original }}</td>
-                    <td class="py-2">{{ row.message_type }}</td>
-                    <td class="py-2">{{ row.provider }}</td>
-                    <td class="py-2">{{ row.provider_message_id }}</td>
-                    <td class="py-2">
+                  <tr v-for="row in items.data" :key="row.id" class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="py-1">{{ row.sent_at ? new Date(row.sent_at).toLocaleString() : '' }}</td>
+                    <td class="py-1">{{ row.connection?.empresa_nome || '' }}</td>
+                    <td class="py-1">{{ row.whatsapp_number?.description || '' }}</td>
+                    <td class="py-1">{{ row.client_name }}</td>
+                    <td class="py-1">{{ row.phone_sanitized || row.phone_original }}</td>
+                    <td class="py-1">{{ row.message_type }}</td>
+                    <td class="py-1">{{ row.provider }}</td>
+                    <td class="py-1">{{ row.provider_message_id }}</td>
+                    <td class="py-1">
                       <span
                         :class="{
-                          'px-2 py-1 rounded bg-gray-200 text-gray-800': row.delivery_status === 'PENDING',
-                          'px-2 py-1 rounded bg-yellow-200 text-yellow-800': row.delivery_status === 'SENT',
-                          'px-2 py-1 rounded bg-blue-200 text-blue-800': row.delivery_status === 'DELIVERED',
-                          'px-2 py-1 rounded bg-green-200 text-green-800': row.delivery_status === 'READ',
-                          'px-2 py-1 rounded bg-red-200 text-red-800': row.delivery_status === 'FAILED' || row.delivery_status === 'ERROR',
-                          'px-2 py-1 rounded bg-gray-100 text-gray-600': !row.delivery_status,
+                          'px-2 py-0.5 rounded bg-gray-200 text-gray-800': row.delivery_status === 'PENDING',
+                          'px-2 py-0.5 rounded bg-yellow-200 text-yellow-800': row.delivery_status === 'SENT',
+                          'px-2 py-0.5 rounded bg-blue-200 text-blue-800': row.delivery_status === 'DELIVERED',
+                          'px-2 py-0.5 rounded bg-green-200 text-green-800': row.delivery_status === 'READ',
+                          'px-2 py-0.5 rounded bg-red-200 text-red-800': row.delivery_status === 'FAILED' || row.delivery_status === 'ERROR',
+                          'px-2 py-0.5 rounded bg-gray-100 text-gray-600': !row.delivery_status,
                         }"
+                        :title="`Atualizado: ${row.delivery_status_updated_at ? new Date(row.delivery_status_updated_at).toLocaleString() : 'N/A'} | Provedor: ${row.provider || 'N/A'}`"
                       >
                         {{ row.delivery_status || 'N/A' }}
                       </span>
                     </td>
-                    <td class="py-2">{{ row.delivery_status_updated_at ? new Date(row.delivery_status_updated_at).toLocaleString() : '' }}</td>
-                    <td class="py-2">
-                      <span :class="row.responded ? 'text-green-600' : 'text-gray-500'">
+                    <td class="py-1">
+                      <span
+                        :class="row.responded ? 'px-2 py-0.5 rounded bg-green-100 text-green-700' : 'px-2 py-0.5 rounded bg-gray-100 text-gray-600'"
+                        :title="row.responded_at ? `Respondida em: ${new Date(row.responded_at).toLocaleString()}` : 'Sem resposta'"
+                      >
                         {{ row.responded ? 'Sim' : 'Não' }}
                       </span>
                     </td>
-                    <td class="py-2">{{ row.responded_at ? new Date(row.responded_at).toLocaleString() : '' }}</td>
+                    <td class="py-1">{{ row.responded_at ? new Date(row.responded_at).toLocaleString() : '' }}</td>
                   </tr>
                 </tbody>
               </table>
