@@ -48,7 +48,15 @@ const ensureLastMsgs = async (row) => {
     for (const it of items) {
       const pj = it.payload_json || {};
       const body = (pj?.text && pj.text.body) || (pj?.message && pj.message.text && pj.message.text.body) || null;
-      if (body) texts.push(body);
+      let ts = null;
+      if (pj?.timestamp) {
+        ts = new Date(Number(pj.timestamp) * 1000);
+      } else if (pj?.context?.created_at) {
+        ts = new Date(pj.context.created_at);
+      } else if (it.created_at) {
+        ts = new Date(it.created_at);
+      }
+      if (body) texts.push({ text: body, time: ts });
       if (texts.length >= 5) break;
     }
     lastMsgs.value[key] = texts;
@@ -57,6 +65,16 @@ const ensureLastMsgs = async (row) => {
   } finally {
     loadingPhones.value[key] = false;
   }
+};
+const openPopover = ref(null);
+const togglePopover = async (row) => {
+  const key = phoneKey(row);
+  if (!key) return;
+  openPopover.value = openPopover.value === key ? null : key;
+  if (openPopover.value === key) await ensureLastMsgs(row);
+};
+const copyMsg = async (msg) => {
+  try { await navigator.clipboard.writeText(msg || ''); } catch (_e) {}
 };
 </script>
 
@@ -195,18 +213,40 @@ const ensureLastMsgs = async (row) => {
                         {{ row.responded ? 'Sim' : 'Não' }}
                       </span>
                     </td>
-                    <td class="py-1">
+                    <td class="py-1 relative">
                       <span
-                        @mouseenter="ensureLastMsgs(row)"
+                        @click="togglePopover(row)"
                         :class="{
-                          'px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 cursor-help': true
+                          'px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 cursor-pointer': true
                         }"
-                        :title="(lastMsgs[phoneKey(row)] && lastMsgs[phoneKey(row)].length > 0)
-                          ? lastMsgs[phoneKey(row)].join('\n')
-                          : (row.responded_at ? `Respondida em: ${new Date(row.responded_at).toLocaleString()}` : 'Sem mensagens')"
                       >
                         Resposta
                       </span>
+                      <div
+                        v-if="openPopover === phoneKey(row)"
+                        class="absolute z-10 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg p-2"
+                      >
+                        <div v-if="loadingPhones[phoneKey(row)]" class="text-xs text-gray-500">Carregando…</div>
+                        <div v-else-if="(lastMsgs[phoneKey(row)] || []).length === 0" class="text-xs text-gray-500">
+                          {{ row.responded_at ? ('Respondida em: ' + new Date(row.responded_at).toLocaleString()) : 'Sem mensagens' }}
+                        </div>
+                        <ul v-else class="space-y-1">
+                          <li
+                            v-for="(m, idx) in lastMsgs[phoneKey(row)]"
+                            :key="idx"
+                            class="text-xs"
+                          >
+                            <button
+                              @click="copyMsg(m.text)"
+                              class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                              style="white-space: pre-line"
+                            >
+                              <span class="font-semibold text-gray-700 dark:text-gray-200">{{ m.time ? new Date(m.time).toLocaleString() : '' }}</span>
+                              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ m.text }}</span>
+                            </button>
+                          </li>
+                        </ul>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
