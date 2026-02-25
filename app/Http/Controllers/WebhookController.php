@@ -76,12 +76,12 @@ class WebhookController extends Controller
         // Whapi: incoming messages are delivered with { event: { type: 'messages', event: 'post' }, messages: [...] }
         $eventType = strtolower((string) ($payload['event']['type'] ?? ''));
         $eventAction = strtolower((string) ($payload['event']['event'] ?? ''));
-        $isWhapiIncoming = ($eventType === 'messages' && in_array($eventAction, ['post', 'put'], true) && isset($payload['messages']));
-        $isWhapiStatuses = ($eventType === 'statuses' && in_array($eventAction, ['post', 'put'], true) && isset($payload['messages']));
+        $isWhapiIncoming = ($eventType === 'messages' && in_array($eventAction, ['post', 'put'], true) && isset($payload['messages'])) || isset($payload['message']);
+        $isWhapiStatuses = ($eventType === 'statuses' && in_array($eventAction, ['post', 'put'], true) && isset($payload['messages'])) || isset($payload['statuses']);
 
         if ($type === 'incoming' || $isWhapiIncoming || $isWhapiStatuses) {
             if ($isWhapiIncoming) {
-                $incomingMsgs = $payload['messages'] ?? [];
+                $incomingMsgs = $payload['messages'] ?? ($payload['message'] ?? []);
                 if (! is_array($incomingMsgs)) {
                     $incomingMsgs = [$incomingMsgs];
                 }
@@ -206,7 +206,7 @@ class WebhookController extends Controller
 
                 return response()->json(['success' => true]);
             } elseif ($isWhapiStatuses) {
-                $statusMsgs = $payload['messages'] ?? [];
+                $statusMsgs = $payload['messages'] ?? ($payload['statuses'] ?? []);
                 if (! is_array($statusMsgs)) {
                     $statusMsgs = [$statusMsgs];
                 }
@@ -216,7 +216,7 @@ class WebhookController extends Controller
                         // Ignora status de mensagens que não são deste remetente
                         continue;
                     }
-                    $mId = (string) ($msg['id'] ?? ($msg['message_id'] ?? ''));
+                    $mId = (string) ($msg['id'] ?? ($msg['message_id'] ?? ($msg['message']['id'] ?? '')));
                     $chatIdRaw = $msg['chat_id'] ?? null;
                     $toRaw = (function ($chatId) {
                         if (! is_string($chatId)) return null;
@@ -224,7 +224,7 @@ class WebhookController extends Controller
                         return $num ?: null;
                     })($chatIdRaw);
                     $toSanitized = $this->normalizePhone($toRaw);
-                    $statusNormMsg = $this->normalizeStatus($msg['status'] ?? null);
+                    $statusNormMsg = $this->normalizeStatus($msg['status'] ?? ($msg['message']['status'] ?? null));
                     if (! $statusNormMsg) {
                         continue;
                     }
