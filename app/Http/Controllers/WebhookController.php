@@ -229,7 +229,8 @@ class WebhookController extends Controller
                     $statusMsgs = [$statusMsgs];
                 }
                 foreach ($statusMsgs as $msg) {
-                    $fromMe = (bool) ($msg['from_me'] ?? $msg['fromMe'] ?? false);
+                    $fromMeRaw = $msg['from_me'] ?? $msg['fromMe'] ?? null;
+                    $fromMe = is_null($fromMeRaw) ? true : (bool) $fromMeRaw;
                     if (! $fromMe) {
                         // Ignora status de mensagens que não são deste remetente
                         continue;
