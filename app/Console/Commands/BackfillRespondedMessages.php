@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\WhatsappMessageLog;
 use Illuminate\Support\Facades\DB;
+use App\Models\WebhookEventLog;
+use Carbon\Carbon;
 
 class BackfillRespondedMessages extends Command
 {
@@ -15,7 +17,7 @@ class BackfillRespondedMessages extends Command
     public function handle()
     {
         $tz = config('app.timezone') ?: 'America/Sao_Paulo';
-        $today = \Carbon\Carbon::today($tz);
+        $today = Carbon::today($tz);
 
         $logs = WhatsappMessageLog::whereNull('responded')->orWhere('responded', false)
             ->whereNotNull('phone_sanitized')
@@ -38,9 +40,46 @@ class BackfillRespondedMessages extends Command
                 ->first();
             if ($incoming) {
                 $log->responded = true;
-                $log->responded_at = \Carbon\Carbon::parse($incoming->created_at, $tz);
+                $log->responded_at = Carbon::parse($incoming->created_at, $tz);
                 $log->save();
                 $updated++;
+            }
+
+            if (! $log->responded) {
+                $evt = WebhookEventLog::where(function ($q) use ($log, $phone) {
+                        $q->where('matched_log_id', $log->id)
+                          ->orWhere('provider_message_id', $log->provider_message_id)
+                          ->orWhere('phone', $phone);
+                    })
+                    ->whereIn('reason', ['respondida_ok', 'respondida_fallback_dia'])
+                    ->where('created_at', '>=', $log->sent_at ?? $today->copy()->subDays(7))
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+                if ($evt) {
+                    $log->responded = true;
+                    $log->responded_at = Carbon::parse($evt->created_at, $tz);
+                    $log->save();
+                    $updated++;
+                }
+            }
+
+            $statusEvt = WebhookEventLog::where(function ($q) use ($log, $phone) {
+                    $q->where('matched_log_id', $log->id)
+                      ->orWhere('provider_message_id', $log->provider_message_id)
+                      ->orWhere('phone', $phone);
+                })
+                ->where('reason', 'like', 'status_atualizado:%')
+                ->where('created_at', '>=', $log->sent_at ?? $today->copy()->subDays(7))
+                ->orderBy('created_at', 'desc')
+                ->first();
+            if ($statusEvt) {
+                $parts = explode(':', $statusEvt->reason, 2);
+                $st = isset($parts[1]) ? strtoupper(trim($parts[1])) : null;
+                if ($st) {
+                    $log->delivery_status = $st;
+                    $log->delivery_status_updated_at = Carbon::parse($statusEvt->created_at, $tz);
+                    $log->save();
+                }
             }
         }
 
