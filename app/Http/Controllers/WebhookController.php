@@ -178,6 +178,11 @@ class WebhookController extends Controller
                         if ($lastSent) {
                             $lastSent->responded = true;
                             $lastSent->responded_at = $ts;
+                            // Heurística: se houve resposta do cliente, considera como READ
+                            if (in_array($lastSent->delivery_status, [null, 'PENDING', 'SENT', 'DELIVERED'], true)) {
+                                $lastSent->delivery_status = 'READ';
+                                $lastSent->delivery_status_updated_at = $ts;
+                            }
                             $lastSent->save();
                             \App\Models\WebhookEventLog::create([
                                 'provider' => $provider,
@@ -196,7 +201,12 @@ class WebhookController extends Controller
                                 ->whereDate('sent_at', $ts->toDateString())
                                 ->orderByDesc('sent_at')
                                 ->limit(1)
-                                ->update(['responded' => true, 'responded_at' => $ts]);
+                                ->update([
+                                    'responded' => true,
+                                    'responded_at' => $ts,
+                                    'delivery_status' => \DB::raw("CASE WHEN delivery_status IN ('PENDING','SENT','DELIVERED') OR delivery_status IS NULL THEN 'READ' ELSE delivery_status END"),
+                                    'delivery_status_updated_at' => $ts,
+                                ]);
                             \App\Models\WebhookEventLog::create([
                                 'provider' => $provider,
                                 'event_type' => 'messages.post',
