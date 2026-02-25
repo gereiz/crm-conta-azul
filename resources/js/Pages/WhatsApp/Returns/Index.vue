@@ -29,6 +29,35 @@ const clearFilters = () => {
   Object.keys(form.value).forEach(k => form.value[k] = '');
   applyFilters();
 };
+
+const lastMsgs = ref({});
+const loadingPhones = ref({});
+const sanitizeDigits = (s) => (s || '').replace(/\D+/g, '');
+const phoneKey = (row) => sanitizeDigits(row.phone_sanitized || row.phone_original);
+const ensureLastMsgs = async (row) => {
+  const key = phoneKey(row);
+  if (!key) return;
+  if (lastMsgs.value[key] || loadingPhones.value[key]) return;
+  loadingPhones.value[key] = true;
+  try {
+    const url = route('whatsapp.returns.debug') + `?phone=${key}&limit=50`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    const items = Array.isArray(json.items) ? json.items : [];
+    const texts = [];
+    for (const it of items) {
+      const pj = it.payload_json || {};
+      const body = (pj?.text && pj.text.body) || (pj?.message && pj.message.text && pj.message.text.body) || null;
+      if (body) texts.push(body);
+      if (texts.length >= 5) break;
+    }
+    lastMsgs.value[key] = texts;
+  } catch (e) {
+    lastMsgs.value[key] = [];
+  } finally {
+    loadingPhones.value[key] = false;
+  }
+};
 </script>
 
 <template>
@@ -130,7 +159,7 @@ const clearFilters = () => {
                     <th class="py-1">ID provedor</th>
                     <th class="py-1">Status</th>
                     <th class="py-1">Respondida?</th>
-                    <th class="py-1">Data resposta</th>
+                    <th class="py-1">Resposta</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -166,7 +195,19 @@ const clearFilters = () => {
                         {{ row.responded ? 'Sim' : 'Não' }}
                       </span>
                     </td>
-                    <td class="py-1">{{ row.responded_at ? new Date(row.responded_at).toLocaleString() : '' }}</td>
+                    <td class="py-1">
+                      <span
+                        @mouseenter="ensureLastMsgs(row)"
+                        :class="{
+                          'px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 cursor-help': true
+                        }"
+                        :title="(lastMsgs[phoneKey(row)] && lastMsgs[phoneKey(row)].length > 0)
+                          ? lastMsgs[phoneKey(row)].join('\n')
+                          : (row.responded_at ? `Respondida em: ${new Date(row.responded_at).toLocaleString()}` : 'Sem mensagens')"
+                      >
+                        Resposta
+                      </span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
