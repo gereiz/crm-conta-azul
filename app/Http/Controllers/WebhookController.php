@@ -53,12 +53,30 @@ class WebhookController extends Controller
         $eventTypeStr = is_array($evt) ? (($evt['type'] ?? '').'.'.($evt['event'] ?? '')) : (string) ($evt ?? '');
         if ($expectedSecret) {
             if (! hash_equals($expectedSecret, $incomingSecret)) {
+                $raw = $request->all();
+                $candidate = null;
+                try {
+                    if (isset($raw['message']['chat_id'])) {
+                        $candidate = preg_replace('/\D+/', '', (string) $raw['message']['chat_id']);
+                    } elseif (isset($raw['messages'][0]['chat_id'])) {
+                        $candidate = preg_replace('/\D+/', '', (string) $raw['messages'][0]['chat_id']);
+                    } elseif (isset($raw['messages'][0]['from'])) {
+                        $candidate = preg_replace('/\D+/', '', (string) $raw['messages'][0]['from']);
+                    } elseif (isset($raw['from'])) {
+                        $candidate = preg_replace('/\D+/', '', (string) $raw['from']);
+                    } elseif (isset($raw['to'])) {
+                        $candidate = preg_replace('/\D+/', '', (string) $raw['to']);
+                    }
+                } catch (\Throwable $e) {
+                    $candidate = null;
+                }
                 \App\Models\WebhookEventLog::create([
                     'provider' => $provider,
                     'event_type' => $eventTypeStr,
                     'from_me' => false,
+                    'phone' => $candidate,
                     'reason' => 'secret_invalido',
-                    'payload_json' => $request->all(),
+                    'payload_json' => $raw,
                 ]);
                 return response()->json(['success' => false, 'error' => 'Invalid webhook secret'], 401);
             }
