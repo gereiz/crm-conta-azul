@@ -631,6 +631,10 @@ class MessageCronService
             }
         }
 
+        $initialDelivery = $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null));
+        if (!$initialDelivery && ($result['success'] ?? false) && ($result['meta']['message_id'] ?? null)) {
+            $initialDelivery = 'PENDING';
+        }
         WhatsappMessageLog::create([
             'whatsapp_number_id' => $cron->whatsapp_number_id,
             'connection_id' => $connId,
@@ -649,7 +653,7 @@ class MessageCronService
             'error_message' => ($result['queued'] ?? false) ? ($result['message'] ?? 'Enfileirado') : ($result['success'] ? null : ($result['message'] ?? 'Erro desconhecido')),
             'content' => $logContent,
             'batch_id' => $batchId,
-            'delivery_status' => $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)),
+            'delivery_status' => $initialDelivery,
             'delivery_status_updated_at' => isset($result['meta']['whapi_status']) || isset($result['meta']['evolution_status']) ? now() : null,
             'sent_at' => now(),
         ]);
@@ -709,6 +713,10 @@ class MessageCronService
                 }
             }
 
+            $initialDelivery2 = $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null));
+            if (!$initialDelivery2 && ($result['success'] ?? false) && ($result['meta']['message_id'] ?? null)) {
+                $initialDelivery2 = 'PENDING';
+            }
             WhatsappMessageLog::create([
                 'whatsapp_number_id' => $cron->whatsapp_number_id,
                 'connection_id' => $connId,
@@ -725,7 +733,7 @@ class MessageCronService
                 'content' => $logContent,
                 'batch_id' => $batchId,
                 'provider_message_id' => $result['meta']['message_id'] ?? null,
-                'delivery_status' => $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)),
+                'delivery_status' => $initialDelivery2,
                 'delivery_status_updated_at' => isset($result['meta']['whapi_status']) || isset($result['meta']['evolution_status']) ? now() : null,
                 'sent_at' => now(),
             ]);
@@ -1154,6 +1162,10 @@ class MessageCronService
         $whatsapp = WhatsappNumber::find($cron->whatsapp_number_id);
         $result = $this->orchestrator->sendOne($cron->whatsapp_number_id, $sanitizedPhone, $content, ['batch_id' => $batchId]);
 
+        $initialDelivery3 = $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null));
+        if (!$initialDelivery3 && ($result['success'] ?? false) && ($result['meta']['message_id'] ?? null)) {
+            $initialDelivery3 = 'PENDING';
+        }
         WhatsappMessageLog::create([
             'whatsapp_number_id' => $cron->whatsapp_number_id,
             'connection_id' => $connId,
@@ -1176,7 +1188,7 @@ class MessageCronService
             'content' => $content,
             'batch_id' => $batchId,
             'provider_message_id' => $result['meta']['message_id'] ?? null,
-            'delivery_status' => $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)),
+            'delivery_status' => $initialDelivery3,
             'delivery_status_updated_at' => isset($result['meta']['whapi_status']) || isset($result['meta']['evolution_status']) ? now() : null,
             'sent_at' => now(),
         ]);

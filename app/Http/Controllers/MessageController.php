@@ -260,6 +260,10 @@ class MessageController extends Controller
         }
 
         // Registrar Log Detalhado
+        $initialDelivery = isset($result['meta']) ? $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)) : null;
+        if (!$initialDelivery && ($result['success'] ?? false) && (($result['meta']['message_id'] ?? null))) {
+            $initialDelivery = 'PENDING';
+        }
         WhatsappMessageLog::create([
             'whatsapp_number_id' => $whatsappNumber->id,
             'connection_id' => $connId,
@@ -277,7 +281,7 @@ class MessageController extends Controller
             'content' => $logContent,
             'batch_id' => $result['meta']['batch_id'] ?? null,
             'provider_message_id' => $result['meta']['message_id'] ?? null,
-            'delivery_status' => isset($result['meta']) ? $this->normalizeStatus($result['meta']['whapi_status'] ?? ($result['meta']['evolution_status'] ?? null)) : null,
+            'delivery_status' => $initialDelivery,
             'delivery_status_updated_at' => isset($result['meta']) && (($result['meta']['whapi_status'] ?? null) || ($result['meta']['evolution_status'] ?? null)) ? now() : null,
             'sent_at' => now(),
         ]);

@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import Modal from '@/Components/Modal.vue';
 
 const props = defineProps({
   items: Object,
@@ -75,6 +76,18 @@ const togglePopover = async (row) => {
 };
 const copyMsg = async (msg) => {
   try { await navigator.clipboard.writeText(msg || ''); } catch (_e) {}
+};
+
+const showResponseModal = ref(false);
+const modalMessages = ref([]);
+const openModalForRow = async (row) => {
+  await ensureLastMsgs(row);
+  modalMessages.value = lastMsgs.value[phoneKey(row)] || [];
+  showResponseModal.value = true;
+};
+const closeResponseModal = () => {
+  showResponseModal.value = false;
+  modalMessages.value = [];
 };
 </script>
 
@@ -213,45 +226,37 @@ const copyMsg = async (msg) => {
                         {{ row.responded ? 'Sim' : 'Não' }}
                       </span>
                     </td>
-                    <td class="py-1 relative">
+                    <td class="py-1">
                       <span
-                        @click="togglePopover(row)"
-                        :class="{
-                          'px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 cursor-pointer': true
-                        }"
-                      >
-                        Resposta
-                      </span>
-                      <div
-                        v-if="openPopover === phoneKey(row)"
-                        class="absolute z-10 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg p-2"
-                      >
-                        <div v-if="loadingPhones[phoneKey(row)]" class="text-xs text-gray-500">Carregando…</div>
-                        <div v-else-if="(lastMsgs[phoneKey(row)] || []).length === 0" class="text-xs text-gray-500">
-                          {{ row.responded_at ? ('Respondida em: ' + new Date(row.responded_at).toLocaleString()) : 'Sem mensagens' }}
-                        </div>
-                        <ul v-else class="space-y-1">
-                          <li
-                            v-for="(m, idx) in lastMsgs[phoneKey(row)]"
-                            :key="idx"
-                            class="text-xs"
-                          >
-                            <button
-                              @click="copyMsg(m.text)"
-                              class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                              style="white-space: pre-line"
-                            >
-                              <span class="font-semibold text-gray-700 dark:text-gray-200">{{ m.time ? new Date(m.time).toLocaleString() : '' }}</span>
-                              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ m.text }}</span>
-                            </button>
-                          </li>
-                        </ul>
-                      </div>
+                        @click="openModalForRow(row)"
+                        :class="{ 'px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 cursor-pointer': true }"
+                      >Resposta</span>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
+            <Modal :show="showResponseModal" @close="closeResponseModal" maxWidth="lg">
+              <div class="p-4">
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Mensagens do Cliente</h3>
+                  <button class="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700" @click="closeResponseModal">Fechar</button>
+                </div>
+                <div v-if="modalMessages.length === 0" class="text-xs text-gray-500">Sem mensagens</div>
+                <ul v-else class="space-y-1 max-h-64 overflow-auto">
+                  <li v-for="(m, idx) in modalMessages" :key="idx">
+                    <button
+                      @click="copyMsg(m.text)"
+                      class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                      style="white-space: pre-line"
+                    >
+                      <span class="font-semibold text-gray-700 dark:text-gray-200">{{ m.time ? new Date(m.time).toLocaleString() : '' }}</span>
+                      <span class="ml-2 text-gray-800 dark:text-gray-100">{{ m.text }}</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </Modal>
 
             <div class="mt-4 flex items-center gap-2">
               <button
