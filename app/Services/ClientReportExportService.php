@@ -21,59 +21,85 @@ class ClientReportExportService
         $type = $filters['type'] ?? null;
         $search = $filters['search'] ?? null;
 
-        $invQ = Invoice::query()
-            ->with('cliente')
-            ->where(function ($q) {
-                $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
-            })
-            ->where(function ($q) {
-                $q->whereIn('status', ['OVERDUE', 'ATRASADO', 'PENDING', 'ABERTO'])->orWhereNull('status');
-            });
-        if ($connectionId) $invQ->where('connection_id', $connectionId);
-        if ($start && $end) $invQ->whereBetween('data_vencimento', [$start, $end]);
+        $logQ = WhatsappMessageLog::with(['connection'])
+            ->where('status', 'success');
+        if ($connectionId) $logQ->where('connection_id', $connectionId);
+        if ($start && $end) $logQ->whereBetween('sent_at', [$start, $end]);
         if ($search) {
-            $invQ->where(function ($q) use ($search) {
-                $q->where('cliente_nome', 'like', "%{$search}%")
-                  ->orWhere('descricao', 'like', "%{$search}%");
+            $logQ->where(function ($q) use ($search) {
+                $q->where('client_name', 'like', "%{$search}%")
+                  ->orWhere('phone_sanitized', 'like', "%{$search}%")
+                  ->orWhere('phone_original', 'like', "%{$search}%");
             });
         }
-        $invoices = $invQ->orderBy('cliente_nome')->orderBy('data_vencimento')->get();
+        if ($type) $logQ->where('message_type', $type);
+        $logs = $logQ->orderBy('sent_at', 'asc')->get();
 
-        $countByClient = $invoices->groupBy('cliente_ca_id')->map->count();
-
-        // Build sheet
+        $groups = $logs->groupBy('connection_id');
         $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $this->renderHeader($sheet, $filters);
+        $first = true;
 
-        $headers = ['Nome do cliente', 'Data', 'Descrição', 'Parecer', 'Valor total da parcela', 'Conta bancária'];
-        $sheet->fromArray([$headers], null, 'A8');
-        $sheet->getStyle('A8:F8')->getFont()->setBold(true);
-        $sheet->freezePane('A9');
+        foreach ($groups as $connId => $groupLogs) {
+            $companyName = $groupLogs->first()->connection->empresa_nome ?? 'Empresa';
+            $sheet = $first ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
+            $first = false;
+            $sheet->setTitle(Str::substr(Str::slug($companyName), 0, 31));
+            $sheet->getProtection()->setSheet(false);
 
-        $row = 9;
-        foreach ($invoices as $inv) {
-            $clientName = $inv->cliente_nome ?: ($inv->cliente->name ?? 'Cliente');
-            $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : '';
-            $descricao = $inv->descricao ?: '';
-            $valor = (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
-            $conta = 'Boleto bancário';
+            $this->renderHeader($sheet, ['company_name' => $companyName]);
 
-            $parecer = $this->resolveParecer($inv);
+            $headers = ['Nome do cliente', 'Data', 'Descrição', 'Parecer', 'Valor total da parcela', 'Conta bancária'];
+            $sheet->fromArray([$headers], null, 'A8');
+            $sheet->getStyle('A8:F8')->getFont()->setBold(true);
+            $sheet->freezePane('A9');
 
-            $sheet->fromArray([[$clientName, $dateStr, $descricao, $parecer, number_format($valor, 2, ',', '.'), $conta]], null, 'A'.$row);
-
-            // Color by qty
-            $qty = (int) ($countByClient[$inv->cliente_ca_id] ?? 1);
-            $color = $this->colorByQty($qty);
-            if ($color) {
-                $sheet->getStyle("A{$row}:F{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+            // Monta linhas por boleto (sem agrupamento)
+            $row = 9;
+            $clientCounts = [];
+            foreach ($groupLogs as $log) {
+                $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
+                if (empty($boletoIds)) {
+                    // fallback: uma linha sem boleto
+                    $sheet->fromArray([[
+                        $log->client_name,
+                        $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
+                        '',
+                        $this->resolveParecerFromLog($log),
+                        '',
+                        'Boleto bancário',
+                    ]], null, 'A'.$row);
+                    $clientCounts[$log->cliente_id] = ($clientCounts[$log->cliente_id] ?? 0) + 1;
+                    $color = $this->colorByQty($clientCounts[$log->cliente_id]);
+                    if ($color) $sheet->getStyle("A{$row}:F{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    $row++;
+                    continue;
+                }
+                $invList = Invoice::whereIn('id', $boletoIds)->with('cliente')->get();
+                foreach ($invList as $inv) {
+                    $clientName = $inv->cliente_nome ?: ($inv->cliente->name ?? $log->client_name ?? 'Cliente');
+                    $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($log->sent_at ? $log->sent_at->format('d/m/Y') : '');
+                    $descricao = $inv->descricao ?: '';
+                    $valor = (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
+                    $parecer = $this->resolveParecer($inv);
+                    $sheet->fromArray([[
+                        $clientName,
+                        $dateStr,
+                        $descricao,
+                        $parecer,
+                        number_format($valor, 2, ',', '.'),
+                        'Boleto bancário',
+                    ]], null, 'A'.$row);
+                    $cid = $inv->cliente_id ?: $log->cliente_id;
+                    $clientCounts[$cid] = ($clientCounts[$cid] ?? 0) + 1;
+                    $color = $this->colorByQty($clientCounts[$cid]);
+                    if ($color) $sheet->getStyle("A{$row}:F{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    $row++;
+                }
             }
-            $row++;
-        }
 
-        foreach (range('A', 'F') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+            foreach (range('A', 'F') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
         }
 
         return $spreadsheet;
@@ -98,9 +124,6 @@ class ClientReportExportService
             ['text' => 'Deve apenas 1 mês', 'color' => 'FFCCE5FF'], // Azul claro
             ['text' => 'Deve 2 meses', 'color' => 'FFC6EFCE'],       // Verde claro
             ['text' => 'Caso crítico 3 ou + meses', 'color' => 'FFFFCDD2'], // Vermelho claro
-            ['text' => 'Negociado', 'color' => 'FFFCE4A1'],          // Amarelo claro
-            ['text' => 'Pago', 'color' => 'FFD9EAD3'],               // Verde pálido
-            ['text' => 'Não cobrado + justificativa', 'color' => 'FFEAD1DC'], // Rosa pálido
         ];
         $baseRow = 1;
         for ($i = 0; $i < count($legend); $i++) {
@@ -114,10 +137,10 @@ class ClientReportExportService
             $sheet->getStyle("B{$r}:C{$r}")->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
         }
         // Em branco
-        $sheet->setCellValue('B7', 'em branco');
-        $sheet->getStyle('B7')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('C7')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFFF');
-        $sheet->getStyle('B7:C7')->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
+        $sheet->setCellValue('B5', 'em branco');
+        $sheet->getStyle('B5')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('C5')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFFF');
+        $sheet->getStyle('B5:C5')->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
 
         // Título da empresa (bloco à direita)
         $companyTitle = $filters['company_name'] ?? 'Empresa';
