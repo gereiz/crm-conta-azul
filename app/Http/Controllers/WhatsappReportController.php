@@ -208,4 +208,41 @@ class WhatsappReportController extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
+
+    public function downloadClientReport(Request $request)
+    {
+        $connectionId = $request->input('connection_id');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $search = $request->input('search');
+        $type = $request->input('type');
+
+        $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
+        $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
+
+        $companyName = null;
+        if ($connectionId) {
+            $company = ContaAzulConnection::find($connectionId);
+            $companyName = $company?->empresa_nome;
+        }
+
+        $service = new \App\Services\ClientReportExportService();
+        $spreadsheet = $service->build([
+            'connection_id' => $connectionId,
+            'start' => $start,
+            'end' => $end,
+            'type' => $type,
+            'search' => $search,
+            'company_name' => $companyName ?? 'Empresa',
+        ]);
+
+        $filename = 'relatorio_cliente_'.($companyName ? Str::slug($companyName, '_') : 'geral').'_'.($startDate ?? Carbon::today()->format('Y-m-d')).'.xlsx';
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
 }

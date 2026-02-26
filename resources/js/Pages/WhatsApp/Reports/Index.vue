@@ -34,6 +34,15 @@ const getGroupedCronDownloadUrl = () => {
     if (selectedStatus.value) params.status = selectedStatus.value;
     return route('whatsapp.reports.cron.download_grouped', params);
 };
+const getClientReportDownloadUrl = () => {
+    const params = {};
+    if (startDate.value) params.start_date = startDate.value;
+    if (endDate.value) params.end_date = endDate.value;
+    if (selectedConnectionId.value) params.connection_id = selectedConnectionId.value;
+    if (searchQuery.value) params.search = searchQuery.value;
+    if (selectedType.value) params.type = selectedType.value;
+    return route('whatsapp.reports.download_client', params);
+};
 const selectedConnectionId = ref(props.selectedConnectionId || '');
 const startDate = ref(props.selectedStartDate || '');
 const endDate = ref(props.selectedEndDate || '');
@@ -93,6 +102,9 @@ const formatWhatsAppNumber = (n) => {
                     </button>
                     <a :href="getGroupedCronDownloadUrl()" target="_blank" class="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-primary-600 text-white hover:bg-primary-700">
                         Baixar Automação (XLSX Agrupado)
+                    </a>
+                    <a :href="getClientReportDownloadUrl()" target="_blank" class="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700">
+                        Baixar Relatório Cliente
                     </a>
                     <select v-if="connections && connections.length" v-model="selectedConnectionId" @change="filterByConnection" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
                         <option value="">Todas as Empresas</option>

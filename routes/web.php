@@ -151,6 +151,7 @@ Route::middleware('auth')->group(function () {
     Route::get('whatsapp/reports', [\App\Http\Controllers\WhatsappReportController::class, 'index'])->name('whatsapp.reports.index');
     Route::get('whatsapp/reports/{id}/download', [\App\Http\Controllers\WhatsappReportController::class, 'download'])->name('whatsapp.reports.download');
     Route::get('whatsapp/reports/cron/download-grouped', [\App\Http\Controllers\WhatsappReportController::class, 'downloadGroupedAutomations'])->name('whatsapp.reports.cron.download_grouped');
+    Route::get('whatsapp/reports/download-client', [\App\Http\Controllers\WhatsappReportController::class, 'downloadClientReport'])->name('whatsapp.reports.download_client');
 
     // Envios Futuros
     Route::get('whatsapp/future-messages', [\App\Http\Controllers\FutureMessageController::class, 'index'])->name('whatsapp.future.index');
