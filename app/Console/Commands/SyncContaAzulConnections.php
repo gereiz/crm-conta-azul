@@ -14,9 +14,9 @@ use Illuminate\Support\Facades\Log;
 
 class SyncContaAzulConnections extends Command
 {
-    protected $signature = 'contaazul:sync-stale';
+    protected $signature = 'contaazul:sync-stale {--target=all}';
 
-    protected $description = 'Verifica conexões com última sincronização >24h e sincroniza clientes e faturas para todas as empresas.';
+    protected $description = 'Sincroniza clientes e/ou faturas da Conta Azul para todas as empresas ativas.';
 
     protected ContaAzulApiService $api;
 
@@ -40,8 +40,10 @@ class SyncContaAzulConnections extends Command
             }
             $now = Carbon::now();
             $this->info("Iniciando sincronização automática às {$now->toDateTimeString()}");
-            $hour = (int) $now->format('H');
-            $minute = (int) $now->format('i');
+            $target = strtolower((string) $this->option('target'));
+            if (! in_array($target, ['all', 'clients', 'invoices'], true)) {
+                $target = 'all';
+            }
 
             $connections = ContaAzulConnection::active()->orderBy('empresa_nome')->get();
             foreach ($connections as $connection) {
@@ -56,12 +58,12 @@ class SyncContaAzulConnections extends Command
 
                     $log = SyncJobLog::create([
                         'conta_azul_connection_id' => $connection->id,
-                        'job_type' => 'invoices',
+                        'job_type' => $target,
                         'started_at' => Carbon::now(),
                         'status' => 'success',
                     ]);
 
-                    if ($hour === 1 || ($hour === 8 && $minute === 45)) {
+                    if ($target === 'all' || $target === 'clients') {
                         $this->info('Executando sincronização de clientes (janela agendada).');
                         try {
                             $synced = $this->syncClients($connection);
@@ -82,8 +84,12 @@ class SyncContaAzulConnections extends Command
                             $this->warn('Falha ao sincronizar clientes nesta conexão: '.$e->getMessage());
                         }
                     }
-                    $syncedInvoices = $this->api->syncOverdueInvoices($connection);
-                    $syncedClosed = $this->api->syncRecentlyClosedInvoices($connection);
+                    $syncedInvoices = 0;
+                    $syncedClosed = 0;
+                    if ($target === 'all' || $target === 'invoices') {
+                        $syncedInvoices = $this->api->syncOverdueInvoices($connection);
+                        $syncedClosed = $this->api->syncRecentlyClosedInvoices($connection);
+                    }
 
                     $connection->last_sync_at = Carbon::now();
                     $connection->save();
