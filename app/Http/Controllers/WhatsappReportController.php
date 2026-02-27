@@ -259,7 +259,7 @@ class WhatsappReportController extends Controller
             'company_name' => $companyName ?? 'Empresa',
         ]);
 
-        $filename = 'relatorio_cliente_'.($companyName ? Str::slug($companyName, '_') : 'geral').'_'.($startDate ?? Carbon::today()->format('Y-m-d')).'.xlsx';
+        $filename = 'relatorio_empresa_'.($companyName ? Str::slug($companyName, '_') : 'geral').'_'.($startDate ?? Carbon::today()->format('Y-m-d')).'.xlsx';
         $writer = new Xlsx($spreadsheet);
 
         return response()->streamDownload(function () use ($writer) {

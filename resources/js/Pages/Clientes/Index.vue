@@ -173,14 +173,14 @@ const toggleInternational = async (cliente) => {
                                 <input type="checkbox" v-model="noPhone" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
                                 <span class="ml-2">Sem telefone</span>
                             </label>
-                            <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
+                            <!-- <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
                                 <input type="checkbox" v-model="noEmail" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
                                 <span class="ml-2">Sem e-mail</span>
                             </label>
                             <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
                                 <input type="checkbox" v-model="noDocument" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
                                 <span class="ml-2">Sem documento</span>
-                            </label>
+                            </label> -->
                             <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
                                 <input type="checkbox" v-model="onlyInternational" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
                                 <span class="ml-2">Somente internacionais</span>

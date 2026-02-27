@@ -114,7 +114,7 @@ const formatWhatsAppNumber = (n) => {
                         Baixar Automação (XLSX Agrupado)
                     </a>
                     <a :href="getClientReportDownloadUrl()" target="_blank" class="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700">
-                        Baixar Relatório Cliente
+                        Relatório Empresa
                     </a>
                     <select v-if="connections && connections.length" v-model="selectedConnectionId" @change="filterByConnection" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300">
                         <option value="">Todas as Empresas</option>

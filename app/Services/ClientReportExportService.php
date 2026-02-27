@@ -77,16 +77,19 @@ class ClientReportExportService
                 $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
                 if (empty($boletoIds)) {
                     // fallback: uma linha sem boleto
+                    $parecer = $this->resolveParecerFromLog($log);
                     $sheet->fromArray([[
                         $log->client_name,
                         $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
                         '',
-                        $this->resolveParecerFromLog($log),
+                        $parecer,
                         null,
                         'Boleto bancário',
                     ]], null, 'A'.$row);
                     $color = $this->colorByQty($counts[$log->cliente_id] ?? 1);
-                    if ($color) $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    if ($color && $parecer !== '') {
+                        $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    }
                     $row++;
                     continue;
                 }
@@ -107,7 +110,9 @@ class ClientReportExportService
                     ]], null, 'A'.$row);
                     $cid = $inv->cliente_id ?: $log->cliente_id;
                     $color = $this->colorByQty($counts[$cid] ?? 1);
-                    if ($color) $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    if ($color && $parecer !== '') {
+                        $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    }
                     $row++;
                 }
             }
@@ -160,8 +165,8 @@ class ClientReportExportService
             $sheet->getColumnDimension('C')->setWidth(4);
             $sheet->getStyle("B{$r}:C{$r}")->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
         }
-        // Em branco
-        $sheet->setCellValue('B5', 'em branco');
+        // Não cobrado
+        $sheet->setCellValue('B5', 'Não cobrado');
         $sheet->getStyle('B5')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
         $sheet->getStyle('C5')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFFF');
         $sheet->getStyle('B5:C5')->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
