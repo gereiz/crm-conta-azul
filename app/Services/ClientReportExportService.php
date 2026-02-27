@@ -54,6 +54,13 @@ class ClientReportExportService
             $sheet->fromArray([$headers], null, 'A8');
             $sheet->getStyle('A8:F8')->getFont()->setBold(true);
             $sheet->freezePane('A9');
+            // Larguras para impressão previsível
+            $sheet->getColumnDimension('A')->setWidth(40);
+            $sheet->getColumnDimension('B')->setWidth(12);
+            $sheet->getColumnDimension('C')->setWidth(35);
+            $sheet->getColumnDimension('D')->setWidth(25);
+            $sheet->getColumnDimension('E')->setWidth(14);
+            $sheet->getColumnDimension('F')->setWidth(20);
 
             // Primeiro: computa contagem total de boletos por cliente para colorização uniforme
             $counts = [];
@@ -129,6 +136,23 @@ class ClientReportExportService
             $sheet->setCellValue("D{$totalRow}", 'Total');
             $sheet->setCellValue("E{$totalRow}", "=SUM(E9:E{$lastDataRow})");
             $sheet->getStyle("D{$totalRow}:E{$totalRow}")->getFont()->setBold(true)->setSize(12);
+
+            // Configuração de impressão semelhante ao Google Planilhas
+            $printArea = "A1:F{$totalRow}";
+            $pageSetup = $sheet->getPageSetup();
+            $pageSetup->setPrintArea($printArea);
+            $pageSetup->setFitToWidth(1);
+            $pageSetup->setFitToHeight(0);
+            $pageSetup->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
+            $pageSetup->setHorizontalCentered(true);
+            $pageSetup->setRowsToRepeatAtTopByStartAndEnd(8, 8);
+            $sheet->setShowGridlines(true);
+            $pageSetup->setPrintGridlines(true);
+            $margins = $sheet->getPageMargins();
+            $margins->setTop(0.5);
+            $margins->setBottom(0.5);
+            $margins->setLeft(0.25);
+            $margins->setRight(0.25);
         }
 
         return $spreadsheet;
