@@ -109,7 +109,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/cron/delayed/clear', [SettingsController::class, 'clearDelayedCrons'])->name('cron.delayed.clear');
         Route::post('/cron/process-now', [SettingsController::class, 'processCronsNow'])->name('cron.process_now');
         Route::get('/scheduler/status', [SettingsController::class, 'schedulerStatus'])->name('scheduler.status');
-        Route::post('/system/restore-phones', [SettingsController::class, 'restorePhones'])->name('settings.system.restore_phones');
+        Route::post('/settings/system/restore-phones', [SettingsController::class, 'restorePhones'])->name('settings.system.restore_phones');
 
         // Orquestrador
         Route::get('/orchestrator', [SettingsController::class, 'orchestrator'])->name('orchestrator.index');
