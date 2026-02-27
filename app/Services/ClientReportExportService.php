@@ -147,7 +147,7 @@ class ClientReportExportService
             $pageSetup->setHorizontalCentered(true);
             $pageSetup->setRowsToRepeatAtTopByStartAndEnd(8, 8);
             $sheet->setShowGridlines(true);
-            $pageSetup->setPrintGridlines(true);
+            $sheet->setPrintGridlines(true);
             $margins = $sheet->getPageMargins();
             $margins->setTop(0.5);
             $margins->setBottom(0.5);
