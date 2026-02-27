@@ -80,11 +80,11 @@ class ClientReportExportService
                         $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
                         '',
                         $this->resolveParecerFromLog($log),
-                        '',
+                        null,
                         'Boleto bancário',
                     ]], null, 'A'.$row);
                     $color = $this->colorByQty($counts[$log->cliente_id] ?? 1);
-                    if ($color) $sheet->getStyle("A{$row}:F{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    if ($color) $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
                     $row++;
                     continue;
                 }
@@ -100,12 +100,12 @@ class ClientReportExportService
                         $dateStr,
                         $descricao,
                         $parecer,
-                        number_format($valor, 2, ',', '.'),
+                        $valor,
                         'Boleto bancário',
                     ]], null, 'A'.$row);
                     $cid = $inv->cliente_id ?: $log->cliente_id;
                     $color = $this->colorByQty($counts[$cid] ?? 1);
-                    if ($color) $sheet->getStyle("A{$row}:F{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
+                    if ($color) $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
                     $row++;
                 }
             }
@@ -113,6 +113,15 @@ class ClientReportExportService
             foreach (range('A', 'F') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
+
+            // Linhas de total: uma linha em branco e, na seguinte, "Total" em D e soma em E
+            $lastDataRow = $row - 1;
+            $blankRow = $lastDataRow + 1;
+            $totalRow = $lastDataRow + 2;
+            // Deixa linha em branco (nada a fazer)
+            $sheet->setCellValue("D{$totalRow}", 'Total');
+            $sheet->setCellValue("E{$totalRow}", "=SUM(E9:E{$lastDataRow})");
+            $sheet->getStyle("D{$totalRow}:E{$totalRow}")->getFont()->setBold(true)->setSize(12);
         }
 
         return $spreadsheet;
