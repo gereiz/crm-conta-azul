@@ -91,28 +91,33 @@ class SettingsController extends Controller
     public function restorePhones(Request $request)
     {
         $connectionId = $request->input('connection_id');
-        $query = \App\Models\Cliente::query();
-        if ($connectionId) {
-            $query->where('connection_id', $connectionId);
+        $clienteIds = \App\Models\Cliente::query()
+            ->when($connectionId, fn($q) => $q->where('connection_id', $connectionId))
+            ->pluck('id');
+        if ($clienteIds->isEmpty()) {
+            return response()->json(['success' => true, 'updated' => 0]);
         }
-        $clientes = $query->get(['id','connection_id','phone','mobile_phone']);
+        $logs = \App\Models\WhatsappMessageLog::whereIn('cliente_id', $clienteIds)
+            ->where('status', 'success')
+            ->whereNotNull('phone_sanitized')
+            ->orderByDesc('sent_at')
+            ->get(['cliente_id','phone_original','phone_sanitized','sent_at']);
+        $byClient = $logs->groupBy('cliente_id');
         $updated = 0;
-        foreach ($clientes as $c) {
-            $log = \App\Models\WhatsappMessageLog::where('cliente_id', $c->id)
-                ->where('status', 'success')
-                ->orderByDesc('sent_at')
-                ->first();
-            if (!$log) continue;
-            $phone = $log->phone_original ?: $log->phone_sanitized;
-            if (!$phone) continue;
-            $c->mobile_phone = $phone;
-            if (empty($c->phone)) {
-                $c->phone = $phone;
-            }
-            $c->save();
+        foreach ($byClient as $cid => $items) {
+            $best = $items->first();
+            if (!$best) continue;
+            $raw = $best->phone_sanitized ?: $best->phone_original;
+            if (!$raw) continue;
+            $digits = preg_replace('/\D+/', '', (string) $raw);
+            if (!$digits) continue;
+            \App\Models\Cliente::where('id', $cid)->update([
+                'mobile_phone' => $digits,
+                'phone' => $digits,
+            ]);
             $updated++;
         }
-        return response()->json(['success' => true, 'updated' => $updated]);
+        return response()->json(['success' => true, 'updated' => $updated, 'scope' => $connectionId ? 'company' : 'all']);
     }
 
     public function orchestrator()
