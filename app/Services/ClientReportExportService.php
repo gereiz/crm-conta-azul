@@ -53,9 +53,24 @@ class ClientReportExportService
             $sheet->getStyle('A8:F8')->getFont()->setBold(true);
             $sheet->freezePane('A9');
 
+            // Primeiro: computa contagem total de boletos por cliente para colorização uniforme
+            $counts = [];
+            foreach ($groupLogs as $log) {
+                $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
+                if (empty($boletoIds)) {
+                    $cid = $log->cliente_id;
+                    if ($cid) $counts[$cid] = ($counts[$cid] ?? 0) + 1;
+                    continue;
+                }
+                $invList = Invoice::whereIn('id', $boletoIds)->get(['id','cliente_id']);
+                foreach ($invList as $inv) {
+                    $cid = $inv->cliente_id ?: $log->cliente_id;
+                    if ($cid) $counts[$cid] = ($counts[$cid] ?? 0) + 1;
+                }
+            }
+
             // Monta linhas por boleto (sem agrupamento)
             $row = 9;
-            $clientCounts = [];
             foreach ($groupLogs as $log) {
                 $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
                 if (empty($boletoIds)) {
@@ -68,8 +83,7 @@ class ClientReportExportService
                         '',
                         'Boleto bancário',
                     ]], null, 'A'.$row);
-                    $clientCounts[$log->cliente_id] = ($clientCounts[$log->cliente_id] ?? 0) + 1;
-                    $color = $this->colorByQty($clientCounts[$log->cliente_id]);
+                    $color = $this->colorByQty($counts[$log->cliente_id] ?? 1);
                     if ($color) $sheet->getStyle("A{$row}:F{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
                     $row++;
                     continue;
@@ -80,7 +94,7 @@ class ClientReportExportService
                     $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($log->sent_at ? $log->sent_at->format('d/m/Y') : '');
                     $descricao = $inv->descricao ?: '';
                     $valor = (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
-                    $parecer = $this->resolveParecer($inv);
+                    $parecer = $this->resolveParecerFromLog($log);
                     $sheet->fromArray([[
                         $clientName,
                         $dateStr,
@@ -90,8 +104,7 @@ class ClientReportExportService
                         'Boleto bancário',
                     ]], null, 'A'.$row);
                     $cid = $inv->cliente_id ?: $log->cliente_id;
-                    $clientCounts[$cid] = ($clientCounts[$cid] ?? 0) + 1;
-                    $color = $this->colorByQty($clientCounts[$cid]);
+                    $color = $this->colorByQty($counts[$cid] ?? 1);
                     if ($color) $sheet->getStyle("A{$row}:F{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
                     $row++;
                 }
@@ -160,27 +173,29 @@ class ClientReportExportService
         return 'FFCCE5FF'; // Azul claro
     }
 
-    protected function resolveParecer(Invoice $inv): string
+    protected function resolveParecerFromLog(WhatsappMessageLog $log): string
     {
-        $phone = preg_replace('/\D+/', '', (string) ($inv->cliente->mobile_phone ?? $inv->cliente->phone ?? ''));
-        if (! $phone) return 'N/A';
-
-        $lastLog = WhatsappMessageLog::where('phone_sanitized', $phone)->orderByDesc('sent_at')->first();
-        if (! $lastLog) return 'N/A';
-
-        if ((bool) ($lastLog->responded ?? false)) {
-            $incoming = \DB::table('incoming_messages')->where('numero_origem', $phone)->orderByDesc('created_at')->first();
-            if ($incoming && $incoming->payload_json) {
-                $payload = json_decode($incoming->payload_json, true);
-                $text = $payload['text']['body'] ?? ($payload['message']['text']['body'] ?? null);
-                if ($text) return (string) $text;
+        $status = strtoupper((string) ($log->delivery_status ?? ''));
+        if ($status === '' || $status === 'N/A') {
+            return '';
+        }
+        if ($status === 'PENDING') {
+            return '-Cobrado';
+        }
+        if (in_array($status, ['SENT','READ','DELIVERED'], true)) {
+            if (! (bool) ($log->responded ?? false)) {
+                return '-Cobrado';
+            }
+            $phone = preg_replace('/\D+/', '', (string) ($log->phone_sanitized ?? $log->phone_original ?? ''));
+            if ($phone) {
+                $incoming = \DB::table('incoming_messages')->where('numero_origem', $phone)->orderByDesc('created_at')->first();
+                if ($incoming && $incoming->payload_json) {
+                    $payload = json_decode($incoming->payload_json, true);
+                    $text = $payload['text']['body'] ?? ($payload['message']['text']['body'] ?? null);
+                    if ($text) return (string) $text;
+                }
             }
         }
-
-        if ($lastLog->delivery_status && strtoupper($lastLog->delivery_status) !== 'N/A') {
-            return 'Cobrado';
-        }
-
-        return 'N/A';
+        return '';
     }
 }
