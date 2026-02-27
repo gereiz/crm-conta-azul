@@ -76,12 +76,16 @@ const restorePhones = async () => {
     }
     restoring.value = true;
     try {
-        const { data } = await axios.post(route('settings.system.restore_phones'), {
-            connection_id: restoreConnectionId.value || '',
-        });
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const { data } = await axios.post(
+            route('settings.system.restore_phones'),
+            { connection_id: restoreConnectionId.value || '' },
+            { headers: { 'X-CSRF-TOKEN': csrf } }
+        );
         alert(`Telefones restaurados: ${data.updated}`);
     } catch (e) {
-        alert('Falha ao restaurar telefones.');
+        const msg = e?.response?.data?.error || e?.message || 'Falha ao restaurar telefones.';
+        alert(msg);
     } finally {
         restoring.value = false;
     }
