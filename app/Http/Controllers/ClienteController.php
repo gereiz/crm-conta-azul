@@ -124,6 +124,17 @@ class ClienteController extends Controller
         if ($clienteApi) {
             $cliente['local_id'] = $clienteLocal->id;
             $cliente['company_name'] = $clienteLocal->company_name;
+            // Merge telefones locais quando os campos da API estiverem vazios
+            if (empty($cliente['telefone_comercial']) && !empty($clienteLocal->phone)) {
+                $cliente['telefone_comercial'] = $clienteLocal->phone;
+            }
+            if (empty($cliente['telefone_celular']) && !empty($clienteLocal->mobile_phone)) {
+                $cliente['telefone_celular'] = $clienteLocal->mobile_phone;
+            }
+            // Também expõe os campos locais explicitamente para a view
+            $cliente['phone'] = $clienteLocal->phone;
+            $cliente['mobile_phone'] = $clienteLocal->mobile_phone;
+            $cliente['is_international'] = (bool) ($clienteLocal->is_international ?? false);
         }
 
         // Buscar apenas faturas em atraso (saldo > 0, vencidas e não pagas/baixadas)
