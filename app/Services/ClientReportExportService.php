@@ -53,6 +53,10 @@ class ClientReportExportService
             $headers = ['Nome do cliente', 'Data', 'Descrição', 'Parecer', 'Valor total da parcela', 'Conta bancária'];
             $sheet->fromArray([$headers], null, 'A8');
             $sheet->getStyle('A8:F8')->getFont()->setBold(true);
+            $sheet->getStyle('A8:F8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+            $sheet->getRowDimension(8)->setRowHeight(22);
+            $sheet->getStyle('A8:F8')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEFEFEF');
+            $sheet->getStyle('A8:F8')->getBorders()->getOutline()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
             $sheet->freezePane('A9');
             // Larguras para impressão previsível
             $sheet->getColumnDimension('A')->setWidth(40);
@@ -61,6 +65,7 @@ class ClientReportExportService
             $sheet->getColumnDimension('D')->setWidth(25);
             $sheet->getColumnDimension('E')->setWidth(14);
             $sheet->getColumnDimension('F')->setWidth(20);
+            $sheet->getDefaultRowDimension()->setRowHeight(18);
 
             // Primeiro: computa contagem total de boletos por cliente para colorização uniforme
             $counts = [];
@@ -115,6 +120,9 @@ class ClientReportExportService
                         $valor,
                         'Boleto bancário',
                     ]], null, 'A'.$row);
+                    // Wrap para impressão legível
+                    $sheet->getStyle("C{$row}:D{$row}")->getAlignment()->setWrapText(true);
+                    $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
                     $cid = $inv->cliente_id ?: $log->cliente_id;
                     $color = $this->colorByQty($counts[$cid] ?? 1);
                     if ($color && $parecer !== '') {
@@ -127,6 +135,9 @@ class ClientReportExportService
             foreach (range('A', 'F') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
+            // Bordas em toda a tabela
+            $dataRange = "A9:F{$lastDataRow}";
+            $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
 
             // Linhas de total: uma linha em branco e, na seguinte, "Total" em D e soma em E
             $lastDataRow = $row - 1;
@@ -136,6 +147,7 @@ class ClientReportExportService
             $sheet->setCellValue("D{$totalRow}", 'Total');
             $sheet->setCellValue("E{$totalRow}", "=SUM(E9:E{$lastDataRow})");
             $sheet->getStyle("D{$totalRow}:E{$totalRow}")->getFont()->setBold(true)->setSize(12);
+            $sheet->getStyle("D{$totalRow}:E{$totalRow}")->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN);
 
             // Configuração de impressão semelhante ao Google Planilhas
             $printArea = "A1:F{$totalRow}";
