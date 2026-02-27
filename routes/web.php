@@ -146,6 +146,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/clientes/{id}/invoices', [ClienteController::class, 'getClientInvoices'])->name('clientes.invoices.json');
     Route::get('/clientes/export', [ClienteController::class, 'export'])->name('clientes.export');
     Route::resource('clientes', ClienteController::class);
+    Route::post('/clientes/{cliente}/toggle-international', [ClienteController::class, 'toggleInternational'])->name('clientes.toggle_international');
     Route::resource('empresas', EmpresaController::class);
     Route::post('empresas/{connection}/settings/messages', [EmpresaController::class, 'updateMessageSettings'])->name('empresas.settings.messages');
     Route::post('empresas/{connection}/settings/cron', [EmpresaController::class, 'saveCronRule'])->name('empresas.settings.cron');

@@ -29,6 +29,7 @@ class ClienteController extends Controller
         $noPhone = filter_var($request->input('no_phone'), FILTER_VALIDATE_BOOLEAN);
         $noEmail = filter_var($request->input('no_email'), FILTER_VALIDATE_BOOLEAN);
         $noDocument = filter_var($request->input('no_document'), FILTER_VALIDATE_BOOLEAN);
+        $onlyInternational = $request->has('international') ? filter_var($request->input('international'), FILTER_VALIDATE_BOOLEAN) : null;
 
         $query = Cliente::query();
 
@@ -63,13 +64,16 @@ class ClienteController extends Controller
         if ($noDocument) {
             $query->whereNull('cpf_cnpj');
         }
+        if ($onlyInternational !== null) {
+            $query->where('is_international', $onlyInternational);
+        }
 
         // Ordenação
         $sort = $request->input('sort', 'name');
         $direction = $request->input('direction', 'asc');
 
         // Validar colunas permitidas para evitar SQL Injection indireta ou erros
-        $allowedSorts = ['name', 'email', 'company_name', 'cpf_cnpj', 'mobile_phone'];
+        $allowedSorts = ['name', 'email', 'company_name', 'cpf_cnpj', 'mobile_phone', 'is_international'];
         if (! in_array($sort, $allowedSorts)) {
             $sort = 'name';
         }
@@ -92,6 +96,7 @@ class ClienteController extends Controller
                 'no_phone' => $noPhone,
                 'no_email' => $noEmail,
                 'no_document' => $noDocument,
+                'international' => $onlyInternational,
             ]),
         ]);
     }
@@ -335,6 +340,23 @@ class ClienteController extends Controller
                 'payment_type' => $paymentType,
                 'connection_id' => $connectionId,
             ],
+        ]);
+    }
+
+    public function toggleInternational(Request $request, Cliente $cliente)
+    {
+        $value = $request->has('value') ? filter_var($request->input('value'), FILTER_VALIDATE_BOOLEAN) : null;
+        if ($value === null) {
+            $cliente->is_international = ! (bool) ($cliente->is_international ?? false);
+        } else {
+            $cliente->is_international = $value;
+        }
+        $cliente->save();
+
+        return response()->json([
+            'success' => true,
+            'id' => $cliente->id,
+            'is_international' => (bool) $cliente->is_international,
         ]);
     }
 

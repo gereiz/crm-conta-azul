@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
+import axios from 'axios';
 import TextInput from '@/Components/TextInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -19,6 +20,9 @@ const connectionId = ref(props.filters.connection_id || '');
 const noPhone = ref(Boolean(props.filters.no_phone || false));
 const noEmail = ref(Boolean(props.filters.no_email || false));
 const noDocument = ref(Boolean(props.filters.no_document || false));
+const onlyInternational = ref(
+    props.filters.international === true || props.filters.international === '1'
+);
 
 // Função para acionar a ordenação
 const sort = (field) => {
@@ -41,6 +45,7 @@ const updateParams = () => {
         no_phone: noPhone.value ? '1' : '',
         no_email: noEmail.value ? '1' : '',
         no_document: noDocument.value ? '1' : '',
+        international: onlyInternational.value ? '1' : '',
         page: 1 // Resetar página ao ordenar ou filtrar
     }, {
         preserveState: true,
@@ -62,6 +67,7 @@ watch(search, (value) => {
             no_phone: noPhone.value ? '1' : '',
             no_email: noEmail.value ? '1' : '',
             no_document: noDocument.value ? '1' : '',
+            international: onlyInternational.value ? '1' : '',
         }, {
             preserveState: true,
             replace: true,
@@ -86,7 +92,8 @@ const changePage = (page) => {
         connection_id: connectionId.value || '',
         no_phone: noPhone.value ? '1' : '',
         no_email: noEmail.value ? '1' : '',
-        no_document: noDocument.value ? '1' : '',
+            no_document: noDocument.value ? '1' : '',
+            international: onlyInternational.value ? '1' : '',
     }, {
         preserveState: true,
         preserveScroll: true,
@@ -102,8 +109,30 @@ const exportClients = () => {
         no_phone: noPhone.value ? '1' : '',
         no_email: noEmail.value ? '1' : '',
         no_document: noDocument.value ? '1' : '',
+        international: onlyInternational.value ? '1' : '',
     });
     window.location.href = route('clientes.export') + '?' + params.toString();
+};
+
+const toggling = ref({});
+const toggleInternational = async (cliente) => {
+    if (!cliente || !cliente.id) return;
+    if (toggling.value[cliente.id]) return;
+    toggling.value[cliente.id] = true;
+    try {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const { data } = await axios.post(route('clientes.toggle_international', cliente.id), {}, { headers: { 'X-CSRF-TOKEN': csrf } });
+        // Atualiza localmente
+        const list = clientesList.value;
+        const idx = list.findIndex(c => c.id === cliente.id);
+        if (idx >= 0) {
+            list[idx].is_international = data.is_international;
+        }
+    } catch (e) {
+        alert('Falha ao alterar internacional: ' + (e?.response?.data?.error || e.message));
+    } finally {
+        toggling.value[cliente.id] = false;
+    }
 };
 
 </script>
@@ -152,6 +181,10 @@ const exportClients = () => {
                                 <input type="checkbox" v-model="noDocument" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
                                 <span class="ml-2">Sem documento</span>
                             </label>
+                            <label class="inline-flex items-center text-xs text-gray-600 dark:text-gray-300">
+                                <input type="checkbox" v-model="onlyInternational" @change="updateParams" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
+                                <span class="ml-2">Somente internacionais</span>
+                            </label>
                         </div>
                         <div class="flex-1"></div>
                         <PrimaryButton @click="exportClients" class="text-xs">Exportar Clientes</PrimaryButton>
@@ -182,6 +215,12 @@ const exportClients = () => {
                                             <span v-if="currentSort === 'mobile_phone'" class="text-gray-900 dark:text-white">{{ currentDirection === 'asc' ? '↑' : '↓' }}</span>
                                         </div>
                                     </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" @click="sort('is_international')">
+                                        <div class="flex items-center gap-1">
+                                            Internacional
+                                            <span v-if="currentSort === 'is_international'" class="text-gray-900 dark:text-white">{{ currentDirection === 'asc' ? '↑' : '↓' }}</span>
+                                        </div>
+                                    </th>
                                     <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         Ações
                                     </th>
@@ -200,6 +239,12 @@ const exportClients = () => {
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm text-gray-900 dark:text-gray-100">{{ cliente.mobile_phone || cliente.phone }}</div>
                                     </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <button @click="toggleInternational(cliente)" class="inline-flex items-center px-2 py-1 text-xs rounded-full"
+                                            :class="cliente.is_international ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'">
+                                            {{ cliente.is_international ? 'Sim' : 'Não' }}
+                                        </button>
+                                    </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <Link :href="route('clientes.show', cliente.id)" class="text-primary-600 dark:text-primary-400 hover:text-primary-800 mr-2">
                                             Detalhes
@@ -207,7 +252,7 @@ const exportClients = () => {
                                     </td>
                                 </tr>
                                 <tr v-if="clientesList.length === 0">
-                                    <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
                                         Nenhum cliente encontrado. <br>
                                         <span class="text-xs">Certifique-se de sincronizar os clientes em Configurações > Conta Azul.</span>
                                     </td>
