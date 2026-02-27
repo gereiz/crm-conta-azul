@@ -78,7 +78,7 @@ const restorePhones = async () => {
     try {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const { data } = await axios.post(
-            '/settings/system/restore-phones',
+            route('settings.system.restore_phones'),
             { connection_id: restoreConnectionId.value || '' },
             { headers: { 'X-CSRF-TOKEN': csrf } }
         );
