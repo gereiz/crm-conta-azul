@@ -135,9 +135,6 @@ class ClientReportExportService
             foreach (range('A', 'F') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
-            // Bordas em toda a tabela
-            $dataRange = "A9:F{$lastDataRow}";
-            $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
 
             // Linhas de total: uma linha em branco e, na seguinte, "Total" em D e soma em E
             $lastDataRow = $row - 1;
@@ -148,6 +145,9 @@ class ClientReportExportService
             $sheet->setCellValue("E{$totalRow}", "=SUM(E9:E{$lastDataRow})");
             $sheet->getStyle("D{$totalRow}:E{$totalRow}")->getFont()->setBold(true)->setSize(12);
             $sheet->getStyle("D{$totalRow}:E{$totalRow}")->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN);
+            // Bordas em toda a tabela
+            $dataRange = "A9:F{$lastDataRow}";
+            $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
 
             // Configuração de impressão semelhante ao Google Planilhas
             $printArea = "A1:F{$totalRow}";
