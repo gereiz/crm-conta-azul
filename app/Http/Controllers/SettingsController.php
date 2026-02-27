@@ -91,30 +91,31 @@ class SettingsController extends Controller
     public function restorePhones(Request $request)
     {
         $connectionId = $request->input('connection_id');
-        $clienteIds = \App\Models\Cliente::query()
+        $clientes = \App\Models\Cliente::query()
             ->when($connectionId, fn($q) => $q->where('connection_id', $connectionId))
-            ->pluck('id');
-        if ($clienteIds->isEmpty()) {
-            return response()->json(['success' => true, 'updated' => 0]);
-        }
-        $logs = \App\Models\WhatsappMessageLog::whereIn('cliente_id', $clienteIds)
-            ->where('status', 'success')
-            ->whereNotNull('phone_sanitized')
-            ->orderByDesc('sent_at')
-            ->get(['cliente_id','phone_original','phone_sanitized','sent_at']);
-        $byClient = $logs->groupBy('cliente_id');
+            ->get(['id','connection_id','name','phone','mobile_phone']);
         $updated = 0;
-        foreach ($byClient as $cid => $items) {
-            $best = $items->first();
-            if (!$best) continue;
-            $raw = $best->phone_sanitized ?: $best->phone_original;
-            if (!$raw) continue;
+        foreach ($clientes as $c) {
+            $log = \App\Models\WhatsappMessageLog::where('cliente_id', $c->id)
+                ->where('status', 'success')
+                ->orderByDesc('sent_at')
+                ->first();
+            if (!$log) {
+                $log = \App\Models\WhatsappMessageLog::where('connection_id', $c->connection_id)
+                    ->where('client_name', $c->name)
+                    ->where('status', 'success')
+                    ->orderByDesc('sent_at')
+                    ->first();
+            }
+            if (!$log) continue;
+            $raw = $log->phone_sanitized ?: $log->phone_original;
             $digits = preg_replace('/\D+/', '', (string) $raw);
             if (!$digits) continue;
-            \App\Models\Cliente::where('id', $cid)->update([
-                'mobile_phone' => $digits,
-                'phone' => $digits,
-            ]);
+            $c->mobile_phone = $digits;
+            if (empty($c->phone)) {
+                $c->phone = $digits;
+            }
+            $c->save();
             $updated++;
         }
         return response()->json(['success' => true, 'updated' => $updated, 'scope' => $connectionId ? 'company' : 'all']);
