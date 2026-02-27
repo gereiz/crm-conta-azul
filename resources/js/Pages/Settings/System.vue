@@ -66,6 +66,27 @@ const submit = () => {
     });
 };
 
+const restoreConnectionId = ref('');
+const restoring = ref(false);
+const restorePhones = async () => {
+    if (!confirm('Restaurar telefones dos clientes com base no último envio?')) return;
+    if (!restoreConnectionId.value) {
+        const okAll = confirm('Você selecionou "Todas as empresas". Esta ação afetará todos os clientes do sistema. Deseja continuar?');
+        if (!okAll) return;
+    }
+    restoring.value = true;
+    try {
+        const { data } = await axios.post(route('settings.system.restore_phones'), {
+            connection_id: restoreConnectionId.value || '',
+        });
+        alert(`Telefones restaurados: ${data.updated}`);
+    } catch (e) {
+        alert('Falha ao restaurar telefones.');
+    } finally {
+        restoring.value = false;
+    }
+};
+
 onMounted(() => {
     checkCronStatus();
 });
@@ -214,6 +235,26 @@ onMounted(() => {
                                     <li>Evolution: defina Webhook URL e inclua um cabeçalho X-Webhook-Secret com o segredo configurado.</li>
                                 </ul>
                             </div>
+                        </div>
+
+                        <!-- Restaurar Telefones -->
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+                            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Restaurar Telefones</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Empresa</label>
+                                    <select v-model="restoreConnectionId" class="block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md">
+                                        <option value="">Todas</option>
+                                        <option v-for="c in ($page.props.connections || [])" :key="c.id" :value="c.id">{{ c.empresa_nome }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <PrimaryButton @click="restorePhones" :disabled="restoring">
+                                        {{ restoring ? 'Restaurando...' : 'Restaurar Telefones' }}
+                                    </PrimaryButton>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Restaura para cada cliente o último telefone usado em envios com sucesso.</p>
                         </div>
 
                         <div class="flex justify-end">

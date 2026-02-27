@@ -71,6 +71,7 @@ class SettingsController extends Controller
 
         return Inertia::render('Settings/System', [
             'settings' => $settings,
+            'connections' => \App\Models\ContaAzulConnection::orderBy('empresa_nome')->get(),
         ]);
     }
 
@@ -85,6 +86,33 @@ class SettingsController extends Controller
             'logo' => $settings->logo_path ?? null,
             'favicon' => $settings->favicon_path ?? null,
         ]);
+    }
+
+    public function restorePhones(Request $request)
+    {
+        $connectionId = $request->input('connection_id');
+        $query = \App\Models\Cliente::query();
+        if ($connectionId) {
+            $query->where('connection_id', $connectionId);
+        }
+        $clientes = $query->get(['id','connection_id','phone','mobile_phone']);
+        $updated = 0;
+        foreach ($clientes as $c) {
+            $log = \App\Models\WhatsappMessageLog::where('cliente_id', $c->id)
+                ->where('status', 'success')
+                ->orderByDesc('sent_at')
+                ->first();
+            if (!$log) continue;
+            $phone = $log->phone_original ?: $log->phone_sanitized;
+            if (!$phone) continue;
+            $c->mobile_phone = $phone;
+            if (empty($c->phone)) {
+                $c->phone = $phone;
+            }
+            $c->save();
+            $updated++;
+        }
+        return response()->json(['success' => true, 'updated' => $updated]);
     }
 
     public function orchestrator()

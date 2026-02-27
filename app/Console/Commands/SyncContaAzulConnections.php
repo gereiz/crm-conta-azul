@@ -184,10 +184,14 @@ class SyncContaAzulConnections extends Command
                     'city' => $city,
                     'state' => $state,
                 ];
-                if (! $preserveCurrent && ! empty($phone)) {
+                // Regra de não sobrescrever telefones locais quando CA está vazio
+                $hasDigits = function ($v) {
+                    return is_string($v) && preg_match('/\d+/', trim($v));
+                };
+                if (! $preserveCurrent && $hasDigits($phone)) {
                     $data['phone'] = $phone;
                 }
-                if (! $preserveMobile && ! empty($mobilePhone)) {
+                if (! $preserveMobile && $hasDigits($mobilePhone)) {
                     $data['mobile_phone'] = $mobilePhone;
                 }
                 Cliente::updateOrCreate(
