@@ -54,7 +54,28 @@ class WhatsappReportController extends Controller
             $query->where('status', $status);
         }
 
-        $reports = $query->paginate(20)->withQueryString();
+        // Exibição agrupada por cliente: usa o último envio por cliente/empresa/tipo
+        $page = (int) request()->input('page', 1);
+        $perPage = 20;
+        $collection = $query->get();
+        $grouped = $collection->groupBy(function ($log) {
+            return implode('|', [
+                (string) ($log->cliente_id ?? 'null'),
+                (string) ($log->connection_id ?? 'null'),
+                (string) ($log->message_type ?? 'unknown'),
+            ]);
+        })->map(function ($group) {
+            return $group->sortByDesc('sent_at')->first();
+        })->values();
+        $total = $grouped->count();
+        $items = $grouped->slice(($page - 1) * $perPage, $perPage)->values();
+        $reports = new \Illuminate\Pagination\LengthAwarePaginator(
+            $items,
+            $total,
+            $perPage,
+            $page,
+            ['path' => request()->url(), 'query' => request()->query()]
+        );
 
         $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
 
@@ -216,6 +237,7 @@ class WhatsappReportController extends Controller
         $endDate = $request->input('end_date');
         $search = $request->input('search');
         $type = $request->input('type');
+        $clienteId = $request->input('cliente_id');
 
         $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
         $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
@@ -229,6 +251,7 @@ class WhatsappReportController extends Controller
         $service = new \App\Services\ClientReportExportService();
         $spreadsheet = $service->build([
             'connection_id' => $connectionId,
+            'cliente_id' => $clienteId,
             'start' => $start,
             'end' => $end,
             'type' => $type,

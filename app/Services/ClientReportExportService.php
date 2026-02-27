@@ -16,6 +16,7 @@ class ClientReportExportService
     public function build(array $filters): Spreadsheet
     {
         $connectionId = $filters['connection_id'] ?? null;
+        $clienteId = $filters['cliente_id'] ?? null;
         $start = $filters['start'] ?? null;
         $end = $filters['end'] ?? null;
         $type = $filters['type'] ?? null;
@@ -24,6 +25,7 @@ class ClientReportExportService
         $logQ = WhatsappMessageLog::with(['connection'])
             ->where('status', 'success');
         if ($connectionId) $logQ->where('connection_id', $connectionId);
+        if ($clienteId) $logQ->where('cliente_id', $clienteId);
         if ($start && $end) $logQ->whereBetween('sent_at', [$start, $end]);
         if ($search) {
             $logQ->where(function ($q) use ($search) {

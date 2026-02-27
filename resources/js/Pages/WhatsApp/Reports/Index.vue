@@ -23,6 +23,16 @@ const formatDate = (dateString) => {
 const getDownloadUrl = (report) => {
     return route('whatsapp.reports.download', { id: report.id });
 };
+const getClientDownloadUrl = (report) => {
+    const params = {
+        connection_id: report.connection_id,
+        cliente_id: report.cliente_id,
+        start_date: startDate.value || '',
+        end_date: endDate.value || '',
+        type: selectedType.value || '',
+    };
+    return route('whatsapp.reports.download_client', params);
+};
 
 const getGroupedCronDownloadUrl = () => {
     const params = {};
@@ -232,6 +242,10 @@ const formatWhatsAppNumber = (n) => {
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <a :href="getDownloadUrl(report)" target="_blank" class="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300">
                                                 Baixar XLSX
+                                            </a>
+                                            <span class="mx-2 text-gray-300">|</span>
+                                            <a :href="getClientDownloadUrl(report)" target="_blank" class="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300">
+                                                Baixar Relatório Cliente
                                             </a>
                                         </td>
                                     </tr>
