@@ -227,18 +227,11 @@ class MessageCronService
         }
         $query->where('saldo_devedor', '>', 0)
             ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO']);
-        // Preferir boletos: aceita quando payment_type contém 'BOLETO' OU quando há link_boleto presente
-        // Preferir boletos; quando habilitado "cobrança sem boleto", incluímos também faturas sem link
-        if (!($cron->send_without_boleto ?? false)) {
-            $query->where(function ($q) {
-                $q->where(function ($qq) {
-                    $qq->whereNotNull('payment_type')
-                        ->where('payment_type', 'LIKE', '%BOLETO%');
-                })->orWhere(function ($qq) {
-                    $qq->whereNotNull('link_boleto')->where('link_boleto', '!=', '');
-                });
-            });
-        }
+        // Somente clientes com forma de pagamento BOLETO (ex.: 'BOLETO', 'Boleto bancário', 'BOLETO_BANCARIO')
+        $query->where(function ($q) {
+            $q->whereNotNull('payment_type')
+              ->where('payment_type', 'LIKE', '%BOLETO%');
+        });
 
         $invoices = $query->with('cliente')->get();
 
@@ -1107,8 +1100,8 @@ class MessageCronService
             return $due.' - '.$display;
         })->implode("\n");
 
-        // Se habilitado "cobrança sem boleto" e não há nenhum link, usa template alternativo
-        if (($cron->send_without_boleto ?? false) && ($cron->no_boleto_template_id ?? null) && ! $firstUrl) {
+        // Se não há nenhum link de boleto para o cliente, usa template "cobrança sem boleto" quando configurado
+        if ((! $firstUrl) && ($cron->no_boleto_template_id ?? null)) {
             try {
                 $altTpl = \App\Models\WhatsappTemplate::find($cron->no_boleto_template_id);
                 if ($altTpl) {
@@ -1176,7 +1169,7 @@ class MessageCronService
             'phone_sanitized' => $sanitizedPhone,
             'message_type' => $cron->type,
             'provider' => $whatsapp->provider ?? null,
-            'message_template_id' => (($cron->send_without_boleto ?? false) && ($cron->no_boleto_template_id ?? null) && ! $firstUrl) ? $cron->no_boleto_template_id : $cron->message_template_id,
+            'message_template_id' => ((! $firstUrl) && ($cron->no_boleto_template_id ?? null)) ? $cron->no_boleto_template_id : $cron->message_template_id,
             'total_boletos' => $firstUrl ? (is_countable($invoices) ? count($invoices) : null) : 0,
             'boleto_ids' => collect($invoices)->pluck('id')->toArray(),
             'status' => ($result['queued'] ?? false) ? 'skipped' : ($result['success'] ? 'success' : 'error'),
