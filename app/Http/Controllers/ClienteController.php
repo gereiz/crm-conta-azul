@@ -215,52 +215,46 @@ class ClienteController extends Controller
             $direction = 'asc';
         }
         $query->orderBy($sort, $direction);
-        $items = $query->get();
+        $items = $query->orderBy('company_name')->get();
 
         $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Clientes');
         $headers = [
-            'ID',
-            'CA ID',
-            'Empresa',
-            'Nome',
-            'Email',
-            'Telefone',
-            'Celular',
-            'Internacional',
-            'CPF/CNPJ',
-            'Tipo Pessoa',
-            'Cidade',
-            'Estado',
-            'Data Nascimento',
-            'Criado em',
-            'Atualizado em',
+            'ID','CA ID','Empresa','Nome','Email','Telefone','Celular','Internacional','CPF/CNPJ',
+            'Tipo Pessoa','Cidade','Estado','Data Nascimento','Criado em','Atualizado em',
         ];
-        $sheet->fromArray([$headers], null, 'A1');
-        $row = 2;
-        foreach ($items as $c) {
-            $sheet->fromArray([[
-                $c->id,
-                $c->ca_id,
-                $c->company_name,
-                $c->name,
-                $c->email,
-                $c->phone,
-                $c->mobile_phone,
-                $c->is_international ? 'Sim' : 'Não',
-                $c->cpf_cnpj,
-                $c->person_type,
-                $c->city,
-                $c->state,
-                $c->birthdate ? \Carbon\Carbon::parse($c->birthdate)->format('d/m/Y') : '',
-                $c->created_at ? \Carbon\Carbon::parse($c->created_at)->format('d/m/Y H:i:s') : '',
-                $c->updated_at ? \Carbon\Carbon::parse($c->updated_at)->format('d/m/Y H:i:s') : '',
-            ]], null, 'A'.$row);
-            $row++;
-        }
-        foreach (range('A', 'O') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+        $groups = $items->groupBy('company_name');
+        $first = true;
+        foreach ($groups as $company => $list) {
+            $sheet = $first ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
+            $first = false;
+            $title = \Illuminate\Support\Str::substr(\Illuminate\Support\Str::slug($company ?: 'sem-empresa'), 0, 31);
+            $sheet->setTitle($title ?: 'clientes');
+            $sheet->fromArray([$headers], null, 'A1');
+            $sheet->freezePane('A2');
+            $row = 2;
+            foreach ($list as $c) {
+                $sheet->fromArray([[
+                    $c->id,
+                    $c->ca_id,
+                    $c->company_name,
+                    $c->name,
+                    $c->email,
+                    $c->phone,
+                    $c->mobile_phone,
+                    $c->is_international ? 'Sim' : 'Não',
+                    $c->cpf_cnpj,
+                    $c->person_type,
+                    $c->city,
+                    $c->state,
+                    $c->birthdate ? \Carbon\Carbon::parse($c->birthdate)->format('d/m/Y') : '',
+                    $c->created_at ? \Carbon\Carbon::parse($c->created_at)->format('d/m/Y H:i:s') : '',
+                    $c->updated_at ? \Carbon\Carbon::parse($c->updated_at)->format('d/m/Y H:i:s') : '',
+                ]], null, 'A'.$row);
+                $row++;
+            }
+            foreach (range('A', 'O') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
         }
         $filename = 'clientes_filtrados_'.now()->format('Y-m-d_H-i').'.xlsx';
         $writer = new Xlsx($spreadsheet);
