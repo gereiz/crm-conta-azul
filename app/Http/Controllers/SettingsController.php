@@ -566,10 +566,9 @@ class SettingsController extends Controller
             $startTime = now();
 
             if ($mode === 'reset') {
-                if ($target === 'all') {
-                    Cliente::where('connection_id', $connection->id)->delete();
-                    \App\Models\Invoice::where('connection_id', $connection->id)->delete();
-                } elseif ($target === 'invoices') {
+                // Para preservar telefones locais, NÃO removemos clientes na opção "reset".
+                // Em vez disso, removemos apenas faturas quando solicitado e deixamos o pruning fazer a limpeza segura.
+                if ($target === 'all' || $target === 'invoices') {
                     \App\Models\Invoice::where('connection_id', $connection->id)->delete();
                 }
             }
