@@ -31,6 +31,29 @@ const clearFilters = () => {
   applyFilters();
 };
 
+// Marcadores locais persistidos
+const markedIds = ref(new Set(JSON.parse(localStorage.getItem('returns_marked_ids') || '[]')));
+const saveMarks = () => {
+  localStorage.setItem('returns_marked_ids', JSON.stringify([...markedIds.value]));
+};
+const toggleMark = (row) => {
+  if (!row?.id) return;
+  if (markedIds.value.has(row.id)) {
+    markedIds.value.delete(row.id);
+  } else {
+    markedIds.value.add(row.id);
+  }
+  saveMarks();
+};
+const isMarked = (id) => markedIds.value.has(id);
+const onlyMarked = ref(false);
+const displayRows = () => {
+  const data = props.items?.data || [];
+  if (!onlyMarked.value) return data;
+  if (markedIds.value.size === 0) return [];
+  return data.filter(r => markedIds.value.has(r.id));
+};
+
 const lastMsgs = ref({});
 const loadingPhones = ref({});
 const sanitizeDigits = (s) => (s || '').replace(/\D+/g, '');
@@ -89,6 +112,30 @@ const openModalForRow = async (row) => {
 const closeResponseModal = () => {
   showResponseModal.value = false;
   modalMessages.value = [];
+};
+
+// Modal para ver apenas marcados (toda a lista)
+const showMarkedModal = ref(false);
+const markedItems = ref([]);
+const openMarkedModal = async () => {
+  const ids = [...markedIds.value];
+  if (ids.length === 0) {
+    alert('Nenhum registro marcado.');
+    return;
+  }
+  try {
+    const url = route('whatsapp.returns.by_ids') + `?ids=${ids.join(',')}`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    markedItems.value = Array.isArray(json.items) ? json.items : [];
+    showMarkedModal.value = true;
+  } catch (_e) {
+    alert('Falha ao carregar registros marcados.');
+  }
+};
+const closeMarkedModal = () => {
+  showMarkedModal.value = false;
+  markedItems.value = [];
 };
 </script>
 
@@ -177,10 +224,20 @@ const closeResponseModal = () => {
         <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
           <div class="p-6 text-gray-900 dark:text-gray-100">
             <h3 class="text-lg font-medium mb-4">Mensagens</h3>
+            <div class="mb-3 flex items-center gap-3">
+              <label class="inline-flex items-center text-xs cursor-pointer">
+                <input type="checkbox" v-model="onlyMarked" class="mr-2 rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900" />
+                <span>Somente marcados</span>
+              </label>
+              <button @click="openMarkedModal" class="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700">
+                Ver marcados ({{ markedIds.size }})
+              </button>
+            </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-xs">
                 <thead>
                   <tr class="text-left text-gray-600 dark:text-gray-300">
+                    <th class="py-1">Mark</th>
                     <th class="py-1">Data envio</th>
                     <th class="py-1">Empresa</th>
                     <th class="py-1">Número remetente</th>
@@ -195,10 +252,13 @@ const closeResponseModal = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in items.data" :key="row.id" class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                  <tr v-for="row in displayRows()" :key="row.id" class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="py-1">
+                      <input type="checkbox" :checked="isMarked(row.id)" @change="toggleMark(row)" />
+                    </td>
                     <td class="py-1">{{ row.sent_at ? new Date(row.sent_at).toLocaleString() : '' }}</td>
                     <td class="py-1">{{ row.connection?.empresa_nome || '' }}</td>
-                    <td class="py-1">{{ row.whatsapp_number?.description || '' }}</td>
+                    <td class="py-1">{{ row.whatsapp_number?.description || row.whatsappNumber?.description || '' }}</td>
                     <td class="py-1">{{ row.client_name }}</td>
                     <td class="py-1">{{ row.phone_sanitized || row.phone_original }}</td>
                     <td class="py-1">{{ row.message_type }}</td>
@@ -263,6 +323,46 @@ const closeResponseModal = () => {
                     </button>
                   </li>
                 </ul>
+              </div>
+            </Modal>
+
+            <!-- Modal: Registros Marcados -->
+            <Modal :show="showMarkedModal" @close="closeMarkedModal" maxWidth="3xl">
+              <div class="p-4">
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Registros Marcados</h3>
+                  <button class="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700" @click="closeMarkedModal">Fechar</button>
+                </div>
+                <div v-if="markedItems.length === 0" class="text-xs text-gray-500">Nenhum registro marcado.</div>
+                <div v-else class="overflow-x-auto">
+                  <table class="min-w-full text-xs">
+                    <thead>
+                      <tr class="text-left text-gray-600 dark:text-gray-300">
+                        <th class="py-1">ID</th>
+                        <th class="py-1">Data</th>
+                        <th class="py-1">Cliente</th>
+                        <th class="py-1">Telefone</th>
+                        <th class="py-1">Status</th>
+                        <th class="py-1">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="r in markedItems" :key="r.id" class="border-t border-gray-200 dark:border-gray-700">
+                        <td class="py-1">{{ r.id }}</td>
+                        <td class="py-1">{{ r.sent_at ? new Date(r.sent_at).toLocaleString() : '' }}</td>
+                        <td class="py-1">{{ r.client_name }}</td>
+                        <td class="py-1">{{ r.phone_sanitized || r.phone_original }}</td>
+                        <td class="py-1">{{ r.delivery_status || 'N/A' }}</td>
+                        <td class="py-1">
+                          <button class="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                  @click="() => { markedIds.delete(r.id); saveMarks(); markedItems = markedItems.filter(x => x.id !== r.id); }">
+                            Desmarcar
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </Modal>
 

@@ -78,4 +78,18 @@ class WhatsAppReturnController extends Controller
         $logs = $query->limit(max(10, min(500, $limit)))->get();
         return response()->json(['items' => $logs]);
     }
+
+    public function getByIds(Request $request)
+    {
+        $idsParam = (string) $request->input('ids', '');
+        $ids = array_values(array_filter(array_map('intval', preg_split('/[,\s]+/', $idsParam) ?: [])));
+        if (empty($ids)) {
+            return response()->json(['items' => []]);
+        }
+        $items = \App\Models\WhatsappMessageLog::with(['connection'])
+            ->whereIn('id', $ids)
+            ->orderByDesc('sent_at')
+            ->get();
+        return response()->json(['items' => $items]);
+    }
 }
