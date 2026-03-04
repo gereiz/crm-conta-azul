@@ -22,8 +22,7 @@ class ClientReportExportService
         $type = $filters['type'] ?? null;
         $search = $filters['search'] ?? null;
 
-        $logQ = WhatsappMessageLog::with(['connection'])
-            ->where('status', 'success');
+        $logQ = WhatsappMessageLog::with(['connection']);
         if ($connectionId) $logQ->where('connection_id', $connectionId);
         if ($clienteId) $logQ->where('cliente_id', $clienteId);
         if ($start && $end) $logQ->whereBetween('sent_at', [$start, $end]);
@@ -42,6 +41,7 @@ class ClientReportExportService
         $first = true;
 
         foreach ($groups as $connId => $groupLogs) {
+            $sentGroup = $groupLogs->where('status', 'success');
             $companyName = $groupLogs->first()->connection->empresa_nome ?? 'Empresa';
             $sheet = $first ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
             $first = false;
@@ -69,7 +69,7 @@ class ClientReportExportService
 
             // Primeiro: computa contagem total de boletos por cliente para colorização uniforme
             $counts = [];
-            foreach ($groupLogs as $log) {
+            foreach ($sentGroup as $log) {
                 $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
                 if (empty($boletoIds)) {
                     $cid = $log->cliente_id;
@@ -85,7 +85,7 @@ class ClientReportExportService
 
             // Monta linhas por boleto (sem agrupamento)
             $row = 9;
-            foreach ($groupLogs as $log) {
+            foreach ($sentGroup as $log) {
                 $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
                 if (empty($boletoIds)) {
                     // fallback: uma linha sem boleto
