@@ -57,7 +57,8 @@ const ensureLastMsgs = async (row) => {
       } else if (it.created_at) {
         ts = new Date(it.created_at);
       }
-      if (body) texts.push({ text: body, time: ts });
+      const fromMe = Boolean(it.from_me);
+      if (body) texts.push({ text: body, time: ts, fromMe });
       if (texts.length >= 5) break;
     }
     lastMsgs.value[key] = texts;
@@ -247,11 +248,18 @@ const closeResponseModal = () => {
                   <li v-for="(m, idx) in modalMessages" :key="idx">
                     <button
                       @click="copyMsg(m.text)"
-                      class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                      class="w-full text-left px-2 py-1 rounded"
+                      :class="m.fromMe ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30' : 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'"
                       style="white-space: pre-line"
                     >
-                      <span class="font-semibold text-gray-700 dark:text-gray-200">{{ m.time ? new Date(m.time).toLocaleString() : '' }}</span>
-                      <span class="ml-2 text-gray-800 dark:text-gray-100">{{ m.text }}</span>
+                      <span class="font-semibold"
+                        :class="m.fromMe ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'">
+                        {{ m.fromMe ? 'Sistema' : 'Cliente' }} • {{ m.time ? new Date(m.time).toLocaleString() : '' }}
+                      </span>
+                      <span class="block mt-0.5"
+                        :class="m.fromMe ? 'text-blue-900 dark:text-blue-200' : 'text-green-900 dark:text-green-100'">
+                        {{ m.text }}
+                      </span>
                     </button>
                   </li>
                 </ul>
