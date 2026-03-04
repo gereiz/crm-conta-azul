@@ -656,13 +656,10 @@ class SettingsController extends Controller
                         $currentPhone = $existing?->phone;
                         $currentMobile = $existing?->mobile_phone;
                         $hasPlusCurrent = is_string($currentPhone) && preg_match('/^\s*\+/', $currentPhone);
+                        // Política: NUNCA sobrescrever telefones locais; somente preencher quando local estiver vazio
                         $hasPlusMobile = is_string($currentMobile) && preg_match('/^\s*\+/', $currentMobile);
                         $sanitizedCurrent = \App\Services\PhoneSanitizerService::sanitize($currentPhone ?? '');
                         $sanitizedMobile = \App\Services\PhoneSanitizerService::sanitize($currentMobile ?? '');
-                        $isInternationalCurrent = $sanitizedCurrent && (!str_starts_with($sanitizedCurrent, '55')) && (strlen($sanitizedCurrent) >= 12);
-                        $isInternationalMobile = $sanitizedMobile && (!str_starts_with($sanitizedMobile, '55')) && (strlen($sanitizedMobile) >= 12);
-                        $preserveCurrent = $currentPhone && ($hasPlusCurrent || $isInternationalCurrent);
-                        $preserveMobile = $currentMobile && ($hasPlusMobile || $isInternationalMobile);
 
                         $data = [
                             'connection_id' => $connection->id,
@@ -674,10 +671,11 @@ class SettingsController extends Controller
                             'city' => $city,
                             'state' => $state,
                         ];
-                        if (! $preserveCurrent && ! empty($phone)) {
+                        $hasDigits = function ($v) { return is_string($v) && preg_match('/\d+/', trim($v)); };
+                        if (empty($currentPhone) && $hasDigits($phone)) {
                             $data['phone'] = $phone;
                         }
-                        if (! $preserveMobile && ! empty($mobilePhone)) {
+                        if (empty($currentMobile) && $hasDigits($mobilePhone)) {
                             $data['mobile_phone'] = $mobilePhone;
                         }
 
@@ -800,13 +798,10 @@ class SettingsController extends Controller
                             $currentPhone = $existing?->phone;
                             $currentMobile = $existing?->mobile_phone;
                             $hasPlusCurrent = is_string($currentPhone) && preg_match('/^\s*\+/', $currentPhone);
+                            // Política: NUNCA sobrescrever telefones locais; somente preencher quando local estiver vazio
                             $hasPlusMobile = is_string($currentMobile) && preg_match('/^\s*\+/', $currentMobile);
                             $sanitizedCurrent = \App\Services\PhoneSanitizerService::sanitize($currentPhone ?? '');
                             $sanitizedMobile = \App\Services\PhoneSanitizerService::sanitize($currentMobile ?? '');
-                            $isInternationalCurrent = $sanitizedCurrent && (!str_starts_with($sanitizedCurrent, '55')) && (strlen($sanitizedCurrent) >= 12);
-                            $isInternationalMobile = $sanitizedMobile && (!str_starts_with($sanitizedMobile, '55')) && (strlen($sanitizedMobile) >= 12);
-                            $preserveCurrent = $currentPhone && ($hasPlusCurrent || $isInternationalCurrent);
-                            $preserveMobile = $currentMobile && ($hasPlusMobile || $isInternationalMobile);
                             $data = [
                                 'connection_id' => $connection->id,
                                 'name' => $caClient['nome'] ?? 'Sem Nome',
@@ -817,10 +812,11 @@ class SettingsController extends Controller
                                 'city' => $city,
                                 'state' => $state,
                             ];
-                            if (! $preserveCurrent && ! empty($phone)) {
+                            $hasDigits = function ($v) { return is_string($v) && preg_match('/\d+/', trim($v)); };
+                            if (empty($currentPhone) && $hasDigits($phone)) {
                                 $data['phone'] = $phone;
                             }
-                            if (! $preserveMobile && ! empty($mobilePhone)) {
+                            if (empty($currentMobile) && $hasDigits($mobilePhone)) {
                                 $data['mobile_phone'] = $mobilePhone;
                             }
                             Cliente::updateOrCreate(
@@ -933,13 +929,10 @@ class SettingsController extends Controller
                         $currentPhone = $existing?->phone;
                         $currentMobile = $existing?->mobile_phone;
                         $hasPlusCurrent = is_string($currentPhone) && preg_match('/^\s*\+/', $currentPhone);
+                        // Política: NUNCA sobrescrever telefones locais; somente preencher quando local estiver vazio
                         $hasPlusMobile = is_string($currentMobile) && preg_match('/^\s*\+/', $currentMobile);
                         $sanitizedCurrent = \App\Services\PhoneSanitizerService::sanitize($currentPhone ?? '');
                         $sanitizedMobile = \App\Services\PhoneSanitizerService::sanitize($currentMobile ?? '');
-                        $isInternationalCurrent = $sanitizedCurrent && (!str_starts_with($sanitizedCurrent, '55')) && (strlen($sanitizedCurrent) >= 12);
-                        $isInternationalMobile = $sanitizedMobile && (!str_starts_with($sanitizedMobile, '55')) && (strlen($sanitizedMobile) >= 12);
-                        $preserveCurrent = $currentPhone && ($hasPlusCurrent || $isInternationalCurrent);
-                        $preserveMobile = $currentMobile && ($hasPlusMobile || $isInternationalMobile);
 
                         $data = [
                             'connection_id' => $connection->id,
@@ -951,10 +944,11 @@ class SettingsController extends Controller
                             'city' => $city,
                             'state' => $state,
                         ];
-                        if (! $preserveCurrent && ! empty($phone)) {
+                        $hasDigits = function ($v) { return is_string($v) && preg_match('/\d+/', trim($v)); };
+                        if (empty($currentPhone) && $hasDigits($phone)) {
                             $data['phone'] = $phone;
                         }
-                        if (! $preserveMobile && ! empty($mobilePhone)) {
+                        if (empty($currentMobile) && $hasDigits($mobilePhone)) {
                             $data['mobile_phone'] = $mobilePhone;
                         }
                         Cliente::updateOrCreate(

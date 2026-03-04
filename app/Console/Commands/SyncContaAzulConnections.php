@@ -169,10 +169,7 @@ class SyncContaAzulConnections extends Command
                 $hasPlusMobile = is_string($currentMobile) && preg_match('/^\s*\+/', $currentMobile);
                 $sanitizedCurrent = \App\Services\PhoneSanitizerService::sanitize($currentPhone ?? '');
                 $sanitizedMobile = \App\Services\PhoneSanitizerService::sanitize($currentMobile ?? '');
-                $isInternationalCurrent = $sanitizedCurrent && (!str_starts_with($sanitizedCurrent, '55')) && (strlen($sanitizedCurrent) >= 12);
-                $isInternationalMobile = $sanitizedMobile && (!str_starts_with($sanitizedMobile, '55')) && (strlen($sanitizedMobile) >= 12);
-                $preserveCurrent = $currentPhone && ($hasPlusCurrent || $isInternationalCurrent);
-                $preserveMobile = $currentMobile && ($hasPlusMobile || $isInternationalMobile);
+                // Política: nunca sobrescrever telefones locais; apenas preencher se local estiver vazio
 
                 $data = [
                     'connection_id' => $connection->id,
@@ -188,10 +185,10 @@ class SyncContaAzulConnections extends Command
                 $hasDigits = function ($v) {
                     return is_string($v) && preg_match('/\d+/', trim($v));
                 };
-                if (! $preserveCurrent && $hasDigits($phone)) {
+                if (empty($currentPhone) && $hasDigits($phone)) {
                     $data['phone'] = $phone;
                 }
-                if (! $preserveMobile && $hasDigits($mobilePhone)) {
+                if (empty($currentMobile) && $hasDigits($mobilePhone)) {
                     $data['mobile_phone'] = $mobilePhone;
                 }
                 Cliente::updateOrCreate(
