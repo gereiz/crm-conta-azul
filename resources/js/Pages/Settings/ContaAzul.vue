@@ -395,6 +395,15 @@ const deleteConnection = (id) => {
                                 <li>10:00 — sincronização automática diária de <strong>apenas Faturas</strong>.</li>
                             </ul>
                         </div>
+                        <div class="mt-3 p-4 rounded-md border bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-200">
+                            <p class="font-semibold">Política de Telefones</p>
+                            <ul class="list-disc list-inside mt-1">
+                                <li>Nunca sobrescrevemos telefones locais durante a sincronização.</li>
+                                <li>Preenchemos telefone/celular somente se o campo local estiver vazio e a Conta Azul tiver número válido.</li>
+                                <li>No modo “Resetar e Sincronizar”, clientes são preservados; apenas faturas são limpas.</li>
+                                <li>Para recuperar números antigos, use “Restaurar Telefones” em Configurações do Sistema.</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 

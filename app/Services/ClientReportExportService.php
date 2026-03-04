@@ -149,8 +149,71 @@ class ClientReportExportService
             $dataRange = "A9:F{$lastDataRow}";
             $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
 
+            // Seção: Não cobrados por motivo (logs skipped) — duas linhas abaixo do total
+            $sectionStart = $totalRow + 2;
+            $skipped = $groupLogs->where('status', 'skipped')->filter(function ($l) {
+                return (string) ($l->error_message ?? '') !== '';
+            })->groupBy(function ($l) {
+                return (string) $l->error_message;
+            });
+            foreach ($skipped as $reason => $logsByReason) {
+                // Cabeçalho da seção
+                $sheet->mergeCells("A{$sectionStart}:F{$sectionStart}");
+                $sheet->setCellValue("A{$sectionStart}", "Não cobradas, {$reason}:");
+                $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFont()->setBold(true);
+                $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE0E0E0');
+                $sectionStart++;
+                $sectionTotal = 0.0;
+
+                // Lista de linhas por boleto
+                foreach ($logsByReason as $log) {
+                    $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
+                    if (empty($boletoIds)) {
+                        $sheet->fromArray([[
+                            $log->client_name,
+                            $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
+                            '',
+                            $reason,
+                            null,
+                            $log->payment_type ?? 'Outro',
+                        ]], null, 'A'.$sectionStart);
+                        $sectionStart++;
+                        continue;
+                    }
+                    $invList = Invoice::whereIn('id', $boletoIds)->with('cliente')->get();
+                    foreach ($invList as $inv) {
+                        $clientName = $inv->cliente_nome ?: ($inv->cliente->name ?? $log->client_name ?? 'Cliente');
+                        $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($log->sent_at ? $log->sent_at->format('d/m/Y') : '');
+                        $descricao = $inv->descricao ?: '';
+                        $valor = (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
+                        $sectionTotal += $valor;
+                        $sheet->fromArray([[
+                            $clientName,
+                            $dateStr,
+                            $descricao,
+                            $reason,
+                            $valor,
+                            $inv->payment_type ?: 'Outro',
+                        ]], null, 'A'.$sectionStart);
+                        // estilo de número
+                        $sheet->getStyle("E{$sectionStart}")->getNumberFormat()->setFormatCode('#,##0.00');
+                        // borda da linha
+                        $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFDDDDDD'));
+                        $sectionStart++;
+                    }
+                }
+                // Total da seção
+                $sheet->setCellValue("D{$sectionStart}", "Total {$reason}");
+                $sheet->setCellValue("E{$sectionStart}", "=SUM(E".($totalRow+3).":E".($sectionStart-1).")");
+                $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getFont()->setBold(true);
+                $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN);
+                $sectionStart += 2; // separação entre motivos
+            }
+            // Atualiza última linha útil para configuração de impressão
+            $endRowForPrint = max($totalRow, $sectionStart - 1);
+
             // Configuração de impressão semelhante ao Google Planilhas
-            $printArea = "A1:F{$totalRow}";
+            $printArea = "A1:F{$endRowForPrint}";
             $pageSetup = $sheet->getPageSetup();
             $pageSetup->setPrintArea($printArea);
             $pageSetup->setFitToWidth(1);
