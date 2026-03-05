@@ -60,12 +60,14 @@ class ClientReportExportService
             $sheet->freezePane('A9');
             // Larguras para impressão previsível
             $sheet->getColumnDimension('A')->setWidth(40);
-            $sheet->getColumnDimension('B')->setWidth(12);
-            $sheet->getColumnDimension('C')->setWidth(35);
-            $sheet->getColumnDimension('D')->setWidth(25);
-            $sheet->getColumnDimension('E')->setWidth(14);
-            $sheet->getColumnDimension('F')->setWidth(20);
+            $sheet->getColumnDimension('B')->setWidth(12); // Data
+            $sheet->getColumnDimension('C')->setWidth(12); // Descrição (compacto)
+            $sheet->getColumnDimension('D')->setWidth(12); // Parecer
+            $sheet->getColumnDimension('E')->setWidth(18); // Valor total
+            $sheet->getColumnDimension('F')->setWidth(14); // Conta bancária
             $sheet->getDefaultRowDimension()->setRowHeight(18);
+            // Centraliza colunas B..F
+            $sheet->getStyle('B9:F1048576')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
 
             // Primeiro: computa contagem total de boletos por cliente para colorização uniforme
             $counts = [];
@@ -132,9 +134,8 @@ class ClientReportExportService
                 }
             }
 
-            foreach (range('A', 'F') as $col) {
-                $sheet->getColumnDimension($col)->setAutoSize(true);
-            }
+            // Evita autosize nas colunas B..F para manter largura do título
+            // Opcionalmente, podemos ajustar apenas A se desejar
 
             // Linhas de total: uma linha em branco e, na seguinte, "Total" em D e soma em E
             $lastDataRow = $row - 1;
@@ -211,6 +212,53 @@ class ClientReportExportService
                 $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getFont()->setBold(true);
                 $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN);
                 $sectionStart += 2; // separação entre motivos
+            }
+            // Seção adicional: Forma de Pagamento diferente (não BOLETO)
+            try {
+                $notBoleto = Invoice::where('connection_id', (int) $connId)
+                    ->where('saldo_devedor', '>', 0)
+                    ->whereNotIn('status', ['PAID','PAGO','BAIXADO','LIQUIDADO','CANCELLED','CANCELADO','PENDING','ABERTO'])
+                    ->where('data_vencimento', '<', \Carbon\Carbon::today()->format('Y-m-d'))
+                    ->where(function ($q) {
+                        $q->whereNull('payment_type')
+                          ->orWhere('payment_type', 'NOT LIKE', '%BOLETO%');
+                    })
+                    ->with('cliente')
+                    ->get();
+                if ($notBoleto->isNotEmpty()) {
+                    $sheet->mergeCells("A{$sectionStart}:F{$sectionStart}");
+                    $sheet->setCellValue("A{$sectionStart}", "Não cobradas, Forma de Pagamento diferente:");
+                    $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFont()->setBold(true);
+                    $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE0E0E0');
+                    $sectionStart++;
+                    $reasonTotal = 0.0;
+                    foreach ($notBoleto as $inv) {
+                        $clientName = $inv->cliente_nome ?: ($inv->cliente->name ?? 'Cliente');
+                        $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : '';
+                        $descricao = $inv->descricao ?: '';
+                        $valor = (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
+                        $reasonTotal += $valor;
+                        $sheet->fromArray([[
+                            $clientName,
+                            $dateStr,
+                            $descricao,
+                            'Forma de Pagamento diferente',
+                            $valor,
+                            $inv->payment_type ?: 'Outro',
+                        ]], null, 'A'.$sectionStart);
+                        $sheet->getStyle("E{$sectionStart}")->getNumberFormat()->setFormatCode('#,##0.00');
+                        $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFDDDDDD'));
+                        $sectionStart++;
+                    }
+                    $sheet->setCellValue("D{$sectionStart}", "Total Forma de Pagamento diferente");
+                    $sheet->setCellValue("E{$sectionStart}", $reasonTotal);
+                    $sheet->getStyle("E{$sectionStart}")->getNumberFormat()->setFormatCode('#,##0.00');
+                    $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getFont()->setBold(true);
+                    $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+                    $sectionStart += 2;
+                }
+            } catch (\Throwable $e) {
+                // Ignora falhas silenciosamente para não quebrar a geração
             }
             // Atualiza última linha útil para configuração de impressão
             $endRowForPrint = max($totalRow, $sectionStart - 1);
