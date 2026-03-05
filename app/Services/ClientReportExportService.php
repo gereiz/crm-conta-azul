@@ -66,8 +66,7 @@ class ClientReportExportService
             $sheet->getColumnDimension('E')->setWidth(18); // Valor total
             $sheet->getColumnDimension('F')->setWidth(14); // Conta bancária
             $sheet->getDefaultRowDimension()->setRowHeight(18);
-            // Centraliza colunas B..F
-            $sheet->getStyle('B9:F1048576')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+            // Centralização será aplicada ao final, no range efetivamente utilizado
 
             // Primeiro: computa contagem total de boletos por cliente para colorização uniforme
             $counts = [];
@@ -279,6 +278,12 @@ class ClientReportExportService
             $margins->setBottom(0.5);
             $margins->setLeft(0.25);
             $margins->setRight(0.25);
+
+            // Centraliza colunas B..F somente no range utilizado
+            $sheet->getStyle("B9:F{$endRowForPrint}")->getAlignment()
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                ->setVertical(Alignment::VERTICAL_CENTER)
+                ->setWrapText(true);
         }
 
         return $spreadsheet;
