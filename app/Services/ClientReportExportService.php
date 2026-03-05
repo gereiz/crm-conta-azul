@@ -133,8 +133,10 @@ class ClientReportExportService
                 }
             }
 
-            // Evita autosize nas colunas B..F para manter largura do título
-            // Opcionalmente, podemos ajustar apenas A se desejar
+            // Reativa auto size das colunas
+            foreach (range('A', 'F') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
 
             // Linhas de total: uma linha em branco e, na seguinte, "Total" em D e soma em E
             $lastDataRow = $row - 1;
