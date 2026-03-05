@@ -54,6 +54,8 @@ class ClientReportExportService
             $sheet->fromArray([$headers], null, 'A8');
             $sheet->getStyle('A8:F8')->getFont()->setBold(true);
             $sheet->getStyle('A8:F8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+            // Centraliza títulos das colunas B..E (Data, Descrição, Parecer, Valor)
+            $sheet->getStyle('B8:E8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getRowDimension(8)->setRowHeight(22);
             $sheet->getStyle('A8:F8')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEFEFEF');
             $sheet->getStyle('A8:F8')->getBorders()->getOutline()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
@@ -161,11 +163,18 @@ class ClientReportExportService
                 return $msg !== '' ? $msg : 'Motivo não informado';
             });
             foreach ($nonSentGroups as $reason => $logsByReason) {
-                // Cabeçalho da seção
+                // Cabeçalho da seção (título)
                 $sheet->mergeCells("A{$sectionStart}:F{$sectionStart}");
                 $sheet->setCellValue("A{$sectionStart}", "Não cobradas, {$reason}:");
                 $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFont()->setBold(true);
                 $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE0E0E0');
+                $sectionStart++;
+                // Header de colunas (não mesclado), igual ao de cobradas
+                $sectionHeaders = ['Nome do cliente', 'Data', 'Descrição', 'Parecer', 'Valor total da parcela', 'Conta bancária'];
+                $sheet->fromArray([$sectionHeaders], null, 'A'.$sectionStart);
+                $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFont()->setBold(true);
+                $sheet->getStyle("B{$sectionStart}:E{$sectionStart}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
                 $sectionStart++;
                 $sectionTotal = 0.0;
 
@@ -227,10 +236,18 @@ class ClientReportExportService
                     ->with('cliente')
                     ->get();
                 if ($notBoleto->isNotEmpty()) {
+                    // Título da subseção
                     $sheet->mergeCells("A{$sectionStart}:F{$sectionStart}");
                     $sheet->setCellValue("A{$sectionStart}", "Não cobradas, Forma de Pagamento diferente:");
                     $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFont()->setBold(true);
                     $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE0E0E0');
+                    $sectionStart++;
+                    // Header das colunas (igual ao de cobradas)
+                    $sectionHeaders = ['Nome do cliente', 'Data', 'Descrição', 'Parecer', 'Valor total da parcela', 'Conta bancária'];
+                    $sheet->fromArray([$sectionHeaders], null, 'A'.$sectionStart);
+                    $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getFont()->setBold(true);
+                    $sheet->getStyle("B{$sectionStart}:E{$sectionStart}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
                     $sectionStart++;
                     $reasonTotal = 0.0;
                     foreach ($notBoleto as $inv) {
@@ -298,7 +315,7 @@ class ClientReportExportService
         $sheet->setCellValue('A1', 'Legenda');
         $sheet->mergeCells('A1:A6');
         $sheet->getStyle('A1:A6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('A1:A6')->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('A1:A6')->getFont()->setBold(true)->setSize(16);
         $sheet->getStyle('A1:A6')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE0E0E0'); // cinza claro
         foreach ([1,2,3,4,5,6] as $r) {
             $sheet->getRowDimension($r)->setRowHeight(22);
