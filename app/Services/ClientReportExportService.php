@@ -149,14 +149,16 @@ class ClientReportExportService
             $dataRange = "A9:F{$lastDataRow}";
             $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFBBBBBB'));
 
-            // Seção: Não cobrados por motivo (logs skipped) — duas linhas abaixo do total
+            // Seção: Não cobrados por motivo (logs skipped/error) — duas linhas abaixo do total
             $sectionStart = $totalRow + 2;
-            $skipped = $groupLogs->where('status', 'skipped')->filter(function ($l) {
-                return (string) ($l->error_message ?? '') !== '';
+            $nonSentGroups = $groupLogs->filter(function ($l) {
+                $st = strtolower((string) ($l->status ?? ''));
+                return in_array($st, ['skipped', 'error', 'failed'], true);
             })->groupBy(function ($l) {
-                return (string) $l->error_message;
+                $msg = trim((string) ($l->error_message ?? ''));
+                return $msg !== '' ? $msg : 'Motivo não informado';
             });
-            foreach ($skipped as $reason => $logsByReason) {
+            foreach ($nonSentGroups as $reason => $logsByReason) {
                 // Cabeçalho da seção
                 $sheet->mergeCells("A{$sectionStart}:F{$sectionStart}");
                 $sheet->setCellValue("A{$sectionStart}", "Não cobradas, {$reason}:");
@@ -204,7 +206,8 @@ class ClientReportExportService
                 }
                 // Total da seção
                 $sheet->setCellValue("D{$sectionStart}", "Total {$reason}");
-                $sheet->setCellValue("E{$sectionStart}", "=SUM(E".($totalRow+3).":E".($sectionStart-1).")");
+                $sheet->setCellValue("E{$sectionStart}", $sectionTotal);
+                $sheet->getStyle("E{$sectionStart}")->getNumberFormat()->setFormatCode('#,##0.00');
                 $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getFont()->setBold(true);
                 $sheet->getStyle("D{$sectionStart}:E{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN);
                 $sectionStart += 2; // separação entre motivos
