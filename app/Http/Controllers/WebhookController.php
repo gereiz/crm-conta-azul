@@ -365,4 +365,29 @@ class WebhookController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    public function providerError(Request $request, ?string $type = null)
+    {
+        $provider = strtolower((string) ($request->header('X-Provider') ?? $request->input('provider') ?? 'evolution'));
+        $phone = null;
+        $payload = $request->all();
+        try {
+            if (isset($payload['phone'])) {
+                $phone = preg_replace('/\D+/', '', (string) $payload['phone']);
+            } elseif (isset($payload['message']['to'])) {
+                $phone = preg_replace('/\D+/', '', (string) $payload['message']['to']);
+            }
+        } catch (\Throwable $e) {
+            $phone = null;
+        }
+        \App\Models\WebhookEventLog::create([
+            'provider' => $provider,
+            'event_type' => 'error',
+            'from_me' => false,
+            'phone' => $phone,
+            'reason' => 'provider_error:'.($type ?: 'unknown'),
+            'payload_json' => $payload,
+        ]);
+        return response()->json(['success' => true]);
+    }
 }

@@ -40,6 +40,10 @@ Route::withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken
     ->match(['post','put'], '/webhooks/whatsapp/status/{secret?}/{extra?}', [WebhookController::class, 'whatsappStatus'])
     ->where('extra', '.*')
     ->name('webhooks.whatsapp.status');
+Route::withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->match(['post','put'], '/api/errors/{type?}/{extra?}', [WebhookController::class, 'providerError'])
+    ->where('extra', '.*')
+    ->name('webhooks.provider.error');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
