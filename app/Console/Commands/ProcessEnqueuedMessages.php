@@ -47,14 +47,37 @@ class ProcessEnqueuedMessages extends Command
             ->limit(200)
             ->get();
 
+        if ($logs->isEmpty()) {
+            $this->info('Reprocessados 0 registros.');
+
+            return Command::SUCCESS;
+        }
+
+        $successKeys = WhatsappMessageLog::query()
+            ->where('status', 'success')
+            ->whereDate('sent_at', $today)
+            ->whereIn('whatsapp_number_id', $logs->pluck('whatsapp_number_id')->filter()->unique()->all())
+            ->whereIn('phone_sanitized', $logs->pluck('phone_sanitized')->filter()->unique()->all())
+            ->whereIn('message_type', $logs->pluck('message_type')->filter()->unique()->all())
+            ->get(['whatsapp_number_id', 'phone_sanitized', 'message_type'])
+            ->mapWithKeys(function ($item) {
+                $key = implode('|', [
+                    (string) $item->whatsapp_number_id,
+                    (string) $item->phone_sanitized,
+                    (string) $item->message_type,
+                ]);
+
+                return [$key => true];
+            });
+
         $processed = 0;
         foreach ($logs as $log) {
-            $recentSuccess = WhatsappMessageLog::where('whatsapp_number_id', $log->whatsapp_number_id)
-                ->where('phone_sanitized', $log->phone_sanitized)
-                ->where('message_type', $log->message_type)
-                ->where('status', 'success')
-                ->whereDate('sent_at', $today)
-                ->exists();
+            $key = implode('|', [
+                (string) $log->whatsapp_number_id,
+                (string) $log->phone_sanitized,
+                (string) $log->message_type,
+            ]);
+            $recentSuccess = (bool) ($successKeys[$key] ?? false);
             if ($recentSuccess) {
                 continue;
             }
@@ -78,6 +101,10 @@ class ProcessEnqueuedMessages extends Command
                 $log->delivery_status_updated_at = $st ? now($tz) : $log->delivery_status_updated_at;
             }
             $log->save();
+
+            if (($res['success'] ?? false) && ! ($res['queued'] ?? false)) {
+                $successKeys[$key] = true;
+            }
             $processed++;
         }
 

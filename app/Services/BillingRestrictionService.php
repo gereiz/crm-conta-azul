@@ -4,23 +4,17 @@ namespace App\Services;
 
 use App\Models\BillingRestriction;
 use App\Models\Cliente;
+use Illuminate\Support\Collection;
 
 class BillingRestrictionService
 {
+    protected array $rulesCache = [];
+
+    protected array $clientNameCache = [];
+
     public function isBlocked(int $connectionId, array $context = []): bool
     {
-        // Regras Específicas
-        $specificRules = BillingRestriction::where('connection_id', $connectionId)
-            ->where('is_active', true)
-            ->get();
-
-        // Regras Globais
-        $globalRules = BillingRestriction::whereNull('connection_id')
-            ->where('is_active', true)
-            ->get();
-
-        // Combina todas as regras
-        $rules = $specificRules->merge($globalRules);
+        $rules = $this->getRules($connectionId);
 
         if ($rules->isEmpty()) {
             return false;
@@ -37,8 +31,7 @@ class BillingRestrictionService
                 case 'client_equals':
                     $target = mb_strtolower($clienteNome);
                     if (! $target && $clienteCaId) {
-                        $client = Cliente::where('connection_id', $connectionId)->where('ca_id', $clienteCaId)->first();
-                        $target = $client ? mb_strtolower($client->name ?? $client->company_name ?? '') : '';
+                        $target = $this->resolveClientName($connectionId, (string) $clienteCaId);
                     }
                     if ($target && $target === $value) {
                         return true;
@@ -59,5 +52,36 @@ class BillingRestrictionService
         }
 
         return false;
+    }
+
+    protected function getRules(int $connectionId): Collection
+    {
+        if (array_key_exists($connectionId, $this->rulesCache)) {
+            return $this->rulesCache[$connectionId];
+        }
+
+        $specificRules = BillingRestriction::where('connection_id', $connectionId)
+            ->where('is_active', true)
+            ->get();
+
+        $globalRules = BillingRestriction::whereNull('connection_id')
+            ->where('is_active', true)
+            ->get();
+
+        return $this->rulesCache[$connectionId] = $specificRules->merge($globalRules);
+    }
+
+    protected function resolveClientName(int $connectionId, string $clienteCaId): string
+    {
+        $cacheKey = $connectionId.'|'.$clienteCaId;
+        if (array_key_exists($cacheKey, $this->clientNameCache)) {
+            return $this->clientNameCache[$cacheKey];
+        }
+
+        $client = Cliente::where('connection_id', $connectionId)
+            ->where('ca_id', $clienteCaId)
+            ->first(['name', 'company_name']);
+
+        return $this->clientNameCache[$cacheKey] = mb_strtolower((string) ($client->name ?? $client->company_name ?? ''));
     }
 }

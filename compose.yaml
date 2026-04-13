@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm-conta-azul-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    env_file:
+      - .env
+    environment:
+      BRANDING_STORAGE_PATH: /var/www/persistent/branding
+      LOGS_STORAGE_PATH: /var/www/persistent/logs
+      ENV_STORAGE_FILE: /var/www/persistent/env/.env
+    volumes:
+      - branding_data:/var/www/persistent/branding
+      - logs_data:/var/www/persistent/logs
+      - env_data:/var/www/persistent/env
+
+volumes:
+  branding_data:
+  logs_data:
+  env_data:

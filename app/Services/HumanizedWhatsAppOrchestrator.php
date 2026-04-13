@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 class HumanizedWhatsAppOrchestrator
 {
     protected WhatsAppProviderResolver $resolver;
+    protected array $numberCache = [];
     protected int $delayMin = 6;
     protected int $delayMax = 20;
     protected int $batchSize = 30;
@@ -57,6 +58,15 @@ class HumanizedWhatsAppOrchestrator
         ], [
             'warmup_start_date' => Carbon::today(),
         ]);
+    }
+
+    protected function getNumber(int $numberId): ?WhatsappNumber
+    {
+        if (array_key_exists($numberId, $this->numberCache)) {
+            return $this->numberCache[$numberId];
+        }
+
+        return $this->numberCache[$numberId] = WhatsappNumber::find($numberId);
     }
 
     protected function inSafeWindow(): bool
@@ -172,22 +182,26 @@ class HumanizedWhatsAppOrchestrator
             $delay = random_int($this->delayMin, max($this->delayMin, $this->delayMax));
             sleep($delay);
 
-            $number = WhatsappNumber::find($whatsappNumberId);
+            $number = $this->getNumber($whatsappNumberId);
             $provider = $this->resolver->resolve($number);
             $res = $provider->sendMessage($whatsappNumberId, $to, $message);
 
-            // Atualiza contadores
-            $state->refresh();
-            $state->hourly_count = ($state->hourly_count ?? 0) + 1;
-            $state->daily_count = ($state->daily_count ?? 0) + 1;
-            $state->save();
+            DB::table('whatsapp_send_states')
+                ->where('whatsapp_number_id', $whatsappNumberId)
+                ->update([
+                    'hourly_count' => DB::raw('COALESCE(hourly_count, 0) + 1'),
+                    'daily_count' => DB::raw('COALESCE(daily_count, 0) + 1'),
+                ]);
 
             // Pausa automática em erros sensíveis
             if (! ($res['success'] ?? false)) {
                 $msg = strtolower((string) ($res['message'] ?? ''));
                 if (str_contains($msg, 'block') || str_contains($msg, 'bloque') || str_contains($msg, 'rate') || str_contains($msg, 'limit') || str_contains($msg, 'restrit')) {
-                    $state->paused_until = Carbon::now()->addMinutes($this->pauseOnErrorMinutes);
-                    $state->save();
+                    DB::table('whatsapp_send_states')
+                        ->where('whatsapp_number_id', $whatsappNumberId)
+                        ->update([
+                            'paused_until' => Carbon::now()->addMinutes($this->pauseOnErrorMinutes),
+                        ]);
                 }
             }
 
