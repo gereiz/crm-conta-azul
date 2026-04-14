@@ -23,7 +23,7 @@ class ProcessMessageCrons extends Command
 
     public function handle()
     {
-        return \App\Services\CronMutexService::run('cron:global', 600, 900, function () {
+        $result = \App\Services\CronMutexService::run('cron:message-pipeline', 0, 900, function () {
             $tz = config('app.timezone') ?: 'America/Sao_Paulo';
             $now = Carbon::now($tz);
             $currentTime = $now->format('H:i');
@@ -52,5 +52,13 @@ class ProcessMessageCrons extends Command
 
             $this->info('Processamento concluído.');
         });
+
+        if ($result === null) {
+            $this->info('Processamento ignorado: já existe outra execução ativa da fila de crons.');
+
+            return self::SUCCESS;
+        }
+
+        return $result ?? self::SUCCESS;
     }
 }

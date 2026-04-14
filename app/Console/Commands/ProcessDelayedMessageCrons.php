@@ -23,38 +23,48 @@ class ProcessDelayedMessageCrons extends Command
 
     public function handle()
     {
-        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
-        $now = Carbon::now($tz);
-        $today = $now->toDateString();
-        $currentTime = $now->format('H:i');
+        $result = \App\Services\CronMutexService::run('cron:message-pipeline', 0, 900, function () {
+            $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+            $now = Carbon::now($tz);
+            $today = $now->toDateString();
+            $currentTime = $now->format('H:i');
 
-        $this->info("Verificando crons atrasados: {$now->toDateTimeString()} (TZ: {$tz})");
+            $this->info("Verificando crons atrasados: {$now->toDateTimeString()} (TZ: {$tz})");
 
-        $crons = MessageCron::where('is_active', true)
-            ->where('run_when_delayed', true)
-            ->where('send_time', '<=', $currentTime)
-            ->where(function ($q) use ($today) {
-                $q->whereNull('last_run_at')
-                    ->orWhereDate('last_run_at', '<', $today);
-            })
-            ->with(['messageTemplate', 'whatsappNumber'])
-            ->orderBy('send_time', 'asc')
-            ->get();
+            $crons = MessageCron::where('is_active', true)
+                ->where('run_when_delayed', true)
+                ->where('send_time', '<=', $currentTime)
+                ->where(function ($q) use ($today) {
+                    $q->whereNull('last_run_at')
+                        ->orWhereDate('last_run_at', '<', $today);
+                })
+                ->with(['messageTemplate', 'whatsappNumber'])
+                ->orderBy('send_time', 'asc')
+                ->get();
 
-        if ($crons->isEmpty()) {
-            $this->info('Nenhuma automação atrasada elegível para processamento.');
+            if ($crons->isEmpty()) {
+                $this->info('Nenhuma automação atrasada elegível para processamento.');
 
-            return 0;
+                return self::SUCCESS;
+            }
+
+            foreach ($crons as $cron) {
+                $this->info("Processando atrasado: {$cron->name} (ID {$cron->id}, horário {$cron->send_time})");
+                $stats = $this->service->processCron($cron, true);
+                $this->info('Resultado: '.json_encode($stats));
+            }
+
+            $this->info('Processamento de atrasados concluído.');
+
+            return self::SUCCESS;
+        });
+
+        if ($result === null) {
+            $this->info('Processamento de atrasados ignorado: fila principal já está em execução.');
+
+            return self::SUCCESS;
         }
 
-        foreach ($crons as $cron) {
-            $this->info("Processando atrasado: {$cron->name} (ID {$cron->id}, horário {$cron->send_time})");
-            $stats = $this->service->processCron($cron, true);
-            $this->info('Resultado: '.json_encode($stats));
-        }
-
-        $this->info('Processamento de atrasados concluído.');
-
-        return 0;
+        return $result ?? self::SUCCESS;
     }
 }

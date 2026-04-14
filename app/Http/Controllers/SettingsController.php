@@ -359,23 +359,50 @@ class SettingsController extends Controller
 
     public function processCronsNow(MessageCronService $service)
     {
+        $cooldownKey = 'manual_process_crons_now_cooldown';
+        if (! \Illuminate\Support\Facades\Cache::add($cooldownKey, now()->toDateTimeString(), 30)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'O processamento manual já foi disparado recentemente. Aguarde 30 segundos antes de tentar novamente.',
+            ], 429);
+        }
+
+        $processed = \App\Services\CronMutexService::run('cron:message-pipeline', 0, 900, function () use ($service) {
+            $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+            $now = \Carbon\Carbon::now($tz);
+            $currentTime = $now->format('H:i');
+            $crons = \App\Models\MessageCron::where('is_active', true)
+                ->where(function ($q) use ($currentTime) {
+                    $q->where('send_time', $currentTime)
+                        ->orWhere('send_time', ltrim($currentTime, '0'));
+                })
+                ->with(['messageTemplate', 'whatsappNumber'])
+                ->get();
+            $processed = [];
+            foreach ($crons as $cron) {
+                $service->processCron($cron);
+                $processed[] = $cron->id;
+            }
+
+            return ['processed' => $processed, 'time' => $currentTime];
+        });
+
+        if ($processed === null) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Já existe uma execução automática/manual em andamento para a fila de crons.',
+            ], 409);
+        }
+
         $tz = config('app.timezone') ?: 'America/Sao_Paulo';
         $now = \Carbon\Carbon::now($tz);
         $currentTime = $now->format('H:i');
-        $crons = \App\Models\MessageCron::where('is_active', true)
-            ->where(function ($q) use ($currentTime) {
-                $q->where('send_time', $currentTime)
-                    ->orWhere('send_time', ltrim($currentTime, '0'));
-            })
-            ->with(['messageTemplate', 'whatsappNumber'])
-            ->get();
-        $processed = [];
-        foreach ($crons as $cron) {
-            $service->processCron($cron);
-            $processed[] = $cron->id;
-        }
 
-        return response()->json(['success' => true, 'processed' => $processed, 'time' => $currentTime]);
+        return response()->json([
+            'success' => true,
+            'processed' => $processed['processed'] ?? [],
+            'time' => $processed['time'] ?? $currentTime,
+        ]);
     }
 
     public function systemSave(Request $request)
