@@ -6,8 +6,6 @@ use App\Models\ContaAzulConnection;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-
 class ContaAzulAuthService
 {
     protected function resolveRedirectUri(?ContaAzulConnection $connection = null): string
@@ -25,6 +23,9 @@ class ContaAzulAuthService
             }
         }
 
+        $configUri = trim((string) config('services.contaazul.redirect_uri'));
+        $connectionUri = trim((string) ($connection->ca_redirect_uri ?? ''));
+
         $routeUri = '';
         try {
             $routeUri = trim((string) route('contaazul.callback'));
@@ -32,33 +33,9 @@ class ContaAzulAuthService
             $routeUri = '';
         }
 
-        $currentAppUri = '';
-        try {
-            $currentAppUri = trim((string) url('/conta-azul/callback'));
-        } catch (\Throwable $e) {
-            $currentAppUri = '';
-        }
-
-        $configUri = trim((string) config('services.contaazul.redirect_uri'));
-        $connectionUri = trim((string) ($connection->ca_redirect_uri ?? ''));
-
-        $currentHost = '';
-        try {
-            $currentHost = (string) request()->getHost();
-        } catch (\Throwable $e) {
-            $currentHost = '';
-        }
-
-        foreach ([$currentAppUri, $routeUri, $configUri, $connectionUri] as $candidate) {
+        foreach ([$configUri, $connectionUri, $routeUri] as $candidate) {
             if ($candidate === '') {
                 continue;
-            }
-
-            if ($currentHost !== '') {
-                $candidateHost = (string) parse_url($candidate, PHP_URL_HOST);
-                if ($candidateHost !== '' && Str::lower($candidateHost) !== Str::lower($currentHost)) {
-                    continue;
-                }
             }
 
             return $candidate;
@@ -80,11 +57,10 @@ class ContaAzulAuthService
         // Fallback for generic controller if needed, but we should prefer specific
         session(['contaazul_state' => $state]);
 
-        // Usando o escopo definido no arquivo de configuração (que vem do .env)
-        // Isso permite que o usuário controle os escopos sem alterar o código.
-        // O valor padrão do config é 'openid profile email' (definido em config/services.php)
-        // Mas se o .env tiver 'openid profile email', será respeitado.
-        $scope = config('services.contaazul.scope', 'openid profile email');
+        $scope = trim((string) config('services.contaazul.scope', 'openid profile aws.cognito.signin.user.admin'));
+        if ($scope === '') {
+            $scope = 'openid profile aws.cognito.signin.user.admin';
+        }
 
         $redirectUri = $this->resolveRedirectUri($connection);
         session(['contaazul_redirect_uri_'.$connection->id => $redirectUri]);
@@ -96,13 +72,11 @@ class ContaAzulAuthService
             'state' => $state,
             'response_type' => 'code',
             'scope' => $scope,
-            'prompt' => 'login consent select_account',
-            'max_age' => 0,
         ];
 
         $query = http_build_query($params);
 
-        $url = "https://auth.contaazul.com/authorize?{$query}";
+        $url = "https://auth.contaazul.com/login?{$query}";
         Log::info("ContaAzul OAuth URL (conn {$connection->id}): {$url}");
 
         return $url;

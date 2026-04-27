@@ -28,16 +28,9 @@ class ContaAzulService
         $this->clientId = trim(config('services.contaazul.client_id'));
         $this->clientSecret = trim(config('services.contaazul.client_secret'));
         $this->redirectUri = trim(config('services.contaazul.redirect_uri'));
-        $rawScope = (string) (trim(config('services.contaazul.scope')) ?: 'openid profile email sales');
+        $rawScope = trim((string) config('services.contaazul.scope', 'openid profile aws.cognito.signin.user.admin'));
         $rawScope = trim($rawScope, " \t\n\r\0\x0B\"'");
-        $allowed = ['openid', 'profile', 'email', 'offline_access', 'sales', 'customer', 'service', 'product', 'contract'];
-        $parts = preg_split('/[,\s]+/', trim($rawScope)) ?: [];
-        $parts = array_map(fn ($s) => strtolower(trim($s)), $parts);
-        $filtered = array_values(array_unique(array_intersect($parts, $allowed)));
-        if (empty($filtered)) {
-            $filtered = ['openid', 'profile', 'email', 'sales'];
-        }
-        $this->scope = implode(' ', $filtered);
+        $this->scope = $rawScope !== '' ? $rawScope : 'openid profile aws.cognito.signin.user.admin';
     }
 
     public function getAuthUrl()
@@ -57,7 +50,7 @@ class ContaAzulService
             'scope' => $this->scope,
         ]);
 
-        return "https://auth.contaazul.com/authorize?{$query}";
+        return "https://auth.contaazul.com/login?{$query}";
     }
 
     public function getToken($code)

@@ -49,7 +49,7 @@ class ContaAzulConnectionController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $data['ca_redirect_uri'] = route('contaazul.callback');
+        $data['ca_redirect_uri'] = trim((string) config('services.contaazul.redirect_uri')) ?: route('contaazul.callback');
 
         $connection = ContaAzulConnection::create($data);
 
@@ -67,7 +67,7 @@ class ContaAzulConnectionController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $data['ca_redirect_uri'] = route('contaazul.callback');
+        $data['ca_redirect_uri'] = trim((string) config('services.contaazul.redirect_uri')) ?: route('contaazul.callback');
 
         // Tratamento para evitar falha de descriptografia se a chave mudou
         // Se a APP_KEY mudou, o acesso aos atributos criptografados (como ca_client_secret)
