@@ -45,9 +45,11 @@ class ContaAzulConnectionController extends Controller
             'email_desenvolvedor' => 'nullable|email|max:150',
             'ca_client_id' => 'required|string|max:255',
             'ca_client_secret' => 'required|string',
-            'ca_redirect_uri' => 'required|url|max:255',
+            'ca_redirect_uri' => 'nullable|url|max:255',
             'is_active' => 'boolean',
         ]);
+
+        $data['ca_redirect_uri'] = route('contaazul.callback');
 
         $connection = ContaAzulConnection::create($data);
 
@@ -61,9 +63,11 @@ class ContaAzulConnectionController extends Controller
             'email_desenvolvedor' => 'nullable|email|max:150',
             'ca_client_id' => 'required|string|max:255',
             'ca_client_secret' => 'required|string',
-            'ca_redirect_uri' => 'required|url|max:255',
+            'ca_redirect_uri' => 'nullable|url|max:255',
             'is_active' => 'boolean',
         ]);
+
+        $data['ca_redirect_uri'] = route('contaazul.callback');
 
         // Tratamento para evitar falha de descriptografia se a chave mudou
         // Se a APP_KEY mudou, o acesso aos atributos criptografados (como ca_client_secret)
@@ -106,8 +110,8 @@ class ContaAzulConnectionController extends Controller
 
     public function connect(ContaAzulConnection $connection)
     {
-        if (empty($connection->ca_client_id) || empty($connection->ca_redirect_uri)) {
-            return redirect()->back()->with('error', 'Conexão inválida: Client ID ou Redirect URI ausentes.');
+        if (empty($connection->ca_client_id)) {
+            return redirect()->back()->with('error', 'Conexão inválida: Client ID ausente.');
         }
         $url = $this->auth->getAuthUrl($connection);
 

@@ -6,9 +6,67 @@ use App\Models\ContaAzulConnection;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ContaAzulAuthService
 {
+    protected function resolveRedirectUri(?ContaAzulConnection $connection = null): string
+    {
+        $sessionKeys = [];
+        if ($connection?->id) {
+            $sessionKeys[] = 'contaazul_redirect_uri_'.$connection->id;
+        }
+        $sessionKeys[] = 'contaazul_redirect_uri';
+
+        foreach ($sessionKeys as $sessionKey) {
+            $value = trim((string) session($sessionKey, ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $routeUri = '';
+        try {
+            $routeUri = trim((string) route('contaazul.callback'));
+        } catch (\Throwable $e) {
+            $routeUri = '';
+        }
+
+        $currentAppUri = '';
+        try {
+            $currentAppUri = trim((string) url('/conta-azul/callback'));
+        } catch (\Throwable $e) {
+            $currentAppUri = '';
+        }
+
+        $configUri = trim((string) config('services.contaazul.redirect_uri'));
+        $connectionUri = trim((string) ($connection->ca_redirect_uri ?? ''));
+
+        $currentHost = '';
+        try {
+            $currentHost = (string) request()->getHost();
+        } catch (\Throwable $e) {
+            $currentHost = '';
+        }
+
+        foreach ([$currentAppUri, $routeUri, $configUri, $connectionUri] as $candidate) {
+            if ($candidate === '') {
+                continue;
+            }
+
+            if ($currentHost !== '') {
+                $candidateHost = (string) parse_url($candidate, PHP_URL_HOST);
+                if ($candidateHost !== '' && Str::lower($candidateHost) !== Str::lower($currentHost)) {
+                    continue;
+                }
+            }
+
+            return $candidate;
+        }
+
+        return $configUri ?: ($connectionUri ?: $routeUri);
+    }
+
     public function getAuthUrl(ContaAzulConnection $connection): string
     {
         $statePayload = [
@@ -28,13 +86,9 @@ class ContaAzulAuthService
         // Mas se o .env tiver 'openid profile email', será respeitado.
         $scope = config('services.contaazul.scope', 'openid profile email');
 
-        // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
-        $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
-
-        // Fallback de segurança caso ambos estejam vazios (evita erro)
-        if (empty($redirectUri)) {
-            $redirectUri = route('contaazul.callback');
-        }
+        $redirectUri = $this->resolveRedirectUri($connection);
+        session(['contaazul_redirect_uri_'.$connection->id => $redirectUri]);
+        session(['contaazul_redirect_uri' => $redirectUri]);
 
         $params = [
             'client_id' => trim($connection->ca_client_id),
@@ -93,11 +147,7 @@ class ContaAzulAuthService
             }
         }
 
-        // Usar a URL configurada no ambiente (.env) se disponível, ou a do banco como fallback
-        $redirectUri = config('services.contaazul.redirect_uri') ?: trim($connection->ca_redirect_uri);
-        if (empty($redirectUri)) {
-            $redirectUri = route('contaazul.callback');
-        }
+        $redirectUri = $this->resolveRedirectUri($connection);
 
         $credentials = base64_encode("{$clientId}:{$clientSecret}");
 

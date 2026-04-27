@@ -520,7 +520,7 @@ class SettingsController extends Controller
         if ($connections->isEmpty()) {
             $clientId = trim(config('services.contaazul.client_id'));
             $clientSecret = trim(config('services.contaazul.client_secret'));
-            $redirectUri = trim(config('services.contaazul.redirect_uri'));
+            $redirectUri = route('contaazul.callback');
             if ($clientId && $clientSecret && $redirectUri) {
                 ContaAzulConnection::create([
                     'empresa_nome' => 'Default',
