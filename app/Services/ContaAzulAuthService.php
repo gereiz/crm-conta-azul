@@ -10,19 +10,6 @@ class ContaAzulAuthService
 {
     protected function resolveRedirectUri(?ContaAzulConnection $connection = null): string
     {
-        $sessionKeys = [];
-        if ($connection?->id) {
-            $sessionKeys[] = 'contaazul_redirect_uri_'.$connection->id;
-        }
-        $sessionKeys[] = 'contaazul_redirect_uri';
-
-        foreach ($sessionKeys as $sessionKey) {
-            $value = trim((string) session($sessionKey, ''));
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
         $configUri = trim((string) config('services.contaazul.redirect_uri'));
         $connectionUri = trim((string) ($connection->ca_redirect_uri ?? ''));
 
@@ -33,7 +20,22 @@ class ContaAzulAuthService
             $routeUri = '';
         }
 
-        foreach ([$configUri, $connectionUri, $routeUri] as $candidate) {
+        $sessionUri = '';
+        $sessionKeys = [];
+        if ($connection?->id) {
+            $sessionKeys[] = 'contaazul_redirect_uri_'.$connection->id;
+        }
+        $sessionKeys[] = 'contaazul_redirect_uri';
+
+        foreach ($sessionKeys as $sessionKey) {
+            $value = trim((string) session($sessionKey, ''));
+            if ($value !== '') {
+                $sessionUri = $value;
+                break;
+            }
+        }
+
+        foreach ([$configUri, $connectionUri, $routeUri, $sessionUri] as $candidate) {
             if ($candidate === '') {
                 continue;
             }
@@ -41,7 +43,7 @@ class ContaAzulAuthService
             return $candidate;
         }
 
-        return $configUri ?: ($connectionUri ?: $routeUri);
+        return $configUri ?: ($connectionUri ?: ($routeUri ?: $sessionUri));
     }
 
     public function getAuthUrl(ContaAzulConnection $connection): string
@@ -65,6 +67,9 @@ class ContaAzulAuthService
         $redirectUri = $this->resolveRedirectUri($connection);
         session(['contaazul_redirect_uri_'.$connection->id => $redirectUri]);
         session(['contaazul_redirect_uri' => $redirectUri]);
+        if ($connection->ca_redirect_uri !== $redirectUri) {
+            $connection->forceFill(['ca_redirect_uri' => $redirectUri])->save();
+        }
 
         $params = [
             'client_id' => trim($connection->ca_client_id),
@@ -77,7 +82,11 @@ class ContaAzulAuthService
         $query = http_build_query($params);
 
         $url = "https://auth.contaazul.com/login?{$query}";
-        Log::info("ContaAzul OAuth URL (conn {$connection->id}): {$url}");
+        Log::info("ContaAzul OAuth URL (conn {$connection->id}): {$url}", [
+            'resolved_redirect_uri' => $redirectUri,
+            'config_redirect_uri' => trim((string) config('services.contaazul.redirect_uri')),
+            'connection_redirect_uri' => trim((string) ($connection->ca_redirect_uri ?? '')),
+        ]);
 
         return $url;
     }
