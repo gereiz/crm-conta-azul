@@ -2,8 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\Cliente;
 use App\Models\Invoice;
+use App\Models\MessageCron;
 use App\Models\WhatsappMessageLog;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -177,43 +181,22 @@ class ClientReportExportService
                 $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
                 $sectionStart++;
                 $sectionTotal = 0.0;
-
-                // Lista de linhas por boleto
-                foreach ($logsByReason as $log) {
-                    $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
-                    if (empty($boletoIds)) {
-                        $sheet->fromArray([[
-                            $log->client_name,
-                            $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
-                            '',
-                            $reason,
-                            null,
-                            $log->payment_type ?? 'Outro',
-                        ]], null, 'A'.$sectionStart);
-                        $sectionStart++;
-                        continue;
-                    }
-                    $invList = Invoice::whereIn('id', $boletoIds)->with('cliente')->get();
-                    foreach ($invList as $inv) {
-                        $clientName = $inv->cliente_nome ?: ($inv->cliente->name ?? $log->client_name ?? 'Cliente');
-                        $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($log->sent_at ? $log->sent_at->format('d/m/Y') : '');
-                        $descricao = $inv->descricao ?: '';
-                        $valor = (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
-                        $sectionTotal += $valor;
-                        $sheet->fromArray([[
-                            $clientName,
-                            $dateStr,
-                            $descricao,
-                            $reason,
-                            $valor,
-                            $inv->payment_type ?: 'Outro',
-                        ]], null, 'A'.$sectionStart);
-                        // estilo de número
+                $rows = $this->buildNonSentRowsForReason($logsByReason, (string) $reason, $groupLogs);
+                foreach ($rows as $reportRow) {
+                    $sectionTotal += (float) ($reportRow['value'] ?? 0);
+                    $sheet->fromArray([[
+                        $reportRow['client_name'] ?? 'Cliente',
+                        $reportRow['date'] ?? '',
+                        $reportRow['description'] ?? '',
+                        $reportRow['parecer'] ?? $reason,
+                        $reportRow['value'] ?? null,
+                        $reportRow['payment_type'] ?? 'Outro',
+                    ]], null, 'A'.$sectionStart);
+                    if (($reportRow['value'] ?? null) !== null) {
                         $sheet->getStyle("E{$sectionStart}")->getNumberFormat()->setFormatCode('#,##0.00');
-                        // borda da linha
-                        $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFDDDDDD'));
-                        $sectionStart++;
                     }
+                    $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFDDDDDD'));
+                    $sectionStart++;
                 }
                 // Total da seção
                 $sheet->setCellValue("D{$sectionStart}", "Total {$reason}");
@@ -387,5 +370,300 @@ class ClientReportExportService
             }
         }
         return '';
+    }
+
+    protected function buildNonSentRowsForReason(Collection $logsByReason, string $reason, Collection $groupLogs): array
+    {
+        $rows = [];
+        $seen = [];
+
+        foreach ($logsByReason as $log) {
+            foreach ($this->buildNonSentRowsFromLog($log, $reason, $groupLogs) as $row) {
+                $key = $row['key'] ?? md5(json_encode($row));
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                unset($row['key']);
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
+    protected function buildNonSentRowsFromLog(WhatsappMessageLog $log, string $reason, Collection $groupLogs): array
+    {
+        if ($this->isDisconnectedAbortSummary($log, $reason)) {
+            $expanded = $this->buildDisconnectedAbortRows($log, $reason, $groupLogs);
+            if (! empty($expanded)) {
+                return $expanded;
+            }
+        }
+
+        $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
+        if (empty($boletoIds)) {
+            return [[
+                'key' => 'log-'.$log->id,
+                'client_name' => $log->client_name ?: 'Cliente',
+                'date' => $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
+                'description' => '',
+                'parecer' => $reason,
+                'value' => null,
+                'payment_type' => 'Outro',
+            ]];
+        }
+
+        $rows = [];
+        $invList = Invoice::whereIn('id', $boletoIds)->with('cliente')->get();
+        foreach ($invList as $inv) {
+            $rows[] = [
+                'key' => 'invoice-'.$log->id.'-'.$inv->id,
+                'client_name' => $inv->cliente_nome ?: ($inv->cliente->name ?? $log->client_name ?? 'Cliente'),
+                'date' => $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($log->sent_at ? $log->sent_at->format('d/m/Y') : ''),
+                'description' => $inv->descricao ?: '',
+                'parecer' => $reason,
+                'value' => (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0),
+                'payment_type' => $inv->payment_type ?: 'Outro',
+            ];
+        }
+
+        return $rows;
+    }
+
+    protected function isDisconnectedAbortSummary(WhatsappMessageLog $log, string $reason): bool
+    {
+        if ((string) $log->client_name !== 'Resumo do cron') {
+            return false;
+        }
+
+        $normalized = Str::lower($reason);
+
+        return str_contains($normalized, 'desconectado durante o processamento')
+            || str_contains($normalized, 'cron abortado antes de consultar');
+    }
+
+    protected function buildDisconnectedAbortRows(WhatsappMessageLog $summaryLog, string $reason, Collection $groupLogs): array
+    {
+        if (! $summaryLog->message_cron_id || ! $summaryLog->batch_id) {
+            return [];
+        }
+
+        $cron = MessageCron::find($summaryLog->message_cron_id);
+        if (! $cron) {
+            return [];
+        }
+
+        $batchLogs = $groupLogs->filter(function ($item) use ($summaryLog) {
+            return (string) $item->batch_id === (string) $summaryLog->batch_id
+                && (int) $item->message_cron_id === (int) $summaryLog->message_cron_id;
+        });
+
+        $individualLogs = $batchLogs->filter(function ($item) {
+            return (string) $item->client_name !== 'Resumo do cron';
+        });
+
+        return match ((string) $cron->type) {
+            'billing' => $this->buildDisconnectedBillingRows($cron, $summaryLog, $reason, $individualLogs),
+            'due_date', 'boleto' => $this->buildDisconnectedInvoiceRows($cron, $summaryLog, $reason, $individualLogs),
+            'birthday' => $this->buildDisconnectedBirthdayRows($cron, $summaryLog, $reason, $individualLogs),
+            default => [],
+        };
+    }
+
+    protected function buildDisconnectedBillingRows(MessageCron $cron, WhatsappMessageLog $summaryLog, string $reason, Collection $individualLogs): array
+    {
+        $invoices = $this->getBillingInvoicesForReport($cron, $summaryLog);
+        if ($invoices->isEmpty()) {
+            return [];
+        }
+
+        $processedClientIds = $individualLogs->pluck('cliente_id')->filter()->map(fn ($id) => (int) $id)->unique()->all();
+        $processedLookup = array_fill_keys($processedClientIds, true);
+        $rows = [];
+
+        foreach ($invoices->groupBy('cliente_id') as $clienteId => $clientInvoices) {
+            if (! $clienteId || isset($processedLookup[(int) $clienteId])) {
+                continue;
+            }
+            foreach ($clientInvoices as $inv) {
+                $rows[] = [
+                    'key' => 'abort-billing-'.$summaryLog->id.'-'.$inv->id,
+                    'client_name' => $inv->cliente_nome ?: ($inv->cliente->name ?? 'Cliente'),
+                    'date' => $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($summaryLog->sent_at ? $summaryLog->sent_at->format('d/m/Y') : ''),
+                    'description' => $inv->descricao ?: '',
+                    'parecer' => $reason,
+                    'value' => (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0),
+                    'payment_type' => $inv->payment_type ?: 'Outro',
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    protected function buildDisconnectedInvoiceRows(MessageCron $cron, WhatsappMessageLog $summaryLog, string $reason, Collection $individualLogs): array
+    {
+        $invoices = $this->getInvoiceCandidatesForReport($cron, $summaryLog);
+        if ($invoices->isEmpty()) {
+            return [];
+        }
+
+        $processedInvoiceIds = $individualLogs
+            ->flatMap(function ($log) {
+                $ids = is_array($log->boleto_ids) ? $log->boleto_ids : [];
+                return collect($ids)->map(fn ($id) => (int) $id);
+            })
+            ->filter()
+            ->unique()
+            ->all();
+        $processedLookup = array_fill_keys($processedInvoiceIds, true);
+        $rows = [];
+
+        foreach ($invoices as $inv) {
+            if (isset($processedLookup[(int) $inv->id])) {
+                continue;
+            }
+            $rows[] = [
+                'key' => 'abort-invoice-'.$summaryLog->id.'-'.$inv->id,
+                'client_name' => $inv->cliente_nome ?: ($inv->cliente->name ?? 'Cliente'),
+                'date' => $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($summaryLog->sent_at ? $summaryLog->sent_at->format('d/m/Y') : ''),
+                'description' => $inv->descricao ?: '',
+                'parecer' => $reason,
+                'value' => (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0),
+                'payment_type' => $inv->payment_type ?: 'Outro',
+            ];
+        }
+
+        return $rows;
+    }
+
+    protected function buildDisconnectedBirthdayRows(MessageCron $cron, WhatsappMessageLog $summaryLog, string $reason, Collection $individualLogs): array
+    {
+        $clients = $this->getBirthdayCandidatesForReport($cron, $summaryLog);
+        if ($clients->isEmpty()) {
+            return [];
+        }
+
+        $processedClientIds = $individualLogs->pluck('cliente_id')->filter()->map(fn ($id) => (int) $id)->unique()->all();
+        $processedLookup = array_fill_keys($processedClientIds, true);
+        $rows = [];
+
+        foreach ($clients as $client) {
+            if (isset($processedLookup[(int) $client->id])) {
+                continue;
+            }
+            $rows[] = [
+                'key' => 'abort-birthday-'.$summaryLog->id.'-'.$client->id,
+                'client_name' => $client->name ?: 'Cliente',
+                'date' => $summaryLog->sent_at ? $summaryLog->sent_at->format('d/m/Y') : '',
+                'description' => 'Aniversário',
+                'parecer' => $reason,
+                'value' => null,
+                'payment_type' => 'Outro',
+            ];
+        }
+
+        return $rows;
+    }
+
+    protected function getBillingInvoicesForReport(MessageCron $cron, WhatsappMessageLog $summaryLog): Collection
+    {
+        $tz = config('app.timezone') ?: 'America/Sao_Paulo';
+        $reference = $summaryLog->sent_at ? $summaryLog->sent_at->copy()->timezone($tz) : Carbon::now($tz);
+        $daysLate = max(0, (int) ($cron->days_after_due ?? 0));
+        $strictThresholdDays = $daysLate + 1;
+        $dueDateLimit = $reference->copy()->subDays($strictThresholdDays)->format('Y-m-d');
+        $todayDate = $reference->copy()->startOfDay()->format('Y-m-d');
+        $periodStart = $this->getPeriodStartDateForReference($cron, $reference);
+
+        $query = Invoice::where('data_vencimento', '<=', $dueDateLimit)
+            ->where('data_vencimento', '<', $todayDate)
+            ->whereNotIn('status', ['PENDING', 'ABERTO']);
+
+        if (! empty($cron->connection_id)) {
+            $query->where('connection_id', $cron->connection_id);
+        }
+
+        if ($periodStart) {
+            $query->where('data_vencimento', '>=', $periodStart);
+        }
+
+        return $query->where('saldo_devedor', '>', 0)
+            ->whereNotIn('status', ['PAID', 'PAGO', 'BAIXADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO'])
+            ->where(function ($q) {
+                $q->whereNotNull('payment_type')
+                    ->where('payment_type', 'LIKE', '%BOLETO%');
+            })
+            ->with('cliente')
+            ->get()
+            ->filter(fn ($inv) => $inv->cliente_id && $inv->cliente);
+    }
+
+    protected function getInvoiceCandidatesForReport(MessageCron $cron, WhatsappMessageLog $summaryLog): Collection
+    {
+        $reference = $summaryLog->sent_at ? $summaryLog->sent_at->copy() : Carbon::now();
+
+        if ($cron->type === 'due_date') {
+            $targetDate = $reference->copy()->addDays((int) ($cron->days_before_due ?? 0))->format('Y-m-d');
+            $query = Invoice::whereDate('data_vencimento', $targetDate)
+                ->where(function ($q) {
+                    $q->whereIn('status', ['PENDING', 'ABERTO'])
+                        ->orWhereNull('status');
+                })
+                ->where(function ($q) {
+                    $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
+                });
+        } else {
+            $days = (int) ($cron->days_before_due ?? $cron->period_value ?? 0);
+            $startDate = $reference->copy()->startOfDay()->format('Y-m-d');
+            $endDate = $reference->copy()->addDays($days)->format('Y-m-d');
+            $query = Invoice::where('status', 'PENDING')
+                ->whereDate('data_vencimento', '>=', $startDate)
+                ->whereDate('data_vencimento', '<=', $endDate)
+                ->whereNotNull('link_boleto')
+                ->where('link_boleto', '!=', '');
+        }
+
+        if (! empty($cron->connection_id)) {
+            $query->where('connection_id', $cron->connection_id);
+        }
+
+        return $query->with('cliente')->get();
+    }
+
+    protected function getBirthdayCandidatesForReport(MessageCron $cron, WhatsappMessageLog $summaryLog): Collection
+    {
+        $reference = $summaryLog->sent_at ? $summaryLog->sent_at->copy() : Carbon::now();
+        $today = $reference->format('m-d');
+
+        $query = Cliente::whereRaw("DATE_FORMAT(birthdate, '%m-%d') = ?", [$today]);
+        if (! empty($cron->connection_id)) {
+            $query->where('connection_id', $cron->connection_id);
+        }
+
+        return $query->get();
+    }
+
+    protected function getPeriodStartDateForReference(MessageCron $cron, Carbon $reference): ?string
+    {
+        if (! $cron->period_value || ! $cron->period_unit) {
+            return null;
+        }
+
+        $date = $reference->copy();
+        switch ($cron->period_unit) {
+            case 'days':
+                $date->subDays($cron->period_value);
+                break;
+            case 'months':
+                $date->subMonths($cron->period_value);
+                break;
+            case 'years':
+                $date->subYears($cron->period_value);
+                break;
+        }
+
+        return $date->format('Y-m-d');
     }
 }
