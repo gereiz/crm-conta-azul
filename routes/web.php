@@ -164,6 +164,7 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('whatsapp', WhatsAppController::class)->only(['index','store','update','destroy']);
     Route::get('/whatsapp/retornos', [WhatsAppReturnController::class, 'index'])->name('whatsapp.returns.index');
+    Route::get('/whatsapp/retornos/download-xlsx', [WhatsAppReturnController::class, 'downloadXlsx'])->name('whatsapp.returns.download_xlsx');
     Route::get('/whatsapp/retornos/debug', [WhatsAppReturnController::class, 'webhookDebug'])->name('whatsapp.returns.debug');
     Route::get('/whatsapp/retornos/by-ids', [WhatsAppReturnController::class, 'getByIds'])->name('whatsapp.returns.by_ids');
 

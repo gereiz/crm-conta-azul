@@ -7,63 +7,38 @@ use App\Models\WhatsappMessageLog;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class WhatsAppReturnController extends Controller
 {
     public function index(Request $request)
     {
-        $connectionId = $request->input('connection_id');
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
-        $search = $request->input('search');
-        $senderNumberId = $request->input('whatsapp_number_id');
-        $status = $request->input('status');
-        $provider = $request->input('provider');
-        $messageType = $request->input('message_type');
-        $responded = $request->input('responded');
-        $providerMessageId = $request->input('provider_message_id');
-
-        $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
-        $end = $endDate ? Carbon::parse($endDate)->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
-
-        $query = WhatsappMessageLog::with(['connection', 'cliente', 'user', 'whatsappNumber'])
-            ->orderBy('sent_at', 'desc');
-
-        if ($connectionId) $query->where('connection_id', $connectionId);
-        if ($senderNumberId) $query->where('whatsapp_number_id', $senderNumberId);
-        if ($start && $end) $query->whereBetween('sent_at', [$start, $end]);
-        if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('client_name', 'like', "%{$search}%")
-                    ->orWhere('phone_original', 'like', "%{$search}%")
-                    ->orWhere('phone_sanitized', 'like', "%{$search}%");
-            });
-        }
-        if ($messageType) $query->where('message_type', $messageType);
-        if ($provider) $query->where('provider', $provider);
-        if ($providerMessageId) $query->where('provider_message_id', $providerMessageId);
-        if ($status) $query->where('delivery_status', $status);
-        if ($responded !== null && $responded !== '') $query->where('responded', filter_var($responded, FILTER_VALIDATE_BOOLEAN));
-
-        $items = $query->paginate(20)->withQueryString();
+        $items = $this->buildFilteredQuery($request)->paginate(20)->withQueryString();
 
         $connections = ContaAzulConnection::orderBy('empresa_nome')->get();
 
         return Inertia::render('WhatsApp/Returns/Index', [
             'items' => $items,
             'connections' => $connections,
-            'filters' => [
-                'connection_id' => $connectionId,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'search' => $search,
-                'whatsapp_number_id' => $senderNumberId,
-                'status' => $status,
-                'provider' => $provider,
-                'message_type' => $messageType,
-                'responded' => $responded,
-                'provider_message_id' => $providerMessageId,
-            ],
+            'filters' => $this->extractFilters($request),
+        ]);
+    }
+
+    public function downloadXlsx(Request $request)
+    {
+        $logs = $this->buildFilteredQuery($request)->get();
+
+        $service = new \App\Services\WhatsAppReturnExportService();
+        $spreadsheet = $service->build($logs);
+        $writer = new Xlsx($spreadsheet);
+
+        $dateSuffix = now()->format('Y-m-d_H-i');
+        $filename = "retorno_mensagens_{$dateSuffix}.xlsx";
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 
@@ -91,5 +66,66 @@ class WhatsAppReturnController extends Controller
             ->orderByDesc('sent_at')
             ->get();
         return response()->json(['items' => $items]);
+    }
+
+    protected function buildFilteredQuery(Request $request)
+    {
+        $filters = $this->extractFilters($request);
+
+        $start = $filters['start_date'] ? Carbon::parse($filters['start_date'])->startOfDay() : null;
+        $end = $filters['end_date'] ? Carbon::parse($filters['end_date'])->endOfDay() : ($start ? $start->copy()->endOfDay() : null);
+
+        $query = WhatsappMessageLog::with(['connection', 'cliente', 'user', 'whatsappNumber'])
+            ->orderBy('sent_at', 'desc');
+
+        if ($filters['connection_id']) {
+            $query->where('connection_id', $filters['connection_id']);
+        }
+        if ($filters['whatsapp_number_id']) {
+            $query->where('whatsapp_number_id', $filters['whatsapp_number_id']);
+        }
+        if ($start && $end) {
+            $query->whereBetween('sent_at', [$start, $end]);
+        }
+        if ($filters['search']) {
+            $query->where(function ($q) use ($filters) {
+                $q->where('client_name', 'like', '%'.$filters['search'].'%')
+                    ->orWhere('phone_original', 'like', '%'.$filters['search'].'%')
+                    ->orWhere('phone_sanitized', 'like', '%'.$filters['search'].'%');
+            });
+        }
+        if ($filters['message_type']) {
+            $query->where('message_type', $filters['message_type']);
+        }
+        if ($filters['provider']) {
+            $query->where('provider', $filters['provider']);
+        }
+        if ($filters['provider_message_id']) {
+            $query->where('provider_message_id', $filters['provider_message_id']);
+        }
+        if ($filters['status']) {
+            $query->where('delivery_status', $filters['status']);
+        }
+        if ($filters['responded'] !== null && $filters['responded'] !== '') {
+            $query->where('responded', filter_var($filters['responded'], FILTER_VALIDATE_BOOLEAN));
+        }
+
+        return $query;
+    }
+
+    protected function extractFilters(Request $request): array
+    {
+        return [
+            'connection_id' => $request->input('connection_id'),
+            'start_date' => $request->input('start_date'),
+            'end_date' => $request->input('end_date'),
+            'search' => $request->input('search'),
+            'whatsapp_number_id' => $request->input('whatsapp_number_id'),
+            'status' => $request->input('status'),
+            'provider' => $request->input('provider'),
+            'message_type' => $request->input('message_type'),
+            'responded' => $request->input('responded'),
+            'provider_message_id' => $request->input('provider_message_id'),
+        ];
     }
 }

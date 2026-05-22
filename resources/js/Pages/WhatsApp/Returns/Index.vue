@@ -31,6 +31,17 @@ const clearFilters = () => {
   applyFilters();
 };
 
+const downloadXlsx = () => {
+  const params = new URLSearchParams();
+  Object.entries(form.value).forEach(([key, value]) => {
+    if (value !== '' && value !== null && value !== undefined) {
+      params.append(key, value);
+    }
+  });
+  const baseUrl = route('whatsapp.returns.download_xlsx');
+  window.location.href = params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl;
+};
+
 // Marcadores locais persistidos
 const markedIds = ref(new Set(JSON.parse(localStorage.getItem('returns_marked_ids') || '[]')));
 const saveMarks = () => {
@@ -217,6 +228,7 @@ const closeMarkedModal = () => {
             <div class="mt-4 flex gap-3">
               <button @click="applyFilters" class="px-4 py-2 bg-blue-600 text-white rounded-md text-xs font-semibold">Filtrar</button>
               <button @click="clearFilters" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-xs font-semibold">Limpar</button>
+              <button @click="downloadXlsx" class="px-4 py-2 bg-green-600 text-white rounded-md text-xs font-semibold">Baixar Retorno XLSX</button>
             </div>
           </div>
         </div>
