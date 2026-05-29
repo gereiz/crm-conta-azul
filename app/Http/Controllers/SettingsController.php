@@ -576,17 +576,26 @@ class SettingsController extends Controller
             $target = $request->input('target', 'all'); // 'all' | 'invoices' | 'clients'
 
             if (! $connectionId) {
-                return response()->json(['error' => 'Selecione uma empresa para sincronizar.'], 400);
+                return $this->syncResponse($request, false, 'Selecione uma empresa para sincronizar.', 400);
             }
             $connection = ContaAzulConnection::find($connectionId);
             if (! $connection) {
-                return response()->json(['error' => 'Conexão não encontrada.'], 404);
+                return $this->syncResponse($request, false, 'Conexão não encontrada.', 404);
             }
 
             // Renova o token ANTES de sincronizar manualmente
             $token = $this->contaAzulAuthService->getValidToken($connection, true);
             if (! $token) {
-                return response()->json(['error' => 'Falha ao renovar token antes da sincronização.'], 400);
+                return $this->syncResponse(
+                    $request,
+                    false,
+                    "Falha ao renovar o token da conexão {$connection->empresa_nome}. O refresh token pode ter expirado. Use \"Reconectar Conta Azul\" e escolha \"Reconexão Manual\" para autorizar novamente.",
+                    200,
+                    [
+                        'reauthorize_required' => true,
+                        'connection_id' => $connection->id,
+                    ]
+                );
             }
 
             // Marca o tempo de início para pruning (se for update)
@@ -893,12 +902,29 @@ class SettingsController extends Controller
         } catch (\Exception $e) {
             Log::error('Erro na sincronização de clientes: '.$e->getMessage());
 
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'error' => 'Erro ao sincronizar: '.$e->getMessage()], 500);
-            }
-
-            return redirect()->back()->with('error', 'Erro ao sincronizar: '.$e->getMessage());
+            return $this->syncResponse($request, false, 'Erro ao sincronizar: '.$e->getMessage(), 500);
         }
+    }
+
+    protected function shouldReturnJsonForSync(Request $request): bool
+    {
+        if ($request->header('X-Inertia')) {
+            return false;
+        }
+
+        return $request->expectsJson() || $request->ajax();
+    }
+
+    protected function syncResponse(Request $request, bool $success, string $message, int $status = 200, array $extra = [])
+    {
+        if ($this->shouldReturnJsonForSync($request)) {
+            return response()->json(array_merge([
+                'success' => $success,
+                $success ? 'message' : 'error' => $message,
+            ], $extra), $status);
+        }
+
+        return redirect()->back()->with($success ? 'success' : 'error', $message);
     }
 
     public function syncAllClientes()
