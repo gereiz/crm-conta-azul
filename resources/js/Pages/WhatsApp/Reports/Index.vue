@@ -93,17 +93,17 @@ const formatWhatsAppNumber = (n) => {
 
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
                     Relatórios de Envio
                 </h2>
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-2 xl:justify-end">
                     <input 
                         type="text" 
                         v-model="searchQuery" 
                         @keyup.enter="applySearch"
                         placeholder="Buscar..." 
-                        class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300 w-32" 
+                        class="w-32 text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300" 
                     />
                     <input type="date" v-model="startDate" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300" />
                     <input type="date" v-model="endDate" class="text-xs border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-300" />
@@ -139,45 +139,56 @@ const formatWhatsAppNumber = (n) => {
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
                         
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <div class="w-full">
+                            <table class="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700 text-xs xl:text-sm">
+                                <colgroup>
+                                    <col class="w-[12%]" />
+                                    <col class="w-[8%]" />
+                                    <col class="w-[22%]" />
+                                    <col class="w-[13%]" />
+                                    <col class="w-[8%]" />
+                                    <col class="w-[10%]" />
+                                    <col class="w-[6%]" />
+                                    <col class="w-[9%]" />
+                                    <col class="w-[12%]" />
+                                </colgroup>
                                 <thead class="bg-gray-50 dark:bg-gray-700">
                                     <tr>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Data
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Tipo
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Cliente / Empresa
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Telefone (Sanitizado)
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             WhatsApp
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Template
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Boletos
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Status
                                         </th>
-                                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Ações
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     <tr v-for="report in reports.data" :key="report.id">
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        <td class="px-3 py-4 text-gray-500 dark:text-gray-400 break-words">
                                             {{ formatDate(report.sent_at) }}
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <td class="px-3 py-4 align-top">
                                             <span v-if="report.message_type === 'manual'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                                                 Manual
                                             </span>
@@ -185,10 +196,10 @@ const formatWhatsAppNumber = (n) => {
                                                 {{ report.message_type }}
                                             </span>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                            <div class="flex flex-col">
+                                        <td class="px-3 py-4 text-gray-500 dark:text-gray-400 align-top">
+                                            <div class="flex flex-col break-words">
                                                 <template v-if="report.message_type === 'manual'">
-                                                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                                                    <span class="font-medium text-gray-900 dark:text-gray-100 break-words">
                                                         {{
                                                             ((report.client_name && report.client_name.toLowerCase() !== 'manual')
                                                                 ? report.client_name
@@ -200,32 +211,32 @@ const formatWhatsAppNumber = (n) => {
                                                     </span>
                                                 </template>
                                                 <template v-else>
-                                                    <span class="font-medium text-gray-900 dark:text-gray-100">{{ report.client_name || 'Desconhecido' }}</span>
+                                                    <span class="font-medium text-gray-900 dark:text-gray-100 break-words">{{ report.client_name || 'Desconhecido' }}</span>
                                                     <span class="text-xs text-gray-500">{{ report.connection?.empresa_nome }}</span>
                                                 </template>
                                             </div>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                            <div class="flex flex-col">
-                                                <span class="font-mono">{{ report.phone_sanitized || '-' }}</span>
-                                                <span class="text-xs text-gray-400" v-if="report.phone_original !== report.phone_sanitized">Orig: {{ report.phone_original }}</span>
+                                        <td class="px-3 py-4 text-gray-500 dark:text-gray-400 align-top">
+                                            <div class="flex flex-col break-all">
+                                                <span class="font-mono text-xs xl:text-sm">{{ report.phone_sanitized || '-' }}</span>
+                                                <span class="text-[11px] text-gray-400 break-all" v-if="report.phone_original !== report.phone_sanitized">Orig: {{ report.phone_original }}</span>
                                             </div>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        <td class="px-3 py-4 text-gray-500 dark:text-gray-400 align-top">
                                             <div class="flex flex-col">
                                                 <span class="text-xs">{{ report.provider || '-' }}</span>
-                                                <span class="text-xs text-gray-500">
+                                                <span class="text-xs text-gray-500 break-words">
                                                     {{ report.whatsappNumber?.description || formatWhatsAppNumber(report.whatsappNumber) }}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        <td class="px-3 py-4 text-gray-500 dark:text-gray-400 break-words align-top">
                                             {{ report.template?.name || '-' }}
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        <td class="px-3 py-4 text-gray-500 dark:text-gray-400 align-top">
                                             {{ report.total_boletos }}
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <td class="px-3 py-4 align-top">
                                             <span v-if="report.status === 'success'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                                                 Sucesso
                                             </span>
@@ -235,22 +246,23 @@ const formatWhatsAppNumber = (n) => {
                                             <span v-else class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :title="report.error_message">
                                                 Erro
                                             </span>
-                                            <div v-if="report.status !== 'success'" class="text-xs text-red-500 mt-1 max-w-[150px] truncate" :title="report.error_message">
+                                            <div v-if="report.status !== 'success'" class="mt-1 max-w-full break-words text-[11px] text-red-500" :title="report.error_message">
                                                 {{ report.error_message }}
                                             </div>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <td class="px-3 py-4 text-right font-medium align-top">
+                                            <div class="flex flex-col items-end gap-1">
                                             <a :href="getDownloadUrl(report)" target="_blank" class="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300">
                                                 Baixar XLSX
                                             </a>
-                                            <span class="mx-2 text-gray-300">|</span>
                                             <a :href="getClientDownloadUrl(report)" target="_blank" class="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300">
                                                 Baixar Relatório Cliente
                                             </a>
+                                            </div>
                                         </td>
                                     </tr>
                                     <tr v-if="!reports.data || reports.data.length === 0">
-                                        <td colspan="8" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                                        <td colspan="9" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                                             Nenhum registro encontrado.
                                         </td>
                                     </tr>

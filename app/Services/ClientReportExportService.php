@@ -74,69 +74,101 @@ class ClientReportExportService
             $sheet->getDefaultRowDimension()->setRowHeight(18);
             // Centralização será aplicada ao final, no range efetivamente utilizado
 
-            // Primeiro: computa contagem total de boletos por cliente para colorização uniforme
-            $counts = [];
-            foreach ($sentGroup as $log) {
-                $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
-                if (empty($boletoIds)) {
-                    $cid = $log->cliente_id;
-                    if ($cid) $counts[$cid] = ($counts[$cid] ?? 0) + 1;
-                    continue;
-                }
-                $invList = Invoice::whereIn('id', $boletoIds)->get(['id','cliente_id']);
-                foreach ($invList as $inv) {
-                    $cid = $inv->cliente_id ?: $log->cliente_id;
-                    if ($cid) $counts[$cid] = ($counts[$cid] ?? 0) + 1;
-                }
-            }
+            $invoiceIds = $sentGroup
+                ->flatMap(function ($log) {
+                    return is_array($log->boleto_ids) ? $log->boleto_ids : [];
+                })
+                ->filter()
+                ->unique()
+                ->values();
+
+            $invoicesById = $invoiceIds->isEmpty()
+                ? collect()
+                : Invoice::whereIn('id', $invoiceIds->all())
+                    ->with('cliente')
+                    ->get()
+                    ->keyBy('id');
 
             // Monta linhas por boleto (sem agrupamento)
             $row = 9;
+            $sentRows = [];
+
             foreach ($sentGroup as $log) {
                 $boletoIds = is_array($log->boleto_ids) ? $log->boleto_ids : [];
+                $parecer = $this->resolveParecerFromLog($log);
+                $logInvoices = collect($boletoIds)
+                    ->map(function ($id) use ($invoicesById) {
+                        return $invoicesById->get($id) ?? $invoicesById->get((int) $id);
+                    })
+                    ->filter()
+                    ->values();
+                $qtyForColor = $this->resolveColorQuantityForLog($log, $logInvoices);
+
                 if (empty($boletoIds)) {
-                    // fallback: uma linha sem boleto
-                    $parecer = $this->resolveParecerFromLog($log);
-                    $sheet->fromArray([[
-                        $log->client_name,
-                        $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
-                        '',
-                        $parecer,
-                        null,
-                        'Boleto bancário',
-                    ]], null, 'A'.$row);
-                    $color = $this->colorByQty($counts[$log->cliente_id] ?? 1);
-                    if ($color && $parecer !== '') {
-                        $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
-                    }
-                    $row++;
+                    $sentRows[] = [
+                        'client_name' => $log->client_name,
+                        'date' => $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
+                        'description' => '',
+                        'parecer' => $parecer,
+                        'value' => null,
+                        'payment_type' => 'Boleto bancário',
+                        'color' => $parecer !== '' ? $this->colorByQty($qtyForColor) : null,
+                    ];
                     continue;
                 }
-                $invList = Invoice::whereIn('id', $boletoIds)->with('cliente')->get();
-                foreach ($invList as $inv) {
+
+                if ($logInvoices->isEmpty()) {
+                    $sentRows[] = [
+                        'client_name' => $log->client_name,
+                        'date' => $log->sent_at ? $log->sent_at->format('d/m/Y') : '',
+                        'description' => '',
+                        'parecer' => $parecer,
+                        'value' => null,
+                        'payment_type' => 'Boleto bancário',
+                        'color' => $parecer !== '' ? $this->colorByQty($qtyForColor) : null,
+                    ];
+                    continue;
+                }
+
+                foreach ($logInvoices as $inv) {
                     $clientName = $inv->cliente_nome ?: ($inv->cliente->name ?? $log->client_name ?? 'Cliente');
                     $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : ($log->sent_at ? $log->sent_at->format('d/m/Y') : '');
                     $descricao = $inv->descricao ?: '';
                     $valor = (float) ($inv->saldo_devedor ?? $inv->valor_original ?? 0);
-                    $parecer = $this->resolveParecerFromLog($log);
-                    $sheet->fromArray([[
-                        $clientName,
-                        $dateStr,
-                        $descricao,
-                        $parecer,
-                        $valor,
-                        'Boleto bancário',
-                    ]], null, 'A'.$row);
-                    // Wrap para impressão legível
-                    $sheet->getStyle("C{$row}:D{$row}")->getAlignment()->setWrapText(true);
-                    $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
-                    $cid = $inv->cliente_id ?: $log->cliente_id;
-                    $color = $this->colorByQty($counts[$cid] ?? 1);
-                    if ($color && $parecer !== '') {
-                        $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($color);
-                    }
-                    $row++;
+                    $sentRows[] = [
+                        'client_name' => $clientName,
+                        'date' => $dateStr,
+                        'description' => $descricao,
+                        'parecer' => $parecer,
+                        'value' => $valor,
+                        'payment_type' => 'Boleto bancário',
+                        'color' => $parecer !== '' ? $this->colorByQty($qtyForColor) : null,
+                    ];
                 }
+            }
+
+            $sentRows = collect($sentRows)
+                ->sortBy(fn ($item) => $this->normalizeClientNameForSort($item['client_name'] ?? ''))
+                ->values()
+                ->all();
+
+            foreach ($sentRows as $sentRow) {
+                $sheet->fromArray([[
+                    $sentRow['client_name'] ?? 'Cliente',
+                    $sentRow['date'] ?? '',
+                    $sentRow['description'] ?? '',
+                    $sentRow['parecer'] ?? '',
+                    $sentRow['value'] ?? null,
+                    $sentRow['payment_type'] ?? 'Boleto bancário',
+                ]], null, 'A'.$row);
+                $sheet->getStyle("C{$row}:D{$row}")->getAlignment()->setWrapText(true);
+                if (($sentRow['value'] ?? null) !== null) {
+                    $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+                }
+                if (! empty($sentRow['color'])) {
+                    $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($sentRow['color']);
+                }
+                $row++;
             }
 
             // Reativa auto size das colunas
@@ -182,6 +214,11 @@ class ClientReportExportService
                 $sectionStart++;
                 $sectionTotal = 0.0;
                 $rows = $this->buildNonSentRowsForReason($logsByReason, (string) $reason, $groupLogs);
+                $rows = collect($rows)
+                    ->sortBy(fn ($item) => $this->normalizeClientNameForSort($item['client_name'] ?? ''))
+                    ->values()
+                    ->all();
+
                 foreach ($rows as $reportRow) {
                     $sectionTotal += (float) ($reportRow['value'] ?? 0);
                     $sheet->fromArray([[
@@ -233,6 +270,10 @@ class ClientReportExportService
                     $sheet->getStyle("A{$sectionStart}:F{$sectionStart}")->getBorders()->getOutline()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
                     $sectionStart++;
                     $reasonTotal = 0.0;
+                    $notBoleto = $notBoleto->sortBy(function ($inv) {
+                        return $this->normalizeClientNameForSort($inv->cliente_nome ?: ($inv->cliente->name ?? ''));
+                    })->values();
+
                     foreach ($notBoleto as $inv) {
                         $clientName = $inv->cliente_nome ?: ($inv->cliente->name ?? 'Cliente');
                         $dateStr = $inv->data_vencimento ? $inv->data_vencimento->format('d/m/Y') : '';
@@ -346,30 +387,108 @@ class ClientReportExportService
         return 'FFCCE5FF'; // Azul claro
     }
 
+    protected function resolveColorQuantityForLog(WhatsappMessageLog $log, Collection $logInvoices): int
+    {
+        $totalBoletos = (int) ($log->total_boletos ?? 0);
+        $resolvedInvoicesCount = $logInvoices->count();
+        $boletoIdsCount = is_array($log->boleto_ids) ? count($log->boleto_ids) : 0;
+
+        return max($totalBoletos, $resolvedInvoicesCount, $boletoIdsCount, 1);
+    }
+
     protected function resolveParecerFromLog(WhatsappMessageLog $log): string
     {
-        $status = strtoupper((string) ($log->delivery_status ?? ''));
-        if ($status === '' || $status === 'N/A') {
+        $status = strtoupper(trim((string) ($log->delivery_status ?? '')));
+        $sendStatus = strtolower(trim((string) ($log->status ?? '')));
+        $responded = (bool) ($log->responded ?? false);
+
+        if ($responded) {
+            $latestClientMessage = $this->findLatestClientMessageText($log);
+            if ($latestClientMessage !== '') {
+                return $latestClientMessage;
+            }
+        }
+
+        if ($status === 'N/A') {
             return '';
         }
+
+        if ($sendStatus === 'success') {
+            return '-Cobrado';
+        }
+
         if ($status === 'PENDING') {
             return '-Cobrado';
         }
-        if (in_array($status, ['SENT','READ','DELIVERED'], true)) {
-            if (! (bool) ($log->responded ?? false)) {
-                return '-Cobrado';
-            }
-            $phone = preg_replace('/\D+/', '', (string) ($log->phone_sanitized ?? $log->phone_original ?? ''));
-            if ($phone) {
-                $incoming = \DB::table('incoming_messages')->where('numero_origem', $phone)->orderByDesc('created_at')->first();
-                if ($incoming && $incoming->payload_json) {
-                    $payload = json_decode($incoming->payload_json, true);
-                    $text = $payload['text']['body'] ?? ($payload['message']['text']['body'] ?? null);
-                    if ($text) return (string) $text;
-                }
+
+        if (in_array($status, ['SENT', 'READ', 'DELIVERED'], true)) {
+            return '-Cobrado';
+        }
+
+        return '';
+    }
+
+    protected function findLatestClientMessageText(WhatsappMessageLog $log): string
+    {
+        $phone = preg_replace('/\D+/', '', (string) ($log->phone_sanitized ?? $log->phone_original ?? ''));
+        if (! $phone) {
+            return '';
+        }
+
+        $event = \App\Models\WebhookEventLog::query()
+            ->where('from_me', false)
+            ->where(function ($query) use ($log, $phone) {
+                $query->where('matched_log_id', $log->id)
+                    ->orWhere('phone', $phone);
+            })
+            ->when($log->sent_at, function ($query) use ($log) {
+                $query->where('created_at', '>=', $log->sent_at);
+            })
+            ->orderByDesc('created_at')
+            ->first(['payload_json']);
+
+        if ($event && is_array($event->payload_json)) {
+            $text = $this->extractMessageText($event->payload_json);
+            if (is_string($text) && trim($text) !== '') {
+                return trim($text);
             }
         }
+
+        $incoming = \DB::table('incoming_messages')
+            ->where('numero_origem', $phone)
+            ->when($log->sent_at, function ($query) use ($log) {
+                $query->where('created_at', '>=', $log->sent_at);
+            })
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($incoming && $incoming->payload_json) {
+            $payload = json_decode($incoming->payload_json, true);
+            $text = $this->extractMessageText(is_array($payload) ? $payload : []);
+            if (is_string($text) && trim($text) !== '') {
+                return trim($text);
+            }
+        }
+
         return '';
+    }
+
+    protected function extractMessageText(array $payload): string
+    {
+        $text = $payload['text']['body']
+            ?? $payload['message']['text']['body']
+            ?? $payload['body']
+            ?? $payload['text']
+            ?? null;
+
+        return is_string($text) ? trim($text) : '';
+    }
+
+    protected function normalizeClientNameForSort(?string $value): string
+    {
+        $normalized = Str::ascii((string) $value);
+
+        return Str::lower(trim($normalized));
     }
 
     protected function buildNonSentRowsForReason(Collection $logsByReason, string $reason, Collection $groupLogs): array
