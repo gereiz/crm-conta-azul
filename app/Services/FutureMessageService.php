@@ -201,8 +201,11 @@ class FutureMessageService
             ->where('data_vencimento', '>', $today)
             ->whereNotNull('link_boleto')
             ->where('link_boleto', '!=', '')
-            ->where('status', '!=', 'PAID') // Garantir que não está paga
-            ->where('status', '!=', 'BAIXADO');
+            ->where('saldo_devedor', '>', 0)
+            ->where(function ($q) {
+                $q->whereIn('status', ['PENDING', 'ABERTO'])
+                    ->orWhereNull('status');
+            });
 
         // Se o cron tiver configuração de dias (period_value), usamos como filtro de vencimento?
         // Ex: Vencimento nos próximos 30 dias.
@@ -263,8 +266,11 @@ class FutureMessageService
             ->where(function ($q) {
                 $q->whereNull('link_boleto')->orWhere('link_boleto', '');
             })
-            ->where('status', '!=', 'PAID')
-            ->where('status', '!=', 'BAIXADO');
+            ->where('saldo_devedor', '>', 0)
+            ->where(function ($q) {
+                $q->whereIn('status', ['PENDING', 'ABERTO'])
+                    ->orWhereNull('status');
+            });
 
         // Limite de dias (ex: vence nos próximos 5 dias)
         // Usamos days_before_due para definir "quão perto" do vencimento enviamos.

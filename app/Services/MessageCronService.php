@@ -448,9 +448,7 @@ class MessageCronService
                 $q->whereIn('status', ['PENDING', 'ABERTO'])
                     ->orWhereNull('status');
             })
-            ->where(function ($q) {
-                $q->whereNull('saldo_devedor')->orWhere('saldo_devedor', '>', 0);
-            });
+            ->where('saldo_devedor', '>', 0);
 
         if (! empty($cron->connection_id)) {
             $query->where('connection_id', $cron->connection_id);
@@ -517,6 +515,7 @@ class MessageCronService
         $query = Invoice::where('status', 'PENDING')
             ->whereDate('data_vencimento', '>=', $startDate)
             ->whereDate('data_vencimento', '<=', $endDate)
+            ->where('saldo_devedor', '>', 0)
             ->whereNotNull('link_boleto')
             ->where('link_boleto', '!=', '');
 

@@ -239,6 +239,7 @@ class MessageCronController extends Controller
                 $invoices = \App\Models\Invoice::where('status', 'PENDING')
                     ->whereDate('data_vencimento', '>=', $startDate)
                     ->whereDate('data_vencimento', '<=', $endDate)
+                    ->where('saldo_devedor', '>', 0)
                     ->whereNotNull('link_boleto')->where('link_boleto', '!=', '')
                     ->when($cron->connection_id, fn($q) => $q->where('connection_id', $cron->connection_id))
                     ->with('cliente')
@@ -261,7 +262,11 @@ class MessageCronController extends Controller
                     ->where('data_vencimento', '>', $today)
                     ->whereDate('data_vencimento', $targetDue)
                     ->where(function ($q) { $q->whereNull('link_boleto')->orWhere('link_boleto', ''); })
-                    ->whereNotIn('status', ['PAID','BAIXADO'])
+                    ->where(function ($q) {
+                        $q->whereIn('status', ['PENDING', 'ABERTO'])
+                            ->orWhereNull('status');
+                    })
+                    ->where('saldo_devedor', '>', 0)
                     ->with('cliente')->get();
                 foreach ($invoices as $inv) {
                     if (! $inv->cliente) continue;

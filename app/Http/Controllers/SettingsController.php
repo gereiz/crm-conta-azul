@@ -536,7 +536,7 @@ class SettingsController extends Controller
 
         return Inertia::render('Settings/ContaAzul', [
             'connections' => $connections,
-            'lastSync' => Cliente::latest('updated_at')->value('updated_at'),
+            'lastSync' => ContaAzulConnection::whereNotNull('last_sync_at')->max('last_sync_at') ?: Cliente::latest('updated_at')->value('updated_at'),
             'totalClientes' => Cliente::count(),
         ]);
     }

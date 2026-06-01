@@ -345,7 +345,10 @@ class ContaAzulApiService
 
     public function syncRecentlyClosedInvoices(ContaAzulConnection $connection): int
     {
-        $startDate = \Carbon\Carbon::now()->subDays(180)->format('Y-m-d');
+        // Precisamos revisar um histórico maior de títulos fechados, pois a API
+        // filtra por vencimento. Caso contrário, boletos antigos pagos ficam
+        // presos na base local e continuam elegíveis para cobrança.
+        $startDate = \Carbon\Carbon::now()->subYears(1)->format('Y-m-d');
         $endDate = \Carbon\Carbon::now()->addDay()->format('Y-m-d');
         $size = 500;
         $statuses = ['PAID', 'PAGO', 'RECEIVED', 'RECEBIDO', 'CONCILIADO', 'LIQUIDADO', 'CANCELLED', 'CANCELADO', 'BAIXADO'];

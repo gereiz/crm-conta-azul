@@ -8,6 +8,7 @@ use App\Models\SyncJobLog;
 use App\Models\SystemSetting;
 use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
+use App\Services\FutureMessageService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -22,11 +23,14 @@ class SyncContaAzulConnections extends Command
 
     protected ContaAzulAuthService $auth;
 
-    public function __construct(ContaAzulApiService $api, ContaAzulAuthService $auth)
+    protected FutureMessageService $futureMessageService;
+
+    public function __construct(ContaAzulApiService $api, ContaAzulAuthService $auth, FutureMessageService $futureMessageService)
     {
         parent::__construct();
         $this->api = $api;
         $this->auth = $auth;
+        $this->futureMessageService = $futureMessageService;
     }
 
     public function handle()
@@ -89,6 +93,7 @@ class SyncContaAzulConnections extends Command
                     if ($target === 'all' || $target === 'invoices') {
                         $syncedInvoices = $this->api->syncOverdueInvoices($connection);
                         $syncedClosed = $this->api->syncRecentlyClosedInvoices($connection);
+                        $this->futureMessageService->calculateForConnection($connection);
                     }
 
                     $connection->last_sync_at = Carbon::now();
