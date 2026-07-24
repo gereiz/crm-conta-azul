@@ -6,6 +6,8 @@ use App\Models\ContaAzulConnection;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 class ContaAzulAuthService
 {
     public function decodeState(?string $state): ?array
@@ -246,15 +248,13 @@ class ContaAzulAuthService
         }
 
         $data = $response->json();
+        $this->persistTokens($connection, [
+            'access_token' => $data['access_token'] ?? null,
+            'refresh_token' => $data['refresh_token'] ?? null,
+            'expires_in' => $data['expires_in'] ?? null,
+        ], preserveExistingRefreshToken: true);
 
-        $connection->access_token = $data['access_token'] ?? null;
-        $connection->refresh_token = $data['refresh_token'] ?? $connection->refresh_token;
-        $connection->token_expires_at = isset($data['expires_in'])
-            ? Carbon::now()->addSeconds($data['expires_in'])
-            : null;
-        $connection->save();
-
-        return $connection->access_token;
+        return $data['access_token'] ?? null;
     }
 
     public function getValidToken(ContaAzulConnection $connection, bool $forceRefresh = false): ?string
@@ -283,13 +283,41 @@ class ContaAzulAuthService
 
     public function saveTokens(ContaAzulConnection $connection, array $tokenData): ContaAzulConnection
     {
-        $connection->access_token = $tokenData['access_token'] ?? null;
-        $connection->refresh_token = $tokenData['refresh_token'] ?? null;
-        $connection->token_expires_at = isset($tokenData['expires_in'])
-            ? Carbon::now()->addSeconds($tokenData['expires_in'])
-            : null;
-        $connection->save();
+        $this->persistTokens($connection, $tokenData);
 
         return $connection;
+    }
+
+    protected function persistTokens(ContaAzulConnection $connection, array $tokenData, bool $preserveExistingRefreshToken = false): void
+    {
+        $accessToken = $tokenData['access_token'] ?? null;
+        $refreshToken = $tokenData['refresh_token'] ?? null;
+        $expiresAt = isset($tokenData['expires_in'])
+            ? Carbon::now()->addSeconds((int) $tokenData['expires_in'])
+            : null;
+
+        $updates = [
+            'access_token' => $accessToken !== null ? Crypt::encryptString((string) $accessToken) : null,
+            'token_expires_at' => $expiresAt,
+            'updated_at' => now(),
+        ];
+
+        if ($refreshToken !== null || ! $preserveExistingRefreshToken) {
+            $updates['refresh_token'] = $refreshToken !== null
+                ? Crypt::encryptString((string) $refreshToken)
+                : null;
+        }
+
+        DB::table('conta_azul_connections')
+            ->where('id', $connection->id)
+            ->update($updates);
+
+        $connection->forceFill([
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken !== null
+                ? $refreshToken
+                : ($preserveExistingRefreshToken ? null : null),
+            'token_expires_at' => $expiresAt,
+        ]);
     }
 }
