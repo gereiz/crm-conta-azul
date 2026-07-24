@@ -8,6 +8,52 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 class ContaAzulAuthService
 {
+    public function decodeState(?string $state): ?array
+    {
+        if (! is_string($state) || trim($state) === '') {
+            return null;
+        }
+
+        $decoded = base64_decode($state, true);
+        if ($decoded === false) {
+            return null;
+        }
+
+        $payload = json_decode($decoded, true);
+
+        return is_array($payload) ? $payload : null;
+    }
+
+    public function getSavedState(?int $connectionId = null): ?string
+    {
+        $keys = [];
+        if ($connectionId) {
+            $keys[] = 'contaazul_state_'.$connectionId;
+        }
+        $keys[] = 'contaazul_state';
+
+        foreach ($keys as $key) {
+            $value = session($key);
+            if (is_string($value) && trim($value) !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    public function clearOAuthSession(?int $connectionId = null): void
+    {
+        $keys = ['contaazul_state', 'contaazul_redirect_uri'];
+
+        if ($connectionId) {
+            $keys[] = 'contaazul_state_'.$connectionId;
+            $keys[] = 'contaazul_redirect_uri_'.$connectionId;
+        }
+
+        session()->forget($keys);
+    }
+
     protected function resolveRedirectUri(?ContaAzulConnection $connection = null): string
     {
         $configUri = trim((string) config('services.contaazul.redirect_uri'));

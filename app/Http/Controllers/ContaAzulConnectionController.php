@@ -6,6 +6,7 @@ use App\Models\ContaAzulConnection;
 use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class ContaAzulConnectionController extends Controller
@@ -121,13 +122,33 @@ class ContaAzulConnectionController extends Controller
     public function callback(Request $request, ContaAzulConnection $connection)
     {
         $state = $request->input('state');
-        $savedState = session('contaazul_state');
+        $savedState = $this->auth->getSavedState($connection->id);
+        $stateHash = is_string($state) && $state !== '' ? substr(sha1($state), 0, 12) : null;
+        $savedStateHash = is_string($savedState) && $savedState !== '' ? substr(sha1($savedState), 0, 12) : null;
 
-        if (! $state || $state !== $savedState) {
+        Log::info('Conta Azul connection callback debug', [
+            'connection_id' => $connection->id,
+            'request_host' => $request->getHost(),
+            'full_url' => $request->fullUrl(),
+            'session_id' => session()->getId(),
+            'has_state' => ! empty($state),
+            'has_saved_state' => ! empty($savedState),
+            'state_hash' => $stateHash,
+            'saved_state_hash' => $savedStateHash,
+        ]);
+
+        if (! $state || ! $savedState || ! hash_equals($savedState, $state)) {
+            Log::warning('Conta Azul connection callback inválido: state não confere com a sessão.', [
+                'connection_id' => $connection->id,
+                'request_host' => $request->getHost(),
+                'session_id' => session()->getId(),
+                'state_hash' => $stateHash,
+                'saved_state_hash' => $savedStateHash,
+            ]);
             return redirect()->route('contaazul.connections.index')->with('error', 'Falha na autenticação Conta Azul (State inválido).');
         }
 
-        $payload = json_decode(base64_decode($state), true);
+        $payload = $this->auth->decodeState($state);
         if (! $payload || ($payload['connection_id'] ?? null) != $connection->id) {
             return redirect()->route('contaazul.connections.index')->with('error', 'Conexão inválida no callback.');
         }
@@ -138,6 +159,7 @@ class ContaAzulConnectionController extends Controller
             return redirect()->route('contaazul.connections.index')->with('error', 'Falha ao obter token da Conta Azul.');
         }
         $this->auth->saveTokens($connection, $data);
+        $this->auth->clearOAuthSession($connection->id);
 
         return redirect()->route('contaazul.connections.index')->with('success', 'Conexão reautorizada com sucesso.');
     }

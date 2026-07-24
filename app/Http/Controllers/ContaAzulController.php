@@ -49,21 +49,45 @@ class ContaAzulController extends Controller
         $code = $request->input('code');
         $state = $request->input('state');
 
-        $savedState = session('contaazul_state');
+        $decoded = $this->authService->decodeState($state);
+        $connectionId = (int) ($decoded['connection_id'] ?? 0);
+        $savedState = $this->authService->getSavedState($connectionId ?: null);
+        $stateHash = is_string($state) && $state !== '' ? substr(sha1($state), 0, 12) : null;
+        $savedStateHash = is_string($savedState) && $savedState !== '' ? substr(sha1($savedState), 0, 12) : null;
 
-        if (! $code || ! $state || $state !== $savedState) {
-            Log::error('Callback Conta Azul inválido: Code ou State incorretos.');
+        Log::info('Conta Azul callback debug', [
+            'connection_id' => $connectionId ?: null,
+            'request_host' => $request->getHost(),
+            'full_url' => $request->fullUrl(),
+            'session_id' => session()->getId(),
+            'has_code' => ! empty($code),
+            'has_state' => ! empty($state),
+            'has_saved_state' => ! empty($savedState),
+            'state_hash' => $stateHash,
+            'saved_state_hash' => $savedStateHash,
+        ]);
 
-            return redirect()->route('dashboard')->with('error', 'Falha na autenticação com Conta Azul (State inválido).');
+        if (! $code || ! $state || ! $savedState || ! hash_equals($savedState, $state)) {
+            Log::warning('Callback Conta Azul inválido: state não confere com a sessão.', [
+                'connection_id' => $connectionId ?: null,
+                'request_host' => $request->getHost(),
+                'session_id' => session()->getId(),
+                'has_saved_state' => (bool) $savedState,
+                'state_hash' => $stateHash,
+                'saved_state_hash' => $savedStateHash,
+            ]);
+
+            return redirect()->route($connectionId ? 'contaazul.connections.index' : 'dashboard')
+                ->with('error', 'Falha na autenticação com Conta Azul (State inválido).');
         }
 
-        $decoded = json_decode(base64_decode($state), true);
-        if (is_array($decoded) && isset($decoded['connection_id'])) {
-            $connection = ContaAzulConnection::find($decoded['connection_id']);
+        if ($connectionId) {
+            $connection = ContaAzulConnection::find($connectionId);
             if ($connection) {
                 $tokenData = $this->authService->exchangeCode($connection, $code);
                 if ($tokenData && isset($tokenData['access_token'])) {
                     $this->authService->saveTokens($connection, $tokenData);
+                    $this->authService->clearOAuthSession($connection->id);
 
                     return redirect()->route('contaazul.connections.index')->with('success', 'Conectado com sucesso ao Conta Azul (multi).');
                 }
@@ -76,6 +100,7 @@ class ContaAzulController extends Controller
 
         if ($tokenData && isset($tokenData['access_token'])) {
             $this->contaAzulService->saveToken($tokenData);
+            $this->authService->clearOAuthSession();
 
             return redirect()->route('dashboard')->with('success', 'Conectado com sucesso ao Conta Azul!');
         }

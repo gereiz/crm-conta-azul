@@ -84,6 +84,12 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
                 'linkPreview' => false,
             ]);
 
+            if (! $response) {
+                Log::warning("Evolution send failed (ID: {$whatsapp->id}): sem resposta HTTP da API.");
+
+                return ['success' => false, 'message' => 'Sem resposta da Evolution API. Verifique a URL base, DNS, SSL e conectividade da VPS.'];
+            }
+
             if ($response->successful()) {
                 $data = $response->json();
                 $status = $data['status'] ?? 'queued';
@@ -129,6 +135,12 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
 
         try {
             $response = $this->tryRequest('GET', "/instance/connectionState/{$instance}", $token);
+
+            if (! $response) {
+                Log::warning("Evolution connection check failed (ID: {$whatsapp->id}): sem resposta HTTP da API.");
+
+                return ['connected' => false, 'error' => 'Sem resposta da Evolution API. Verifique a URL base, DNS, SSL e conectividade da VPS.'];
+            }
 
             if ($response->successful()) {
                 $data = $response->json();
