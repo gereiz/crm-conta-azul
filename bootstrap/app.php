@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->trustProxies(at: '*');
+        $middleware->validateCsrfTokens(except: [
+            'install',
+            'install/*',
+        ]);
         $middleware->alias([
             'permission' => \App\Http\Middleware\CheckPermission::class,
         ]);

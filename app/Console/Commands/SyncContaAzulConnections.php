@@ -96,8 +96,8 @@ class SyncContaAzulConnections extends Command
                         $this->futureMessageService->calculateForConnection($connection);
                     }
 
+                    \App\Models\ContaAzulConnection::where('id', $connection->id)->update(['last_sync_at' => Carbon::now()]);
                     $connection->last_sync_at = Carbon::now();
-                    $connection->save();
 
                     $this->info("Empresa {$connection->empresa_nome}: {$syncedInvoices} abertas/atrasadas e {$syncedClosed} pagas/canceladas atualizadas.");
 

@@ -6,6 +6,8 @@ use App\Models\ContaAzulConnection;
 use App\Services\ContaAzulApiService;
 use App\Services\ContaAzulAuthService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -84,19 +86,32 @@ class ContaAzulConnectionController extends Controller
             // Como estamos fornecendo TODOS os dados sensíveis novamente no request (secret, etc),
             // podemos forçar a gravação direta ignorando o estado anterior.
 
-            $connection->empresa_nome = $data['empresa_nome'];
-            $connection->email_desenvolvedor = $data['email_desenvolvedor'];
-            $connection->ca_client_id = $data['ca_client_id'];
-            $connection->ca_client_secret = $data['ca_client_secret']; // Será encriptado com a NOVA chave
-            $connection->ca_redirect_uri = $data['ca_redirect_uri'];
-            $connection->is_active = $data['is_active'];
+            DB::table('conta_azul_connections')
+                ->where('id', $connection->id)
+                ->update([
+                    'empresa_nome' => $data['empresa_nome'],
+                    'email_desenvolvedor' => $data['email_desenvolvedor'],
+                    'ca_client_id' => $data['ca_client_id'],
+                    'ca_client_secret' => Crypt::encryptString((string) $data['ca_client_secret']),
+                    'ca_redirect_uri' => $data['ca_redirect_uri'],
+                    'is_active' => (bool) ($data['is_active'] ?? false),
+                    'access_token' => null,
+                    'refresh_token' => null,
+                    'token_expires_at' => null,
+                    'updated_at' => now(),
+                ]);
 
-            // Limpa tokens antigos pois eles também estarão corrompidos
-            $connection->access_token = null;
-            $connection->refresh_token = null;
-            $connection->token_expires_at = null;
-
-            $connection->save();
+            $connection->forceFill([
+                'empresa_nome' => $data['empresa_nome'],
+                'email_desenvolvedor' => $data['email_desenvolvedor'],
+                'ca_client_id' => $data['ca_client_id'],
+                'ca_client_secret' => $data['ca_client_secret'],
+                'ca_redirect_uri' => $data['ca_redirect_uri'],
+                'is_active' => (bool) ($data['is_active'] ?? false),
+                'access_token' => null,
+                'refresh_token' => null,
+                'token_expires_at' => null,
+            ]);
         }
 
         return redirect()->back()->with('success', 'Conexão atualizada.');

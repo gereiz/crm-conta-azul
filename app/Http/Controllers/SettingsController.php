@@ -779,8 +779,8 @@ class SettingsController extends Controller
             }
 
             // Atualiza timestamp da conexão
+            \App\Models\ContaAzulConnection::where('id', $connection->id)->update(['last_sync_at' => now()]);
             $connection->last_sync_at = now();
-            $connection->save();
 
             // Recalcula envios futuros
             try {
@@ -1092,8 +1092,8 @@ class SettingsController extends Controller
                 $apiTotals = $this->contaAzulApiService->getOverdueTotals($connection);
                 $invoicesApiCount = $apiTotals['count'] ?? 0;
                 $summary[] = "{$connection->empresa_nome}: {$clientesDbCount} clientes e {$invoicesApiCount} faturas em atraso.";
+                \App\Models\ContaAzulConnection::where('id', $connection->id)->update(['last_sync_at' => now()]);
                 $connection->last_sync_at = now();
-                $connection->save();
 
                 // Recalcula envios futuros
                 try {

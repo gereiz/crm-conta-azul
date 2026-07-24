@@ -116,7 +116,14 @@ class ContaAzulAuthService
         session(['contaazul_redirect_uri_'.$connection->id => $redirectUri]);
         session(['contaazul_redirect_uri' => $redirectUri]);
         if ($connection->ca_redirect_uri !== $redirectUri) {
-            $connection->forceFill(['ca_redirect_uri' => $redirectUri])->save();
+            DB::table('conta_azul_connections')
+                ->where('id', $connection->id)
+                ->update([
+                    'ca_redirect_uri' => $redirectUri,
+                    'updated_at' => now(),
+                ]);
+
+            $connection->forceFill(['ca_redirect_uri' => $redirectUri]);
         }
 
         $params = [
@@ -168,10 +175,14 @@ class ContaAzulAuthService
 
             // Opcional: Atualizar o banco com o valor do .env para corrigir o registro corrompido
             try {
-                // IMPORTANTE: Ao salvar aqui, o Eloquent usará a APP_KEY atual para criptografar.
-                // Isso "conserta" o registro para o futuro.
-                $connection->ca_client_secret = $clientSecret;
-                $connection->save();
+                DB::table('conta_azul_connections')
+                    ->where('id', $connection->id)
+                    ->update([
+                        'ca_client_secret' => Crypt::encryptString((string) $clientSecret),
+                        'updated_at' => now(),
+                    ]);
+
+                $connection->forceFill(['ca_client_secret' => $clientSecret]);
                 Log::info("Client Secret da conexão {$connection->id} corrigido automaticamente usando valor do .env.");
             } catch (\Exception $saveError) {
                 Log::error('Falha ao tentar corrigir Client Secret no banco: '.$saveError->getMessage());
