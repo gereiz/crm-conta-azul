@@ -32,6 +32,17 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
 
     protected function tryRequest(string $method, string $path, string $token, array $payload = null)
     {
+        // #region debug-point A:try-request-entry
+        $traceId = substr(bin2hex(random_bytes(8)), 0, 12);
+        $this->reportDebug('A', 'app/Services/EvolutionWhatsAppService.php:tryRequest:entry', '[DEBUG] Evolution tryRequest entry', [
+            'traceId' => $traceId,
+            'method' => $method,
+            'path' => $path,
+            'base_url_count' => count($this->baseUrls),
+            'has_payload' => $payload !== null,
+            'token_hash' => substr(sha1((string) $token), 0, 12),
+        ]);
+        // #endregion
         $lastResponse = null;
         foreach ($this->baseUrls as $base) {
             $url = rtrim($base, '/').'/'.ltrim($path, '/');
@@ -43,6 +54,17 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
                 try {
                     $req = Http::withHeaders($headers)->timeout(10);
                     $lastResponse = $method === 'GET' ? $req->get($url) : $req->post($url, $payload ?? []);
+                    // #region debug-point B:try-request-response
+                    $this->reportDebug('B', 'app/Services/EvolutionWhatsAppService.php:tryRequest:response', '[DEBUG] Evolution tryRequest response', [
+                        'traceId' => $traceId,
+                        'url' => $url,
+                        'auth_mode' => array_key_exists('apikey', $headers) ? 'apikey' : 'bearer',
+                        'response_is_null' => $lastResponse === null,
+                        'status' => $lastResponse?->status(),
+                        'successful' => $lastResponse?->successful(),
+                        'body_preview' => $lastResponse ? mb_substr($lastResponse->body(), 0, 300) : null,
+                    ]);
+                    // #endregion
                     if ($lastResponse->successful()) {
                         return $lastResponse;
                     }
@@ -51,9 +73,26 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
                     }
                 } catch (\Exception $e) {
                     $lastResponse = null;
+                    // #region debug-point C:try-request-exception
+                    $this->reportDebug('C', 'app/Services/EvolutionWhatsAppService.php:tryRequest:exception', '[DEBUG] Evolution tryRequest exception', [
+                        'traceId' => $traceId,
+                        'url' => $url,
+                        'auth_mode' => array_key_exists('apikey', $headers) ? 'apikey' : 'bearer',
+                        'exception' => get_class($e),
+                        'message' => $e->getMessage(),
+                    ]);
+                    // #endregion
                 }
             }
         }
+        // #region debug-point B:try-request-exhausted
+        $this->reportDebug('B', 'app/Services/EvolutionWhatsAppService.php:tryRequest:exhausted', '[DEBUG] Evolution tryRequest exhausted', [
+            'traceId' => $traceId,
+            'last_response_is_null' => $lastResponse === null,
+            'last_status' => $lastResponse?->status(),
+            'last_body_preview' => $lastResponse ? mb_substr($lastResponse->body(), 0, 300) : null,
+        ]);
+        // #endregion
         return $lastResponse;
     }
 
@@ -77,12 +116,39 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
             return ['success' => false, 'message' => 'Instância ou token ausente para Evolution API.'];
         }
 
+        // #region debug-point D:send-message-entry
+        $caller = collect(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 6))
+            ->map(fn ($frame) => ($frame['class'] ?? '').($frame['type'] ?? '').($frame['function'] ?? ''))
+            ->filter()
+            ->values()
+            ->all();
+        $sendTraceId = substr(bin2hex(random_bytes(8)), 0, 12);
+        $this->reportDebug('D', 'app/Services/EvolutionWhatsAppService.php:sendMessage:entry', '[DEBUG] Evolution sendMessage entry', [
+            'traceId' => $sendTraceId,
+            'whatsapp_id' => $whatsapp->id,
+            'provider_instance' => $instance,
+            'to' => $to,
+            'message_length' => mb_strlen((string) $message),
+            'caller_stack' => $caller,
+        ]);
+        // #endregion
+
         try {
             $response = $this->tryRequest('POST', "/message/sendText/{$instance}", $token, [
                 'number' => $to,
                 'text' => $message,
                 'linkPreview' => false,
             ]);
+
+            // #region debug-point D:send-message-response
+            $this->reportDebug('D', 'app/Services/EvolutionWhatsAppService.php:sendMessage:response', '[DEBUG] Evolution sendMessage response received', [
+                'traceId' => $sendTraceId,
+                'response_is_null' => $response === null,
+                'status' => $response?->status(),
+                'successful' => $response?->successful(),
+                'body_preview' => $response ? mb_substr($response->body(), 0, 300) : null,
+            ]);
+            // #endregion
 
             if (! $response) {
                 Log::warning("Evolution send failed (ID: {$whatsapp->id}): sem resposta HTTP da API.");
@@ -133,8 +199,27 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
             return ['connected' => false, 'error' => 'Instância ou token ausente para Evolution API.'];
         }
 
+        // #region debug-point E:check-connection-entry
+        $checkTraceId = substr(bin2hex(random_bytes(8)), 0, 12);
+        $this->reportDebug('E', 'app/Services/EvolutionWhatsAppService.php:checkConnection:entry', '[DEBUG] Evolution checkConnection entry', [
+            'traceId' => $checkTraceId,
+            'whatsapp_id' => $whatsapp->id,
+            'provider_instance' => $instance,
+        ]);
+        // #endregion
+
         try {
             $response = $this->tryRequest('GET', "/instance/connectionState/{$instance}", $token);
+
+            // #region debug-point E:check-connection-response
+            $this->reportDebug('E', 'app/Services/EvolutionWhatsAppService.php:checkConnection:response', '[DEBUG] Evolution checkConnection response received', [
+                'traceId' => $checkTraceId,
+                'response_is_null' => $response === null,
+                'status' => $response?->status(),
+                'successful' => $response?->successful(),
+                'body_preview' => $response ? mb_substr($response->body(), 0, 300) : null,
+            ]);
+            // #endregion
 
             if (! $response) {
                 Log::warning("Evolution connection check failed (ID: {$whatsapp->id}): sem resposta HTTP da API.");
@@ -242,5 +327,36 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
             }
         }
         return ['success' => false, 'error' => 'QR não disponível.'];
+    }
+
+    protected function reportDebug(string $hypothesisId, string $location, string $msg, array $data = []): void
+    {
+        try {
+            $envPath = base_path('.dbg/evolution-null-response.env');
+            $debugUrl = 'http://127.0.0.1:7777/event';
+            $sessionId = 'evolution-null-response';
+
+            if (is_file($envPath)) {
+                $envContent = (string) file_get_contents($envPath);
+                if (preg_match('/^DEBUG_SERVER_URL=(.+)$/m', $envContent, $match)) {
+                    $debugUrl = trim($match[1]);
+                }
+                if (preg_match('/^DEBUG_SESSION_ID=(.+)$/m', $envContent, $match)) {
+                    $sessionId = trim($match[1]);
+                }
+            }
+
+            Http::timeout(2)->asJson()->post($debugUrl, [
+                'sessionId' => $sessionId,
+                'runId' => 'pre-fix',
+                'hypothesisId' => $hypothesisId,
+                'location' => $location,
+                'msg' => $msg,
+                'data' => $data,
+                'ts' => (int) round(microtime(true) * 1000),
+            ]);
+        } catch (\Throwable $e) {
+            // Ignora falhas do coletor para não interferir no fluxo normal.
+        }
     }
 }
