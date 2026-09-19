@@ -26,6 +26,7 @@
   - D: entrada/saída do `sendMessage()` com pilha resumida do chamador
   - E: entrada/saída do `checkConnection()`
 - Log da sessão limpo e pronto para reprodução em `.dbg/trae-debug-log-evolution-null-response.ndjson`
+- Após uma rodada de teste, o arquivo `.dbg/trae-debug-log-evolution-null-response.ndjson` permaneceu vazio e o erro não foi reproduzido.
 
 ## Verification Conclusion
-- Pending
+- Hipóteses A-E continuam **inconclusivas** por ausência de reprodução/evidência nesta rodada.

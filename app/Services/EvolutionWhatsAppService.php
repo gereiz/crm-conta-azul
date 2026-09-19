@@ -358,5 +358,15 @@ class EvolutionWhatsAppService implements WhatsAppProviderInterface
         } catch (\Throwable $e) {
             // Ignora falhas do coletor para não interferir no fluxo normal.
         }
+
+        try {
+            Log::info('[DEBUG][evolution-null-response] '.$msg, [
+                'hypothesisId' => $hypothesisId,
+                'location' => $location,
+                'data' => $data,
+            ]);
+        } catch (\Throwable $e) {
+            // Ignora falhas do logger de debug para não interferir no fluxo normal.
+        }
     }
 }
